@@ -65,9 +65,11 @@ class RoomBoundary(BaseModel):
 
     @field_validator("points")
     @classmethod
-    def require_at_least_three_points(cls, points: list[Point]) -> list[Point]:
+    def validate_points(cls, points: list[Point]) -> list[Point]:
         if len(points) < 4:
             raise ValueError("room boundary must include at least 4 points including closure")
+        if points[0].x != points[-1].x or points[0].y != points[-1].y:
+            raise ValueError("room boundary must be closed (first point equals last point)")
         return points
 
 
@@ -105,6 +107,13 @@ class PolylineMarker(BaseModel):
     points: list[Point]
     floor: str | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("points")
+    @classmethod
+    def validate_points(cls, points: list[Point]) -> list[Point]:
+        if len(points) < 2:
+            raise ValueError("polyline must include at least 2 points")
+        return points
 
 
 class HeightMarker(BaseModel):
