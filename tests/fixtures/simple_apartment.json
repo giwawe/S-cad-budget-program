@@ -1,0 +1,53 @@
+{
+  "project_name": "Simple Apartment",
+  "default_height": 2.8,
+  "default_window_height": 1.5,
+  "rooms": [
+    {
+      "id": "bedroom",
+      "points": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 4,
+          "y": 0
+        },
+        {
+          "x": 4,
+          "y": 3
+        },
+        {
+          "x": 0,
+          "y": 3
+        },
+        {
+          "x": 0,
+          "y": 0
+        }
+      ]
+    }
+  ],
+  "texts": [
+    {
+      "id": "txt-bedroom",
+      "text": "卧室",
+      "point": {
+        "x": 2,
+        "y": 1
+      }
+    }
+  ],
+  "windows": [
+    {
+      "id": "win-bedroom",
+      "point": {
+        "x": 2,
+        "y": 0
+      },
+      "width": 1.2,
+      "height": 1.5
+    }
+  ]
+}
