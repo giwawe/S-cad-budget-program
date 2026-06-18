@@ -168,3 +168,45 @@ def test_cli_reports_non_utf8_input(tmp_path: Path):
     assert "Failed to read input JSON" in error_text
     assert "non_utf8.bin" in error_text
     assert "Traceback" not in error_text
+
+
+def test_cli_reports_invalid_room_geometry_without_traceback(tmp_path: Path):
+    runner = CliRunner()
+    output = tmp_path / "result.json"
+    bad_input = tmp_path / "bad_room.json"
+    bad_input.write_text(
+        json.dumps(
+            {
+                "project_name": "Bad Geometry",
+                "default_height": 2.8,
+                "rooms": [
+                    {
+                        "id": "bow-tie",
+                        "points": [
+                            {"x": 0, "y": 0},
+                            {"x": 2, "y": 2},
+                            {"x": 0, "y": 2},
+                            {"x": 2, "y": 0},
+                            {"x": 0, "y": 0},
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "calculate",
+            str(bad_input),
+            "--json-output",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "Failed to calculate quantities" in error_text
+    assert "Traceback" not in error_text

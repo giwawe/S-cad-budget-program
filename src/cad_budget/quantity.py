@@ -30,13 +30,23 @@ def _resolve_room_names(project: ProjectInput, rooms: list[RoomBoundary]) -> tup
     matched_names: dict[str, list[str]] = defaultdict(list)
 
     for text in project.texts:
-        matched_room_ids = [
-            room.id
-            for room in rooms
-            if not room.name
-            and _floor_compatible(room.floor, text.floor)
-            and point_inside_polygon(text.point, room.points)
-        ]
+        matched_room_ids: list[str] = []
+        for room in rooms:
+            if room.name:
+                continue
+            if not point_inside_polygon(text.point, room.points):
+                continue
+            if _floor_compatible(room.floor, text.floor):
+                matched_room_ids.append(room.id)
+            else:
+                exceptions.append(
+                    QuantityException(
+                        code="marker_floor_mismatch_text",
+                        message=f"Text {text.id} skipped for room {room.id} due floor mismatch",
+                        room_id=room.id,
+                    )
+                )
+
         if len(matched_room_ids) > 1:
             for room_id in matched_room_ids:
                 exceptions.append(
@@ -72,7 +82,7 @@ def _resolve_height_assignments(
     assigned: dict[str, tuple[float, HeightMode]] = {}
     exceptions: list[QuantityException] = []
 
-    explicit_by_room: dict[str, list[float]] = defaultdict(list)
+    explicit_by_room: dict[str, list[tuple[float, str]]] = defaultdict(list)
     point_candidates: dict[str, list[tuple[float, str]]] = defaultdict(list)
 
     for marker in project.heights:
@@ -80,16 +90,32 @@ def _resolve_height_assignments(
             for room in rooms:
                 if room.id != marker.room_id:
                     continue
-                if marker.floor is not None and room.floor != marker.floor:
+                if not _floor_compatible(room.floor, marker.floor):
+                    exceptions.append(
+                        QuantityException(
+                            code="marker_floor_mismatch_height",
+                            message=f"Height marker {marker.id} skipped for room {room.id} due floor mismatch",
+                            room_id=room.id,
+                        )
+                    )
                     continue
-                explicit_by_room[room.id].append(marker.height)
+                explicit_by_room[room.id].append((marker.height, marker.id))
             continue
 
-        candidate_rooms = [
-            room.id
-            for room in rooms
-            if _floor_compatible(room.floor, marker.floor) and point_inside_polygon(marker.point, room.points)
-        ]
+        candidate_rooms: list[str] = []
+        for room in rooms:
+            if not point_inside_polygon(marker.point, room.points):
+                continue
+            if _floor_compatible(room.floor, marker.floor):
+                candidate_rooms.append(room.id)
+            else:
+                exceptions.append(
+                    QuantityException(
+                        code="marker_floor_mismatch_height",
+                        message=f"Height marker {marker.id} skipped for room {room.id} due floor mismatch",
+                        room_id=room.id,
+                    )
+                )
         if len(candidate_rooms) == 1:
             point_candidates[candidate_rooms[0]].append((marker.height, marker.id))
         elif len(candidate_rooms) > 1:
@@ -105,8 +131,17 @@ def _resolve_height_assignments(
     for room in rooms:
         if room.id in explicit_by_room:
             heights = explicit_by_room[room.id]
-            if heights:
-                assigned[room.id] = (heights[0], HeightMode.QUOTE_HEIGHT)
+            if len(heights) == 1:
+                assigned[room.id] = (heights[0][0], HeightMode.QUOTE_HEIGHT)
+            elif len(heights) > 1:
+                marker_ids = ", ".join(marker_id for _, marker_id in heights)
+                exceptions.append(
+                    QuantityException(
+                        code="ambiguous_height_assignment",
+                        message=f"Room {room.id} has multiple explicit heights: {marker_ids}",
+                        room_id=room.id,
+                    )
+                )
             continue
 
         candidates = point_candidates.get(room.id, [])
@@ -133,11 +168,20 @@ def _resolve_window_assignments(
     exceptions: list[QuantityException] = []
 
     for window in project.windows:
-        matched_room_ids = [
-            room.id
-            for room in rooms
-            if _floor_compatible(room.floor, window.floor) and point_inside_polygon(window.point, room.points)
-        ]
+        matched_room_ids: list[str] = []
+        for room in rooms:
+            if not point_inside_polygon(window.point, room.points):
+                continue
+            if _floor_compatible(room.floor, window.floor):
+                matched_room_ids.append(room.id)
+            else:
+                exceptions.append(
+                    QuantityException(
+                        code="marker_floor_mismatch_window",
+                        message=f"Window {window.id} skipped for room {room.id} due floor mismatch",
+                        room_id=room.id,
+                    )
+                )
         if len(matched_room_ids) == 1:
             assignments[matched_room_ids[0]].append(window)
         elif len(matched_room_ids) > 1:
@@ -294,6 +338,9 @@ def _determine_status(exceptions: list[QuantityException], default_inferred: boo
         if exc.code in {
             "room_has_no_name",
             "ambiguous_room_text",
+            "marker_floor_mismatch_text",
+            "marker_floor_mismatch_window",
+            "marker_floor_mismatch_height",
             "ambiguous_window_assignment",
             "ambiguous_height_assignment",
             "ambiguous_void_marker",

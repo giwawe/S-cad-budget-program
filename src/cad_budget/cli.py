@@ -36,7 +36,11 @@ def calculate(
         typer.echo(f"Invalid project JSON in '{input_json}': {error_message}", err=True)
         raise typer.Exit(code=1)
 
-    result = calculate_quantities(project)
+    try:
+        result = calculate_quantities(project)
+    except ValueError as exc:
+        typer.echo(f"Failed to calculate quantities: {exc}", err=True)
+        raise typer.Exit(code=1)
     wrote_outputs: list[str] = []
 
     try:

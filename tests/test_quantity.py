@@ -529,3 +529,54 @@ def test_void_space_related_floor_sum_sets_related_floors_sum_mode():
     assert row.space_type is SpaceType.VOID
     assert row.height == 5.8
     assert row.height_mode is HeightMode.RELATED_FLOORS_SUM
+
+
+def test_floorless_markers_for_floored_room_are_ignored_and_flagged():
+    project = ProjectInput(
+        project_name="Floor-Mismatch Marker",
+        default_height=2.8,
+        floor_heights={"1F": 2.9},
+        rooms=[RoomBoundary(id="r1", floor="1F", points=rect(0, 0, 4, 3))],
+        texts=[TextMarker(id="t1", text="Bedroom", point=Point(x=2, y=1))],
+        windows=[WindowMarker(id="w1", point=Point(x=1, y=1), width=1.2)],
+        heights=[HeightMarker(id="h1", point=Point(x=3, y=1), height=4.8)],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.room_name == "\u672a\u547d\u540d\u7a7a\u95f4"
+    assert row.height == 2.9
+    assert row.height_mode is HeightMode.FLOOR_DEFAULT
+    assert row.window_count == 0
+    assert row.window_area == 0
+    assert row.status is DataStatus.NEEDS_REVIEW
+    assert {exc.code for exc in result.exceptions if exc.room_id == "r1"} >= {
+        "marker_floor_mismatch_text",
+        "marker_floor_mismatch_window",
+        "marker_floor_mismatch_height",
+    }
+
+
+def test_explicit_height_markers_for_same_room_id_become_ambiguous():
+    project = ProjectInput(
+        project_name="Duplicate Explicit Heights",
+        default_height=2.8,
+        rooms=[RoomBoundary(id="r1", points=rect(0, 0, 4, 3))],
+        heights=[
+            HeightMarker(id="h1", point=Point(x=1, y=1), height=2.5, room_id="r1"),
+            HeightMarker(id="h2", point=Point(x=3, y=2), height=3.1, room_id="r1"),
+        ],
+        texts=[TextMarker(id="t1", text="Bedroom", point=Point(x=2, y=1))],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.height == 2.8
+    assert row.height_mode is HeightMode.PROJECT_DEFAULT
+    assert row.status is DataStatus.NEEDS_REVIEW
+    assert any(
+        exc.code == "ambiguous_height_assignment" and exc.room_id == "r1"
+        for exc in result.exceptions
+    )
