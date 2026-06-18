@@ -91,3 +91,26 @@ def test_cli_reports_invalid_json_input(tmp_path: Path):
     error_text = (result.stdout or "") + (result.stderr or "")
     assert "Invalid project JSON" in error_text
     assert "Traceback" not in error_text
+
+
+def test_cli_reports_non_utf8_input(tmp_path: Path):
+    runner = CliRunner()
+    output = tmp_path / "output" / "result.json"
+    bad_input = tmp_path / "non_utf8.bin"
+    bad_input.write_bytes(bytes([0xFF, 0xFE, 0xFD]))
+
+    result = runner.invoke(
+        app,
+        [
+            "calculate",
+            str(bad_input),
+            "--json-output",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "Failed to read input JSON" in error_text
+    assert "non_utf8.bin" in error_text
+    assert "Traceback" not in error_text

@@ -23,7 +23,7 @@ def calculate(
 ) -> None:
     try:
         raw_json = input_json.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         typer.echo(f"Failed to read input JSON '{input_json}': {exc}", err=True)
         raise typer.Exit(code=1)
 
