@@ -76,6 +76,14 @@ from cad_budget.models import ProjectInput
 
 def test_project_input_can_be_imported():
     assert ProjectInput.__name__ == "ProjectInput"
+
+
+def test_project_input_defaults_to_untitled():
+    assert ProjectInput().project_name == "Untitled"
+
+
+def test_project_input_accepts_custom_project_name():
+    assert ProjectInput(project_name="Villa A").project_name == "Villa A"
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -117,9 +125,6 @@ dependencies = [
 dev = [
   "pytest>=8.2.0"
 ]
-
-[project.scripts]
-cad-budget = "cad_budget.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -175,7 +180,7 @@ pytest tests/test_models.py -q
 Expected:
 
 ```text
-1 passed
+3 passed
 ```
 
 - [ ] **Step 8: Commit**
@@ -184,6 +189,8 @@ Expected:
 git add pyproject.toml README.md src/cad_budget/__init__.py src/cad_budget/models.py tests/test_models.py
 git commit -m "chore: initialize quantity takeoff project"
 ```
+
+Do not add a `cad-budget` console script in this task. The entrypoint is added in Task 6 after `src/cad_budget/cli.py` exists.
 
 ## Task 2: Domain Models
 
@@ -981,6 +988,7 @@ git commit -m "feat: support first-version special spaces"
 
 **Files:**
 - Create: `src/cad_budget/cli.py`
+- Modify: `pyproject.toml`
 - Create: `tests/fixtures/simple_apartment.json`
 - Create: `tests/test_cli.py`
 
@@ -1089,7 +1097,16 @@ def calculate(
     typer.echo(f"Wrote {json_output}")
 ```
 
-- [ ] **Step 5: Run CLI test**
+- [ ] **Step 5: Add the package CLI entrypoint**
+
+Modify `pyproject.toml` by adding:
+
+```toml
+[project.scripts]
+cad-budget = "cad_budget.cli:app"
+```
+
+- [ ] **Step 6: Run CLI test**
 
 Run:
 
@@ -1103,7 +1120,7 @@ Expected:
 1 passed
 ```
 
-- [ ] **Step 6: Run all tests**
+- [ ] **Step 7: Run all tests**
 
 Run:
 
@@ -1117,10 +1134,10 @@ Expected:
 11 passed
 ```
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/cad_budget/cli.py tests/fixtures/simple_apartment.json tests/test_cli.py
+git add pyproject.toml src/cad_budget/cli.py tests/fixtures/simple_apartment.json tests/test_cli.py
 git commit -m "feat: add JSON quantity CLI"
 ```
 
