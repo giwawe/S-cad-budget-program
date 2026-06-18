@@ -1,6 +1,7 @@
 from cad_budget.models import (
     DataStatus,
     HeightMarker,
+    VoidMarker,
     SpaceType,
     LayerName,
     Point,
@@ -252,13 +253,24 @@ def test_elevator_shaft_is_excluded_by_default():
                 include_in_wall_paint_quantity=False,
             )
         ],
+        windows=[WindowMarker(id="win1", point=Point(x=1, y=1), width=1.2)],
     )
 
     row = calculate_quantities(project).rows[0]
 
     assert row.status.value == "excluded"
+    assert row.height == 2.8
     assert row.floor_area == 0
+    assert row.wall_measure_perimeter == 0
+    assert row.open_boundary_length == 0
+    assert row.gross_wall_area == 0
+    assert row.window_count == 0
+    assert row.window_area == 0
+    assert row.door_opening_count == 0
+    assert row.door_opening_area == 0
     assert row.net_wall_area == 0
+    assert row.include_in_floor_quantity is False
+    assert row.include_in_wall_paint_quantity is False
 
 
 def test_balcony_keeps_outdoor_flags():
@@ -281,3 +293,85 @@ def test_balcony_keeps_outdoor_flags():
     assert row.space_type is SpaceType.BALCONY
     assert row.is_outdoor is True
     assert row.include_in_wall_paint_quantity is False
+
+
+def test_void_space_uses_void_marker_height_when_no_room_height():
+    project = ProjectInput(
+        project_name="Lobby Void",
+        rooms=[
+            RoomBoundary(
+                id="void-atrium",
+                points=rect(0, 0, 6, 4),
+                space_type=SpaceType.VOID,
+                floor="2F",
+            )
+        ],
+        voids=[
+            VoidMarker(
+                id="void-marker",
+                points=rect(1, 1, 5, 3),
+                height=5.8,
+                floor="2F",
+            )
+        ],
+    )
+
+    row = calculate_quantities(project).rows[0]
+
+    assert row.space_type is SpaceType.VOID
+    assert row.height == 5.8
+
+
+def test_void_opening_is_excluded_from_floor_and_wall_quantities():
+    project = ProjectInput(
+        project_name="Void Opening",
+        rooms=[
+            RoomBoundary(id="floor-room", points=rect(0, 0, 4, 3)),
+            RoomBoundary(
+                id="void-opening",
+                points=rect(0, 0, 4, 3),
+                floor="2F",
+                space_type=SpaceType.VOID_OPENING,
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row_opening = result.rows[1]
+    assert row_opening.space_type is SpaceType.VOID_OPENING
+    assert row_opening.status is DataStatus.EXCLUDED
+    assert row_opening.floor_area == 0
+    assert row_opening.wall_measure_perimeter == 0
+    assert row_opening.open_boundary_length == 0
+    assert row_opening.gross_wall_area == 0
+    assert row_opening.net_wall_area == 0
+    assert row_opening.include_in_floor_quantity is False
+    assert row_opening.include_in_wall_paint_quantity is False
+
+
+def test_balcony_opening_reduces_wall_measure_perimeter():
+    project = ProjectInput(
+        project_name="Balcony Opening",
+        rooms=[
+            RoomBoundary(
+                id="balcony",
+                points=rect(0, 0, 3, 1.5),
+                space_type=SpaceType.BALCONY,
+                include_in_wall_paint_quantity=False,
+            )
+        ],
+        openings=[
+            PolylineMarker(
+                id="balcony-open",
+                layer=LayerName.QUOTE_OPENING,
+                points=[Point(x=3, y=0), Point(x=3, y=1.5)],
+            )
+        ],
+    )
+
+    row = calculate_quantities(project).rows[0]
+
+    assert row.space_type is SpaceType.BALCONY
+    assert row.floor_perimeter == 9
+    assert row.open_boundary_length == 1.5
+    assert row.wall_measure_perimeter == 7.5

@@ -6,6 +6,7 @@ from typing import Any
 from shapely.geometry import LineString, Polygon
 
 from cad_budget.geometry import closed_polygon_area, closed_polygon_perimeter, point_inside_polygon
+from cad_budget.models import VoidMarker
 from cad_budget.models import (
     DataStatus,
     HeightMode,
@@ -152,6 +153,50 @@ def _resolve_window_assignments(
     return assignments, exceptions
 
 
+def _resolve_void_height_assignments(
+    project: ProjectInput, rooms: list[RoomBoundary]
+) -> tuple[dict[str, tuple[float, HeightMode]], list[QuantityException]]:
+    assigned: dict[str, tuple[float, HeightMode]] = {}
+    exceptions: list[QuantityException] = []
+
+    def _void_marker_matches_room(room: RoomBoundary, marker: VoidMarker) -> bool:
+        if marker.floor is not None and room.floor is not None and marker.floor != room.floor:
+            return False
+        if marker.floor is not None and room.floor is None:
+            return False
+        if room.floor is not None and marker.related_floors and room.floor not in marker.related_floors:
+            return False
+
+        room_polygon = _room_polygon(room)
+        marker_line = LineString((point.x, point.y) for point in marker.points)
+        if not marker_line.is_empty and room_polygon.intersects(marker_line):
+            return True
+
+        return point_inside_polygon(marker.points[0], room.points)
+
+    for room in rooms:
+        if room.space_type is not SpaceType.VOID:
+            continue
+
+        matching_markers = [marker for marker in project.voids if _void_marker_matches_room(room, marker)]
+        if not matching_markers:
+            continue
+
+        marker = matching_markers[0]
+        if marker.height is not None:
+            assigned[room.id] = (float(marker.height), HeightMode.QUOTE_VOID)
+            continue
+
+        if marker.related_floors:
+            related_height_sum = sum(
+                project.floor_heights.get(floor_name, 0.0) for floor_name in marker.related_floors
+            )
+            if related_height_sum > 0:
+                assigned[room.id] = (round(related_height_sum, 6), HeightMode.RELATED_FLOORS_SUM)
+
+    return assigned, exceptions
+
+
 def _room_polygon(room: RoomBoundary) -> Polygon:
     return Polygon((point.x, point.y) for point in room.points)
 
@@ -204,6 +249,9 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
     room_name_assignments, name_exceptions = _resolve_room_names(project, project.rooms)
     exceptions.extend(name_exceptions)
 
+    void_height_assignments, void_height_exceptions = _resolve_void_height_assignments(project, project.rooms)
+    exceptions.extend(void_height_exceptions)
+
     height_assignments, height_exceptions = _resolve_height_assignments(project, project.rooms)
     exceptions.extend(height_exceptions)
 
@@ -233,6 +281,8 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
         if room.attributes.get("height") is not None:
             height = float(room.attributes["height"])
             height_mode = HeightMode.MANUAL
+        elif room.space_type is SpaceType.VOID and room.id in void_height_assignments:
+            height, height_mode = void_height_assignments[room.id]
         elif room.id in height_assignments:
             height, height_mode = height_assignments[room.id]
         elif room.floor and room.floor in project.floor_heights:
@@ -274,14 +324,23 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
 
         status = _determine_status(room_exceptions, has_defaulted_window_height)
 
-        if room.space_type is SpaceType.ELEVATOR_SHAFT:
+        is_excluded_area_space = room.space_type in {SpaceType.ELEVATOR_SHAFT, SpaceType.VOID_OPENING}
+        if is_excluded_area_space:
             status = DataStatus.EXCLUDED
             floor_area = 0.0
-            floor_perimeter = 0.0
+            floor_perimeter = 0.0  # used for completeness
             open_boundary_length = 0.0
             wall_measure_perimeter = 0.0
             gross_wall_area = 0.0
+            window_count = 0
+            window_area = 0.0
             net_wall_area = 0.0
+
+            include_in_floor_quantity = False
+            include_in_wall_paint_quantity = False
+        else:
+            include_in_floor_quantity = room.include_in_floor_quantity
+            include_in_wall_paint_quantity = room.include_in_wall_paint_quantity
 
         rows.append(
             QuantityRow(
@@ -302,8 +361,8 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
                 door_opening_area=0.0,
                 net_wall_area=net_wall_area,
                 is_outdoor=room.is_outdoor,
-                include_in_floor_quantity=room.include_in_floor_quantity,
-                include_in_wall_paint_quantity=room.include_in_wall_paint_quantity,
+                include_in_floor_quantity=include_in_floor_quantity,
+                include_in_wall_paint_quantity=include_in_wall_paint_quantity,
                 status=status,
                 exception_notes=[exception.message for exception in room_exceptions],
             )
