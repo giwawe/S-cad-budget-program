@@ -37,20 +37,24 @@ def calculate(
         raise typer.Exit(code=1)
 
     result = calculate_quantities(project)
+    wrote_outputs: list[str] = []
+
     try:
         json_output.parent.mkdir(parents=True, exist_ok=True)
         json_output.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+        wrote_outputs.append(f"Wrote {json_output}")
     except OSError as exc:
         typer.echo(f"Failed to write JSON output '{json_output}': {exc}", err=True)
         raise typer.Exit(code=1)
-
-    typer.echo(f"Wrote {json_output}")
 
     if excel_output is not None:
         try:
             excel_output.parent.mkdir(parents=True, exist_ok=True)
             export_quantity_result(result, excel_output)
+            wrote_outputs.append(f"Wrote {excel_output}")
         except OSError as exc:
             typer.echo(f"Failed to write Excel output '{excel_output}': {exc}", err=True)
             raise typer.Exit(code=1)
-        typer.echo(f"Wrote {excel_output}")
+
+    for message in wrote_outputs:
+        typer.echo(message)
