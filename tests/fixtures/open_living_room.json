@@ -1,0 +1,27 @@
+{
+  "project_name": "Open Living",
+  "default_height": 2.8,
+  "rooms": [
+    {
+      "id": "living",
+      "name": "客餐厅",
+      "points": [
+        { "x": 0, "y": 0 },
+        { "x": 4, "y": 0 },
+        { "x": 4, "y": 3 },
+        { "x": 0, "y": 3 },
+        { "x": 0, "y": 0 }
+      ]
+    }
+  ],
+  "openings": [
+    {
+      "id": "open1",
+      "layer": "QUOTE_OPENING",
+      "points": [
+        { "x": 4, "y": 0 },
+        { "x": 4, "y": 3 }
+      ]
+    }
+  ]
+}

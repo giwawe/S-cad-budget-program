@@ -1,0 +1,39 @@
+{
+  "project_name": "Villa Special Spaces",
+  "default_height": 2.8,
+  "floor_heights": {
+    "1F": 3.0,
+    "2F": 3.0
+  },
+  "rooms": [
+    {
+      "id": "void-living",
+      "name": "挑空客厅",
+      "floor": "1F",
+      "space_type": "void",
+      "attributes": { "height": 6.0 },
+      "points": [
+        { "x": 0, "y": 0 },
+        { "x": 5, "y": 0 },
+        { "x": 5, "y": 4 },
+        { "x": 0, "y": 4 },
+        { "x": 0, "y": 0 }
+      ]
+    },
+    {
+      "id": "elevator",
+      "name": "电梯井",
+      "floor": "1F",
+      "space_type": "elevator_shaft",
+      "include_in_floor_quantity": false,
+      "include_in_wall_paint_quantity": false,
+      "points": [
+        { "x": 6, "y": 0 },
+        { "x": 8, "y": 0 },
+        { "x": 8, "y": 2 },
+        { "x": 6, "y": 2 },
+        { "x": 6, "y": 0 }
+      ]
+    }
+  ]
+}
