@@ -317,20 +317,37 @@ def _opening_overlap(opening_points: list[tuple[float, float]], boundary: LineSt
     return round(float(intersection.length), 6)
 
 
-def _open_boundary_length(project: ProjectInput, room: RoomBoundary) -> float:
+def _open_boundary_length(
+    project: ProjectInput, room: RoomBoundary
+) -> tuple[float, list[QuantityException]]:
     polygon = _room_polygon(room)
     boundary = polygon.boundary
     total = 0.0
+    exceptions: list[QuantityException] = []
 
     for opening in project.openings:
         if opening.layer != LayerName.QUOTE_OPENING:
             continue
-        if not _floor_compatible(room.floor, opening.floor):
+        opening_points = [(point.x, point.y) for point in opening.points]
+        if not boundary.intersects(LineString(opening_points)):
             continue
 
-        total += _opening_overlap([(point.x, point.y) for point in opening.points], boundary)
+        if not _floor_compatible(room.floor, opening.floor):
+            exceptions.append(
+                QuantityException(
+                    code="marker_floor_mismatch_opening",
+                    message=(
+                        "marker_floor_mismatch_opening: "
+                        f"Opening {opening.id} skipped for room {room.id} due floor mismatch"
+                    ),
+                    room_id=room.id,
+                )
+            )
+            continue
 
-    return round(max(total, 0.0), 6)
+        total += _opening_overlap(opening_points, boundary)
+
+    return round(max(total, 0.0), 6), exceptions
 
 
 def _determine_status(exceptions: list[QuantityException], default_inferred: bool) -> DataStatus:
@@ -340,11 +357,13 @@ def _determine_status(exceptions: list[QuantityException], default_inferred: boo
             "ambiguous_room_text",
             "marker_floor_mismatch_text",
             "marker_floor_mismatch_window",
+            "marker_floor_mismatch_opening",
             "marker_floor_mismatch_height",
             "ambiguous_window_assignment",
             "ambiguous_height_assignment",
             "ambiguous_void_marker",
             "void_related_floor_height_missing",
+            "window_area_exceeds_wall_area",
         }:
             return DataStatus.NEEDS_REVIEW
     if default_inferred:
@@ -404,7 +423,10 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
 
         floor_area = closed_polygon_area(room.points)
         floor_perimeter = closed_polygon_perimeter(room.points)
-        open_boundary_length = _open_boundary_length(project, room)
+        open_boundary_length, open_boundary_exceptions = _open_boundary_length(project, room)
+        if open_boundary_exceptions:
+            room_exceptions.extend(open_boundary_exceptions)
+            exceptions.extend(open_boundary_exceptions)
         wall_measure_perimeter = max(floor_perimeter - open_boundary_length, 0.0)
 
         room_windows = window_assignments.get(room.id, [])
@@ -430,7 +452,21 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
                 exceptions.append(room_exceptions[-1])
 
         gross_wall_area = round(wall_measure_perimeter * height, 6)
-        net_wall_area = round(gross_wall_area - window_area, 6)
+        if window_area > gross_wall_area:
+            net_wall_area = 0.0
+            exception = QuantityException(
+                code="window_area_exceeds_wall_area",
+                message=(
+                    "window_area_exceeds_wall_area: "
+                    f"Window area {round(window_area, 6)} exceeds gross wall area {gross_wall_area} "
+                    f"for room {room.id}"
+                ),
+                room_id=room.id,
+            )
+            room_exceptions.append(exception)
+            exceptions.append(exception)
+        else:
+            net_wall_area = round(gross_wall_area - window_area, 6)
 
         status = _determine_status(room_exceptions, has_defaulted_window_height)
 

@@ -72,7 +72,7 @@ def test_open_boundary_reduces_wall_measure_perimeter():
     assert row.gross_wall_area == 30.8
 
 
-def test_floorless_opening_does_not_bleed_across_floors_and_floored_opening_is_scoped():
+def test_floorless_opening_for_floored_rooms_is_flagged_as_floor_mismatch():
     project = ProjectInput(
         project_name="Stacked Openings",
         default_height=2.8,
@@ -91,8 +91,22 @@ def test_floorless_opening_does_not_bleed_across_floors_and_floored_opening_is_s
 
     result = calculate_quantities(project)
     room1, room2 = result.rows
+    assert room1.status is DataStatus.NEEDS_REVIEW
+    assert room2.status is DataStatus.NEEDS_REVIEW
     assert room1.open_boundary_length == 0
     assert room2.open_boundary_length == 0
+    assert any(
+        exc.code == "marker_floor_mismatch_opening" for exc in result.exceptions if exc.room_id == "r1"
+    )
+    assert any(
+        exc.code == "marker_floor_mismatch_opening" for exc in result.exceptions if exc.room_id == "r2"
+    )
+    assert any(
+        "marker_floor_mismatch_opening" in note for note in room1.exception_notes
+    )
+    assert any(
+        "marker_floor_mismatch_opening" in note for note in room2.exception_notes
+    )
 
     floor_project = ProjectInput(
         project_name="Scoped Floor Opening",
@@ -115,6 +129,31 @@ def test_floorless_opening_does_not_bleed_across_floors_and_floored_opening_is_s
     room1, room2 = scoped_result.rows
     assert room1.open_boundary_length == 3
     assert room2.open_boundary_length == 0
+
+
+def test_oversized_window_exceeds_wall_area_and_flags_review():
+    project = ProjectInput(
+        project_name="Oversized Window",
+        rooms=[RoomBoundary(id="tiny", points=rect(0, 0, 2, 2), name="Tiny Room")],
+        windows=[WindowMarker(id="w1", point=Point(x=1, y=1), width=10.0, height=3.0)],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.room_name == "Tiny Room"
+    assert row.gross_wall_area == 22.4
+    assert row.window_area == 30.0
+    assert row.net_wall_area == 0
+    assert row.status is DataStatus.NEEDS_REVIEW
+    assert any(
+        exc.code == "window_area_exceeds_wall_area" and exc.room_id == "tiny"
+        for exc in result.exceptions
+    )
+    assert any(
+        "window_area_exceeds_wall_area" in note
+        for note in row.exception_notes
+    )
 
 
 def test_identical_floor_footprints_match_markers_only_on_the_same_floor():
