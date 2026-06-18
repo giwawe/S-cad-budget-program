@@ -1,6 +1,7 @@
 from cad_budget.models import (
     DataStatus,
     HeightMarker,
+    SpaceType,
     LayerName,
     Point,
     PolylineMarker,
@@ -212,3 +213,71 @@ def test_missing_window_height_uses_project_default_and_marks_default_inferred()
     assert row.status is DataStatus.DEFAULT_INFERRED
     assert any("default height" in note for note in row.exception_notes)
     assert any(exception.code == "window_height_defaulted" for exception in result.exceptions)
+
+
+def test_void_space_uses_custom_height_and_keeps_single_floor_area():
+    project = ProjectInput(
+        project_name="Villa Void",
+        default_height=2.8,
+        floor_heights={"1F": 3.0, "2F": 3.0},
+        rooms=[
+            RoomBoundary(
+                id="void-living",
+                points=rect(0, 0, 5, 4),
+                floor="1F",
+                space_type=SpaceType.VOID,
+                attributes={"height": 6.0},
+            )
+        ],
+        texts=[TextMarker(id="t1", text="挑空客厅", point=Point(x=2, y=2))],
+    )
+
+    row = calculate_quantities(project).rows[0]
+
+    assert row.space_type is SpaceType.VOID
+    assert row.height == 6.0
+    assert row.floor_area == 20
+    assert row.gross_wall_area == 108
+
+
+def test_elevator_shaft_is_excluded_by_default():
+    project = ProjectInput(
+        project_name="Villa Shaft",
+        rooms=[
+            RoomBoundary(
+                id="shaft",
+                points=rect(0, 0, 2, 2),
+                space_type=SpaceType.ELEVATOR_SHAFT,
+                include_in_floor_quantity=False,
+                include_in_wall_paint_quantity=False,
+            )
+        ],
+    )
+
+    row = calculate_quantities(project).rows[0]
+
+    assert row.status.value == "excluded"
+    assert row.floor_area == 0
+    assert row.net_wall_area == 0
+
+
+def test_balcony_keeps_outdoor_flags():
+    project = ProjectInput(
+        project_name="Balcony",
+        rooms=[
+            RoomBoundary(
+                id="balcony",
+                points=rect(0, 0, 3, 1.5),
+                name="阳台",
+                space_type=SpaceType.BALCONY,
+                is_outdoor=True,
+                include_in_wall_paint_quantity=False,
+            )
+        ],
+    )
+
+    row = calculate_quantities(project).rows[0]
+
+    assert row.space_type is SpaceType.BALCONY
+    assert row.is_outdoor is True
+    assert row.include_in_wall_paint_quantity is False
