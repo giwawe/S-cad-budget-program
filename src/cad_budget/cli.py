@@ -5,6 +5,7 @@ import typer
 from pydantic import ValidationError
 
 from cad_budget.models import ProjectInput
+from cad_budget.export_excel import export_quantity_result
 from cad_budget.quantity import calculate_quantities
 
 app = typer.Typer(help="CAD renovation quantity takeoff tools.")
@@ -20,6 +21,7 @@ def main() -> None:
 def calculate(
     input_json: Path,
     json_output: Path = typer.Option(..., "--json-output", help="Path for calculated JSON output."),
+    excel_output: Path | None = typer.Option(None, "--excel-output", help="Optional Excel output path."),
 ) -> None:
     try:
         raw_json = input_json.read_text(encoding="utf-8")
@@ -43,3 +45,12 @@ def calculate(
         raise typer.Exit(code=1)
 
     typer.echo(f"Wrote {json_output}")
+
+    if excel_output is not None:
+        try:
+            excel_output.parent.mkdir(parents=True, exist_ok=True)
+            export_quantity_result(result, excel_output)
+        except OSError as exc:
+            typer.echo(f"Failed to write Excel output '{excel_output}': {exc}", err=True)
+            raise typer.Exit(code=1)
+        typer.echo(f"Wrote {excel_output}")
