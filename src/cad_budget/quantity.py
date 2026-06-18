@@ -20,10 +20,6 @@ from cad_budget.models import (
 
 
 def _floor_compatible(room_floor: str | None, marker_floor: str | None) -> bool:
-    if room_floor is None:
-        return marker_floor is None
-    if marker_floor is None:
-        return True
     return room_floor == marker_floor
 
 
@@ -83,7 +79,7 @@ def _resolve_height_assignments(
             for room in rooms:
                 if room.id != marker.room_id:
                     continue
-                if not _floor_compatible(room.floor, marker.floor):
+                if marker.floor is not None and room.floor != marker.floor:
                     continue
                 explicit_by_room[room.id].append(marker.height)
             continue

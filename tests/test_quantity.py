@@ -69,6 +69,51 @@ def test_open_boundary_reduces_wall_measure_perimeter():
     assert row.gross_wall_area == 30.8
 
 
+def test_floorless_opening_does_not_bleed_across_floors_and_floored_opening_is_scoped():
+    project = ProjectInput(
+        project_name="Stacked Openings",
+        default_height=2.8,
+        rooms=[
+            RoomBoundary(id="r1", floor="1F", points=rect(0, 0, 4, 3)),
+            RoomBoundary(id="r2", floor="2F", points=rect(4, 0, 8, 3)),
+        ],
+        openings=[
+            PolylineMarker(
+                id="global-open",
+                layer=LayerName.QUOTE_OPENING,
+                points=[Point(x=4, y=0), Point(x=4, y=3)],
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+    room1, room2 = result.rows
+    assert room1.open_boundary_length == 0
+    assert room2.open_boundary_length == 0
+
+    floor_project = ProjectInput(
+        project_name="Scoped Floor Opening",
+        default_height=2.8,
+        rooms=[
+            RoomBoundary(id="r1", floor="1F", points=rect(0, 0, 4, 3)),
+            RoomBoundary(id="r2", floor="2F", points=rect(4, 0, 8, 3)),
+        ],
+        openings=[
+            PolylineMarker(
+                id="floor1-open",
+                layer=LayerName.QUOTE_OPENING,
+                points=[Point(x=4, y=0), Point(x=4, y=3)],
+                floor="1F",
+            )
+        ],
+    )
+
+    scoped_result = calculate_quantities(floor_project)
+    room1, room2 = scoped_result.rows
+    assert room1.open_boundary_length == 3
+    assert room2.open_boundary_length == 0
+
+
 def test_identical_floor_footprints_match_markers_only_on_the_same_floor():
     project = ProjectInput(
         project_name="Stacked Rooms",
