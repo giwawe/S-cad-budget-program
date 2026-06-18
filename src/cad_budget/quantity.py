@@ -168,32 +168,69 @@ def _resolve_void_height_assignments(
             return False
 
         room_polygon = _room_polygon(room)
-        marker_line = LineString((point.x, point.y) for point in marker.points)
-        if not marker_line.is_empty and room_polygon.intersects(marker_line):
-            return True
+        if len(marker.points) > 1:
+            marker_line = LineString((point.x, point.y) for point in marker.points)
+            if not marker_line.is_empty and room_polygon.intersects(marker_line):
+                return True
 
         return point_inside_polygon(marker.points[0], room.points)
 
-    for room in rooms:
-        if room.space_type is not SpaceType.VOID:
+    void_rooms = [room for room in rooms if room.space_type is SpaceType.VOID]
+    markers_by_room: dict[str, list[tuple[int, VoidMarker]]] = defaultdict(list)
+    rooms_by_marker: dict[int, list[RoomBoundary]] = defaultdict(list)
+    ambiguous_exception_keys: set[tuple[str, str]] = set()
+
+    for marker_index, marker in enumerate(project.voids):
+        for room in void_rooms:
+            if not _void_marker_matches_room(room, marker):
+                continue
+            markers_by_room[room.id].append((marker_index, marker))
+            rooms_by_marker[marker_index].append(room)
+
+    ambiguous_room_ids: set[str] = set()
+    for marker_index, matched_rooms in rooms_by_marker.items():
+        if len(matched_rooms) <= 1:
             continue
 
-        matching_markers = [marker for marker in project.voids if _void_marker_matches_room(room, marker)]
+        marker = project.voids[marker_index]
+        room_ids = ", ".join(room.id for room in matched_rooms)
+        for room in matched_rooms:
+            ambiguous_room_ids.add(room.id)
+            exception_key = ("ambiguous_void_marker", room.id)
+            if exception_key in ambiguous_exception_keys:
+                continue
+            ambiguous_exception_keys.add(exception_key)
+            exceptions.append(
+                QuantityException(
+                    code="ambiguous_void_marker",
+                    message=f"Void marker {marker.id} matches multiple rooms: {room_ids}",
+                    room_id=room.id,
+                )
+            )
+
+    for room in void_rooms:
+        matching_markers = markers_by_room.get(room.id, [])
         if not matching_markers:
             continue
 
         if len(matching_markers) > 1:
-            marker_ids = ", ".join(marker.id for marker in matching_markers)
-            exceptions.append(
-                QuantityException(
-                    code="ambiguous_void_marker",
-                    message=f"Room {room.id} matches multiple void markers: {marker_ids}",
-                    room_id=room.id,
+            marker_ids = ", ".join(marker.id for _, marker in matching_markers)
+            ambiguous_room_ids.add(room.id)
+            exception_key = ("ambiguous_void_marker", room.id)
+            if exception_key not in ambiguous_exception_keys:
+                ambiguous_exception_keys.add(exception_key)
+                exceptions.append(
+                    QuantityException(
+                        code="ambiguous_void_marker",
+                        message=f"Room {room.id} matches multiple void markers: {marker_ids}",
+                        room_id=room.id,
+                    )
                 )
-            )
+
+        if room.id in ambiguous_room_ids:
             continue
 
-        marker = matching_markers[0]
+        marker = matching_markers[0][1]
         if marker.height is not None:
             assigned[room.id] = (float(marker.height), HeightMode.QUOTE_VOID)
             continue

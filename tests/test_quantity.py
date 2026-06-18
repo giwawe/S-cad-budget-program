@@ -420,6 +420,52 @@ def test_void_space_with_ambiguous_void_markers_falls_back_to_normal_height():
     )
 
 
+def test_void_marker_matching_multiple_void_rooms_is_ambiguous_for_each_room():
+    project = ProjectInput(
+        project_name="Shared Void Marker",
+        floor_heights={"1F": 3.1},
+        rooms=[
+            RoomBoundary(
+                id="void-left",
+                name="Left Void",
+                points=rect(0, 0, 4, 3),
+                floor="1F",
+                space_type=SpaceType.VOID,
+            ),
+            RoomBoundary(
+                id="void-right",
+                name="Right Void",
+                points=rect(4, 0, 8, 3),
+                floor="1F",
+                space_type=SpaceType.VOID,
+            ),
+        ],
+        voids=[
+            VoidMarker(
+                id="shared-void-marker",
+                points=[Point(x=4, y=0.5), Point(x=4, y=2.5)],
+                height=6.2,
+                floor="1F",
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+    left, right = result.rows
+
+    assert left.height == 3.1
+    assert right.height == 3.1
+    assert left.status is DataStatus.NEEDS_REVIEW
+    assert right.status is DataStatus.NEEDS_REVIEW
+    assert any("shared-void-marker" in note for note in left.exception_notes)
+    assert any("shared-void-marker" in note for note in right.exception_notes)
+    assert {
+        exc.room_id
+        for exc in result.exceptions
+        if exc.code == "ambiguous_void_marker"
+    } == {"void-left", "void-right"}
+
+
 def test_void_space_related_floors_missing_floor_height_triggers_exception():
     project = ProjectInput(
         project_name="Void Missing Floors",
