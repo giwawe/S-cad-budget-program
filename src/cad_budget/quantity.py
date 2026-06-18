@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from math import isclose
-from shapely.geometry import LineString, Point as ShapelyPoint
-from shapely.geometry import Polygon
+from collections import defaultdict
+from typing import Any
+
+from shapely.geometry import LineString, Polygon
 
 from cad_budget.geometry import closed_polygon_area, closed_polygon_perimeter, point_inside_polygon
 from cad_budget.models import (
     DataStatus,
     HeightMode,
+    LayerName,
     ProjectInput,
     QuantityException,
     QuantityResult,
@@ -17,114 +19,184 @@ from cad_budget.models import (
 )
 
 
+def _floor_compatible(room_floor: str | None, marker_floor: str | None) -> bool:
+    if room_floor is None:
+        return marker_floor is None
+    if marker_floor is None:
+        return True
+    return room_floor == marker_floor
+
+
+def _resolve_room_names(project: ProjectInput, rooms: list[RoomBoundary]) -> tuple[dict[str, str], list[QuantityException]]:
+    assignments: dict[str, str] = {}
+    exceptions: list[QuantityException] = []
+    matched_names: dict[str, list[str]] = defaultdict(list)
+
+    for text in project.texts:
+        matched_room_ids = [
+            room.id
+            for room in rooms
+            if not room.name
+            and _floor_compatible(room.floor, text.floor)
+            and point_inside_polygon(text.point, room.points)
+        ]
+        if len(matched_room_ids) > 1:
+            for room_id in matched_room_ids:
+                exceptions.append(
+                    QuantityException(
+                        code="ambiguous_room_text",
+                        message=f"Text {text.id} matches multiple rooms",
+                        room_id=room_id,
+                    )
+                )
+            continue
+
+        if len(matched_room_ids) == 1:
+            matched_names[matched_room_ids[0]].append(text.text)
+
+    for room_id, names in matched_names.items():
+        if len(names) == 1:
+            assignments[room_id] = names[0]
+        else:
+            exceptions.append(
+                QuantityException(
+                    code="multiple_room_names",
+                    message=f"Room {room_id} contains multiple names: {', '.join(names)}",
+                    room_id=room_id,
+                )
+            )
+
+    return assignments, exceptions
+
+
+def _resolve_height_assignments(
+    project: ProjectInput, rooms: list[RoomBoundary]
+) -> tuple[dict[str, tuple[float, HeightMode]], list[QuantityException]]:
+    assigned: dict[str, tuple[float, HeightMode]] = {}
+    exceptions: list[QuantityException] = []
+
+    explicit_by_room: dict[str, list[float]] = defaultdict(list)
+    point_candidates: dict[str, list[tuple[float, str]]] = defaultdict(list)
+
+    for marker in project.heights:
+        if marker.room_id:
+            for room in rooms:
+                if room.id != marker.room_id:
+                    continue
+                if not _floor_compatible(room.floor, marker.floor):
+                    continue
+                explicit_by_room[room.id].append(marker.height)
+            continue
+
+        candidate_rooms = [
+            room.id
+            for room in rooms
+            if _floor_compatible(room.floor, marker.floor) and point_inside_polygon(marker.point, room.points)
+        ]
+        if len(candidate_rooms) == 1:
+            point_candidates[candidate_rooms[0]].append((marker.height, marker.id))
+        elif len(candidate_rooms) > 1:
+            for room_id in candidate_rooms:
+                exceptions.append(
+                    QuantityException(
+                        code="ambiguous_height_assignment",
+                        message=f"Height marker {marker.id} matches multiple rooms",
+                        room_id=room_id,
+                    )
+                )
+
+    for room in rooms:
+        if room.id in explicit_by_room:
+            heights = explicit_by_room[room.id]
+            if heights:
+                assigned[room.id] = (heights[0], HeightMode.QUOTE_HEIGHT)
+            continue
+
+        candidates = point_candidates.get(room.id, [])
+        if len(candidates) == 1:
+            height = candidates[0][0]
+            assigned[room.id] = (height, HeightMode.QUOTE_HEIGHT)
+        elif len(candidates) > 1:
+            marker_ids = ", ".join(marker_id for _, marker_id in candidates)
+            exceptions.append(
+                QuantityException(
+                    code="ambiguous_height_assignment",
+                    message=f"Room {room.id} has multiple height points: {marker_ids}",
+                    room_id=room.id,
+                )
+            )
+
+    return assigned, exceptions
+
+
+def _resolve_window_assignments(
+    project: ProjectInput, rooms: list[RoomBoundary]
+) -> tuple[dict[str, list[Any]], list[QuantityException]]:
+    assignments: dict[str, list] = defaultdict(list)
+    exceptions: list[QuantityException] = []
+
+    for window in project.windows:
+        matched_room_ids = [
+            room.id
+            for room in rooms
+            if _floor_compatible(room.floor, window.floor) and point_inside_polygon(window.point, room.points)
+        ]
+        if len(matched_room_ids) == 1:
+            assignments[matched_room_ids[0]].append(window)
+        elif len(matched_room_ids) > 1:
+            for room_id in matched_room_ids:
+                exceptions.append(
+                    QuantityException(
+                        code="ambiguous_window_assignment",
+                        message=f"Window {window.id} matches multiple rooms",
+                        room_id=room_id,
+                    )
+                )
+
+    return assignments, exceptions
+
+
 def _room_polygon(room: RoomBoundary) -> Polygon:
     return Polygon((point.x, point.y) for point in room.points)
 
 
-def _room_name(project: ProjectInput, room: RoomBoundary) -> tuple[str, list[QuantityException]]:
-    if room.name:
-        return room.name, []
-
-    names = [text.text for text in project.texts if point_inside_polygon(text.point, room.points)]
-    if len(names) == 1:
-        return names[0], []
-    if len(names) > 1:
-        return names[0], [
-            QuantityException(
-                code="multiple_room_names",
-                message=f"Room {room.id} contains multiple names: {', '.join(names)}",
-                room_id=room.id,
-            )
-        ]
-    return "未命名空间", [
-        QuantityException(
-            code="room_has_no_name",
-            message=f"Room {room.id} has no name",
-            room_id=room.id,
-        )
-    ]
-
-
-def _height(project: ProjectInput, room: RoomBoundary) -> tuple[float, HeightMode]:
-    if "height" in room.attributes:
-        return float(room.attributes["height"]), HeightMode.MANUAL
-
-    for marker in project.heights:
-        if marker.room_id == room.id or point_inside_polygon(marker.point, room.points):
-            return marker.height, HeightMode.QUOTE_HEIGHT
-
-    if room.floor and room.floor in project.floor_heights:
-        return project.floor_heights[room.floor], HeightMode.FLOOR_DEFAULT
-
-    return project.default_height, HeightMode.PROJECT_DEFAULT
-
-
-def _opening_boundary_overlap(opening_line: list[ShapelyPoint], boundary: LineString) -> float:
-    line = LineString(opening_line)
+def _opening_overlap(opening_points: list[tuple[float, float]], boundary: LineString) -> float:
+    line = LineString(opening_points)
     if line.is_empty:
         return 0.0
-    if line.is_simple is False and line.length < 0:
+    if not boundary.intersects(line):
         return 0.0
+
     intersection = line.intersection(boundary)
     if intersection.is_empty:
         return 0.0
-
-    # If the opening lies across the room edge, count only the overlapping part.
-    overlap_length = intersection.length
-    if not overlap_length and hasattr(intersection, "geom_type") and intersection.geom_type == "Point":
+    if intersection.geom_type == "Point":
         return 0.0
-    return round(float(overlap_length), 6)
+
+    return round(float(intersection.length), 6)
 
 
 def _open_boundary_length(project: ProjectInput, room: RoomBoundary) -> float:
     polygon = _room_polygon(room)
     boundary = polygon.boundary
-
     total = 0.0
+
     for opening in project.openings:
-        if opening.layer.name != "QUOTE_OPENING":
+        if opening.layer != LayerName.QUOTE_OPENING:
+            continue
+        if not _floor_compatible(room.floor, opening.floor):
             continue
 
-        line = LineString((point.x, point.y) for point in opening.points)
-        if not line.is_empty and boundary.distance(line) <= 0:
-            total += _opening_boundary_overlap([(point.x, point.y) for point in opening.points], boundary)
-        elif not line.is_empty and boundary.intersects(line):
-            # Keep legacy behavior tolerant: any intersection at least touches boundary.
-            total += _opening_boundary_overlap([(point.x, point.y) for point in opening.points], boundary)
+        total += _opening_overlap([(point.x, point.y) for point in opening.points], boundary)
 
     return round(max(total, 0.0), 6)
 
 
-def _window_area(project: ProjectInput, room: RoomBoundary) -> tuple[int, float, list[QuantityException], DataStatus]:
-    count = 0
-    area = 0.0
-    status = DataStatus.CONFIRMED
-    exceptions: list[QuantityException] = []
-
-    for window in project.windows:
-        if not point_inside_polygon(window.point, room.points):
-            continue
-        count += 1
-        height = window.height
-        if height is None:
-            height = project.default_window_height
-            status = DataStatus.DEFAULT_INFERRED
-            exceptions.append(
-                QuantityException(
-                    code="window_height_defaulted",
-                    message=f"Window {window.id} used default height {height}",
-                    room_id=room.id,
-                )
-            )
-        area += window.width * height
-
-    return count, round(area, 6), exceptions, status
-
-
-def _merge_status(*statuses: DataStatus) -> DataStatus:
-    if DataStatus.NEEDS_REVIEW in statuses:
-        return DataStatus.NEEDS_REVIEW
-    if DataStatus.DEFAULT_INFERRED in statuses:
+def _determine_status(exceptions: list[QuantityException], default_inferred: bool) -> DataStatus:
+    for exc in exceptions:
+        if exc.code in {"room_has_no_name", "ambiguous_room_text", "ambiguous_window_assignment", "ambiguous_height_assignment"}:
+            return DataStatus.NEEDS_REVIEW
+    if default_inferred:
         return DataStatus.DEFAULT_INFERRED
     return DataStatus.CONFIRMED
 
@@ -133,41 +205,81 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
     rows: list[QuantityRow] = []
     exceptions: list[QuantityException] = []
 
+    room_name_assignments, name_exceptions = _resolve_room_names(project, project.rooms)
+    exceptions.extend(name_exceptions)
+
+    height_assignments, height_exceptions = _resolve_height_assignments(project, project.rooms)
+    exceptions.extend(height_exceptions)
+
+    window_assignments, window_exceptions = _resolve_window_assignments(project, project.rooms)
+    exceptions.extend(window_exceptions)
+
     for room in project.rooms:
-        room_exceptions: list[QuantityException] = []
+        room_exceptions: list[QuantityException] = [
+            exception for exception in exceptions if exception.room_id == room.id
+        ]
 
-        room_name, name_exceptions = _room_name(project, room)
-        room_exceptions.extend(name_exceptions)
+        if room.name:
+            room_name = room.name
+        else:
+            room_name = room_name_assignments.get(room.id, "未命名空间")
+            if room.id not in room_name_assignments and not any(
+                exception.code == "room_has_no_name" for exception in room_exceptions
+            ):
+                missing_name_exception = QuantityException(
+                    code="room_has_no_name",
+                    message=f"Room {room.id} has no name",
+                    room_id=room.id,
+                )
+                room_exceptions.append(missing_name_exception)
+                exceptions.append(missing_name_exception)
 
-        height, height_mode = _height(project, room)
+        if room.attributes.get("height") is not None:
+            height = float(room.attributes["height"])
+            height_mode = HeightMode.MANUAL
+        elif room.id in height_assignments:
+            height, height_mode = height_assignments[room.id]
+        elif room.floor and room.floor in project.floor_heights:
+            height = project.floor_heights[room.floor]
+            height_mode = HeightMode.FLOOR_DEFAULT
+        else:
+            height = project.default_height
+            height_mode = HeightMode.PROJECT_DEFAULT
 
         floor_area = closed_polygon_area(room.points)
         floor_perimeter = closed_polygon_perimeter(room.points)
         open_boundary_length = _open_boundary_length(project, room)
         wall_measure_perimeter = max(floor_perimeter - open_boundary_length, 0.0)
-        if isclose(wall_measure_perimeter, 0.0, abs_tol=1e-12):
-            wall_measure_perimeter = 0.0
-        wall_measure_perimeter = round(wall_measure_perimeter, 6)
 
-        window_count, window_area, window_exceptions, window_status = _window_area(project, room)
-        room_exceptions.extend(window_exceptions)
+        room_windows = window_assignments.get(room.id, [])
+        window_count = len(room_windows)
+        window_area = 0.0
+        has_defaulted_window_height = False
+        for window in room_windows:
+            if window.height is None:
+                has_defaulted_window_height = True
+                height_value = project.default_window_height
+            else:
+                height_value = window.height
+            window_area += window.width * height_value
+
+            if window.height is None:
+                room_exceptions.append(
+                    QuantityException(
+                        code="window_height_defaulted",
+                        message=f"Window {window.id} used default height {height_value}",
+                        room_id=room.id,
+                    )
+                )
+                exceptions.append(room_exceptions[-1])
 
         gross_wall_area = round(wall_measure_perimeter * height, 6)
         net_wall_area = round(gross_wall_area - window_area, 6)
 
-        row_status = _merge_status(
-            DataStatus.CONFIRMED,
-            DataStatus.DEFAULT_INFERRED if room_exceptions else DataStatus.CONFIRMED,
-        )
-        if window_status is DataStatus.DEFAULT_INFERRED:
-            row_status = DataStatus.DEFAULT_INFERRED
-        if any(exc.code == "multiple_room_names" for exc in room_exceptions) or any(
-            exc.code == "room_has_no_name" for exc in room_exceptions
-        ):
-            row_status = DataStatus.NEEDS_REVIEW
+        status = _determine_status(room_exceptions, has_defaulted_window_height)
 
         if room.space_type is SpaceType.ELEVATOR_SHAFT:
-            row_status = DataStatus.EXCLUDED
+            status = DataStatus.EXCLUDED
             floor_area = 0.0
             floor_perimeter = 0.0
             open_boundary_length = 0.0
@@ -185,21 +297,20 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
                 height_mode=height_mode,
                 floor_area=round(floor_area, 6),
                 floor_perimeter=round(floor_perimeter, 6),
-                wall_measure_perimeter=wall_measure_perimeter,
+                wall_measure_perimeter=round(wall_measure_perimeter, 6),
                 open_boundary_length=open_boundary_length,
                 gross_wall_area=gross_wall_area,
                 window_count=window_count,
-                window_area=window_area,
+                window_area=round(window_area, 6),
                 door_opening_count=0,
                 door_opening_area=0.0,
                 net_wall_area=net_wall_area,
                 is_outdoor=room.is_outdoor,
                 include_in_floor_quantity=room.include_in_floor_quantity,
                 include_in_wall_paint_quantity=room.include_in_wall_paint_quantity,
-                status=row_status,
+                status=status,
                 exception_notes=[exception.message for exception in room_exceptions],
             )
         )
-        exceptions.extend(room_exceptions)
 
     return QuantityResult(project_name=project.project_name, rows=rows, exceptions=exceptions)
