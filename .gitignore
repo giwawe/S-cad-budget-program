@@ -25,6 +25,7 @@ coverage/
 
 # Tool and editor state
 .superpowers/
+.worktrees/
 .idea/
 .vscode/
 *.swp

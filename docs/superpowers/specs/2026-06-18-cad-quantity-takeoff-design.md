@@ -108,6 +108,150 @@ Wall-measure perimeter recognition priority:
 
 The quantity table must expose both floor perimeter and wall-measure perimeter to avoid confusion.
 
+## Special Space Rules
+
+The first version should support special spaces through lightweight CAD standards and explicit space types. It should not try to infer complex building semantics from arbitrary geometry.
+
+Recommended space types:
+
+```text
+normal
+void
+void_opening
+stair
+stair_hall
+balcony
+terrace
+elevator_shaft
+```
+
+The space type can come from a CAD object attribute, a room text convention, a table edit, or a dedicated marker layer when needed.
+
+### Void / Double-Height Spaces
+
+Villa projects often include double-height living rooms or other void spaces.
+
+Recommended CAD support:
+
+```text
+QUOTE_VOID
+```
+
+`QUOTE_VOID` marks a double-height region or a slab opening. It can be associated with a `QUOTE_ROOM` boundary.
+
+Calculation rules:
+
+```text
+Floor area = first-floor QUOTE_ROOM boundary area
+Floor perimeter = first-floor QUOTE_ROOM boundary perimeter
+Wall-measure perimeter = QUOTE_WALL / QUOTE_OPENING based perimeter
+Gross wall area = wall-measure perimeter * void actual height
+Net wall area = gross wall area - window area
+```
+
+Void height priority:
+
+1. Manually edited room height.
+2. `QUOTE_HEIGHT` marker.
+3. `QUOTE_VOID` height attribute.
+4. Sum of related floor default heights.
+5. Project default height.
+
+If an upper floor contains the same void as a slab opening, that upper-floor void should not be treated as a normal room and should not create floor area. It can be shown as an auxiliary `void_opening` row for review.
+
+### Stair and Stair Hall Spaces
+
+Stair-related spaces should be marked explicitly:
+
+```text
+space_type = stair
+space_type = stair_hall
+```
+
+Rules:
+
+```text
+Stair space
+- Record floor area as a special area.
+- Calculate wall area using QUOTE_WALL / QUOTE_OPENING and the relevant height.
+- Do not automatically calculate stair tread, riser, sloped slab, handrail, or detailed stair finish quantities in the first version.
+- Provide manual-entry fields for stair-specific quantities later.
+
+Stair hall
+- If it is a normal flat circulation space, calculate like a normal room.
+- If it connects to a void or stairwell, allow opening boundaries and uncertain wall segments.
+```
+
+### Balcony and Terrace Spaces
+
+Balconies and terraces should be explicitly marked:
+
+```text
+space_type = balcony
+space_type = terrace
+```
+
+Rules:
+
+```text
+Balcony
+- Calculate floor area.
+- Calculate wall area only for actual wall segments.
+- Do not count railing or open edges as interior wall area.
+- If enclosed by windows, use QUOTE_WINDOW and deduct window area.
+
+Terrace
+- Calculate floor area.
+- Usually count only adjacent building walls or parapet walls where relevant.
+- Do not count open edges as interior wall paint area.
+- Use table fields to decide whether the space is included in interior renovation quantities.
+```
+
+The table should expose:
+
+```text
+Is outdoor space
+Include in interior floor quantity
+Include in interior wall paint quantity
+```
+
+### Elevator Shaft
+
+Elevator shafts should be marked explicitly:
+
+```text
+space_type = elevator_shaft
+```
+
+Rules:
+
+```text
+- Default to excluded from renovation quantity takeoff.
+- Do not count floor area.
+- Do not count wall area.
+- Keep as an auxiliary row or validation object so it is not mistaken for a normal room.
+```
+
+### Exterior Wall Area
+
+Interior wall quantity and exterior facade quantity should be separate.
+
+The first version may support exterior wall area through lightweight dedicated layers:
+
+```text
+QUOTE_EXT_WALL
+QUOTE_EXT_OPENING
+```
+
+Rules:
+
+```text
+Exterior gross wall area = exterior wall measure length * exterior wall height
+Exterior net wall area = exterior gross wall area - exterior opening area
+```
+
+Exterior wall quantities should be shown in a separate exterior/facade table, not mixed into room rows. The first version should not attempt to automatically handle complex facade modeling, insulation systems, stone/paint assemblies, or decorative exterior shapes.
+
 ## Quantity Table
 
 The generated table has one row per space.
@@ -128,6 +272,13 @@ Window area
 Door opening count
 Door opening area
 Net wall area
+Space type
+Height mode
+Calculation height
+Related floors
+Is outdoor space
+Include in interior floor quantity
+Include in interior wall paint quantity
 Recognition status
 Exception notes
 ```
@@ -142,6 +293,9 @@ Window height
 Window area
 Wall-measure perimeter
 Open boundary length
+Space type
+Calculation height
+Include/exclude flags
 Status / confirmation
 ```
 
@@ -217,6 +371,12 @@ Window height is missing and default height was used
 Door cannot be assigned to a room or wall
 Wall-measure boundary is uncertain
 QUOTE_OPENING conflicts with QUOTE_WALL
+Void height is missing or uncertain
+Upper-floor void opening is mistaken for normal room
+Stair space requires manual stair-specific quantities
+Balcony or terrace open edge is uncertain
+Elevator shaft is not marked as excluded
+Exterior wall height or opening data is missing
 Floor is missing in a multistory project
 Height is missing and default height was used
 CAD unit or scale is unclear
@@ -243,6 +403,9 @@ WallGeometry
 OpeningGeometry
 FloorMarker
 HeightMarker
+VoidMarker
+ExteriorWallGeometry
+ExteriorOpeningGeometry
 ```
 
 ### Geometry Matching Module
@@ -279,6 +442,9 @@ QUOTE_WINDOW parsing
 QUOTE_DOOR parsing, stored but not deducted
 QUOTE_WALL parsing
 QUOTE_OPENING parsing
+QUOTE_VOID parsing for double-height spaces and slab openings
+Special space type support for stair, stair hall, balcony, terrace, and elevator shaft
+Optional QUOTE_EXT_WALL and QUOTE_EXT_OPENING parsing for exterior wall quantities
 Project default height
 Floor default height
 Room-level height override
@@ -294,6 +460,8 @@ Final renovation quotation generation
 Machine-learning recognition of arbitrary unstandardized DWG files
 Automatic room boundary inference without QUOTE_ROOM
 Door opening deduction by default
+Automatic stair tread/riser/sloped slab quantity calculation
+Automatic complex facade modeling or exterior finish system calculation
 Full support for every possible CAD drawing style
 ```
 
@@ -306,5 +474,8 @@ The first version is successful if:
 3. Wall area for open spaces does not incorrectly count open boundaries.
 4. Window area is deducted, using block height when available and default height otherwise.
 5. Door data is retained but does not affect wall area by default.
-6. Users can identify and resolve uncertain data before exporting.
-7. The exported Excel table is suitable as the input for a later quotation module.
+6. Double-height spaces can use explicit height and do not create duplicate upper-floor room quantities.
+7. Stair, balcony, terrace, and elevator shaft spaces can be marked and handled by their first-version rules.
+8. Exterior wall quantities, if enabled, are kept separate from room quantities.
+9. Users can identify and resolve uncertain data before exporting.
+10. The exported Excel table is suitable as the input for a later quotation module.
