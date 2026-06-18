@@ -1,5 +1,6 @@
 from cad_budget.models import (
     DataStatus,
+    HeightMode,
     HeightMarker,
     VoidMarker,
     SpaceType,
@@ -375,3 +376,110 @@ def test_balcony_opening_reduces_wall_measure_perimeter():
     assert row.floor_perimeter == 9
     assert row.open_boundary_length == 1.5
     assert row.wall_measure_perimeter == 7.5
+
+
+def test_void_space_with_ambiguous_void_markers_falls_back_to_normal_height():
+    project = ProjectInput(
+        project_name="Ambiguous Void",
+        floor_heights={"1F": 3.1},
+        rooms=[
+            RoomBoundary(
+                id="void-1",
+                name="Voidded",
+                points=rect(0, 0, 5, 3),
+                floor="1F",
+                space_type=SpaceType.VOID,
+            )
+        ],
+        voids=[
+            VoidMarker(
+                id="void-high",
+                points=[Point(x=1, y=1), Point(x=4, y=1)],
+                height=6.0,
+                floor="1F",
+            ),
+            VoidMarker(
+                id="void-mid",
+                points=[Point(x=4.5, y=1), Point(x=4.8, y=1)],
+                height=4.0,
+                floor="1F",
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.space_type is SpaceType.VOID
+    assert row.height == 3.1
+    assert row.height_mode is HeightMode.FLOOR_DEFAULT
+    assert row.status is DataStatus.NEEDS_REVIEW
+    assert any(
+        exc.code == "ambiguous_void_marker" and exc.room_id == "void-1"
+        for exc in result.exceptions
+    )
+
+
+def test_void_space_related_floors_missing_floor_height_triggers_exception():
+    project = ProjectInput(
+        project_name="Void Missing Floors",
+        floor_heights={"1F": 3.1},
+        rooms=[
+            RoomBoundary(
+                id="void-missing",
+                name="Missing Floor Void",
+                points=rect(0, 0, 5, 3),
+                floor="1F",
+                space_type=SpaceType.VOID,
+            )
+        ],
+        voids=[
+            VoidMarker(
+                id="void-mix",
+                points=[Point(x=1, y=1), Point(x=4, y=1)],
+                related_floors=["1F", "2F"],
+                floor="1F",
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.height == 3.1
+    assert row.status is DataStatus.NEEDS_REVIEW
+    assert any(
+        exc.code == "void_related_floor_height_missing" and exc.room_id == "void-missing"
+        for exc in result.exceptions
+    )
+
+
+def test_void_space_related_floor_sum_sets_related_floors_sum_mode():
+    project = ProjectInput(
+        project_name="Void Related Sum",
+        floor_heights={"1F": 3.0, "2F": 2.8},
+        rooms=[
+            RoomBoundary(
+                id="void-sum",
+                name="Summed Void",
+                points=rect(0, 0, 5, 3),
+                floor="2F",
+                space_type=SpaceType.VOID,
+            )
+        ],
+        voids=[
+            VoidMarker(
+                id="void-sum",
+                points=[Point(x=1, y=1), Point(x=4, y=1)],
+                related_floors=["1F", "2F"],
+                floor="2F",
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.space_type is SpaceType.VOID
+    assert row.height == 5.8
+    assert row.height_mode is HeightMode.RELATED_FLOORS_SUM

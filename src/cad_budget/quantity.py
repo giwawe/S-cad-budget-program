@@ -182,17 +182,36 @@ def _resolve_void_height_assignments(
         if not matching_markers:
             continue
 
+        if len(matching_markers) > 1:
+            marker_ids = ", ".join(marker.id for marker in matching_markers)
+            exceptions.append(
+                QuantityException(
+                    code="ambiguous_void_marker",
+                    message=f"Room {room.id} matches multiple void markers: {marker_ids}",
+                    room_id=room.id,
+                )
+            )
+            continue
+
         marker = matching_markers[0]
         if marker.height is not None:
             assigned[room.id] = (float(marker.height), HeightMode.QUOTE_VOID)
             continue
 
         if marker.related_floors:
-            related_height_sum = sum(
-                project.floor_heights.get(floor_name, 0.0) for floor_name in marker.related_floors
-            )
-            if related_height_sum > 0:
-                assigned[room.id] = (round(related_height_sum, 6), HeightMode.RELATED_FLOORS_SUM)
+            missing_floors = [floor_name for floor_name in marker.related_floors if floor_name not in project.floor_heights]
+            if missing_floors:
+                exceptions.append(
+                    QuantityException(
+                        code="void_related_floor_height_missing",
+                        message=f"Void marker {marker.id} missing floor heights for: {', '.join(missing_floors)}",
+                        room_id=room.id,
+                    )
+                )
+                continue
+
+            related_height_sum = sum(project.floor_heights[floor_name] for floor_name in marker.related_floors)
+            assigned[room.id] = (round(related_height_sum, 6), HeightMode.RELATED_FLOORS_SUM)
 
     return assigned, exceptions
 
@@ -235,7 +254,14 @@ def _open_boundary_length(project: ProjectInput, room: RoomBoundary) -> float:
 
 def _determine_status(exceptions: list[QuantityException], default_inferred: bool) -> DataStatus:
     for exc in exceptions:
-        if exc.code in {"room_has_no_name", "ambiguous_room_text", "ambiguous_window_assignment", "ambiguous_height_assignment"}:
+        if exc.code in {
+            "room_has_no_name",
+            "ambiguous_room_text",
+            "ambiguous_window_assignment",
+            "ambiguous_height_assignment",
+            "ambiguous_void_marker",
+            "void_related_floor_height_missing",
+        }:
             return DataStatus.NEEDS_REVIEW
     if default_inferred:
         return DataStatus.DEFAULT_INFERRED

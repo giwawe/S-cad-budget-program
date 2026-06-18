@@ -133,6 +133,13 @@ class VoidMarker(BaseModel):
     related_floors: list[str] = Field(default_factory=list)
     floor: str | None = None
 
+    @field_validator("points")
+    @classmethod
+    def validate_points(cls, points: list[Point]) -> list[Point]:
+        if len(points) < 1:
+            raise ValueError("void marker must include at least one point")
+        return points
+
 
 class ProjectInput(BaseModel):
     project_name: str = "Untitled"

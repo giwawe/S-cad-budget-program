@@ -3,6 +3,7 @@ from cad_budget.models import (
     HeightMode,
     LayerName,
     Point,
+    VoidMarker,
     ProjectInput,
     PolylineMarker,
     RoomBoundary,
@@ -64,4 +65,12 @@ def test_polyline_marker_rejects_single_point():
             id="line-1",
             layer=LayerName.QUOTE_WALL,
             points=[Point(x=1, y=1)],
+        )
+
+
+def test_void_marker_rejects_empty_points():
+    with pytest.raises(ValidationError):
+        VoidMarker(
+            id="void-empty",
+            points=[],
         )
