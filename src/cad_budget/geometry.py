@@ -45,5 +45,5 @@ def closed_polygon_perimeter(points: list[Point]) -> float:
 
 
 def point_inside_polygon(point: Point, polygon_points: list[Point]) -> bool:
-    polygon = Polygon([(p.x, p.y) for p in polygon_points])
+    polygon = _validate_closed_polygon(polygon_points)
     return bool(polygon.covers(ShapelyPoint(point.x, point.y)))

@@ -65,3 +65,28 @@ def test_degenerate_polygon_raises_value_error():
                 Point(x=0, y=0),
             ]
         )
+
+
+def test_point_inside_polygon_raises_for_invalid_polygons():
+    non_closed_polygon = [
+        Point(x=0, y=0),
+        Point(x=4, y=0),
+        Point(x=4, y=3),
+        Point(x=0, y=3),
+    ]
+    with pytest.raises(ValueError, match="closed"):
+        point_inside_polygon(Point(x=2, y=1), non_closed_polygon)
+
+    with pytest.raises(ValueError, match="at least 4"):
+        point_inside_polygon(Point(x=2, y=1), [])
+
+    with pytest.raises(ValueError, match="positive area"):
+        point_inside_polygon(
+            Point(x=1, y=0),
+            [
+                Point(x=0, y=0),
+                Point(x=1, y=0),
+                Point(x=2, y=0),
+                Point(x=0, y=0),
+            ],
+        )
