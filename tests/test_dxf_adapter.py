@@ -139,6 +139,57 @@ def test_import_dxf_reads_window_outline_door_wall_and_opening(tmp_path: Path):
     assert len(result.project.openings) == 1
 
 
+def test_import_dxf_reads_height_void_and_exterior_layers(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_HEIGHT", "QUOTE_VOID", "QUOTE_EXT_WALL", "QUOTE_EXT_OPENING"]:
+        doc.layers.add(layer)
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("3.6", dxfattribs={"layer": "QUOTE_HEIGHT", "height": 250}).set_placement((100, 100))
+    modelspace.add_lwpolyline(
+        [(1000, 1000), (2500, 1000), (2500, 2200), (1000, 2200), (1000, 1000)],
+        dxfattribs={"layer": "QUOTE_VOID", "closed": True},
+    )
+    modelspace.add_lwpolyline([(0, -200), (4000, -200)], dxfattribs={"layer": "QUOTE_EXT_WALL"})
+    modelspace.add_lwpolyline([(1200, -200), (2200, -200)], dxfattribs={"layer": "QUOTE_EXT_OPENING"})
+    dxf_path = _save_doc(tmp_path / "special_layers.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.heights) == 1
+    assert result.project.heights[0].height == 3.6
+    assert len(result.project.voids) == 1
+    assert len(result.project.exterior_walls) == 1
+    assert len(result.project.exterior_openings) == 1
+
+
+def test_import_dxf_warns_for_invalid_height_text(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_HEIGHT")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("high", dxfattribs={"layer": "QUOTE_HEIGHT", "height": 250}).set_placement((100, 100))
+    dxf_path = _save_doc(tmp_path / "bad_height.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.heights == []
+    assert any(issue.code == "HEIGHT_TEXT_INVALID" for issue in result.issues)
+
+
 def test_import_dxf_infers_polygon_window_width_from_extents(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4

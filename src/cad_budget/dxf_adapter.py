@@ -13,7 +13,18 @@ from cad_budget.cad_adapter_models import (
     CadImportResult,
     CadUnit,
 )
-from cad_budget.models import DoorMarker, LayerName, Point, PolylineMarker, ProjectInput, RoomBoundary, TextMarker, WindowMarker
+from cad_budget.models import (
+    DoorMarker,
+    HeightMarker,
+    LayerName,
+    Point,
+    PolylineMarker,
+    ProjectInput,
+    RoomBoundary,
+    TextMarker,
+    VoidMarker,
+    WindowMarker,
+)
 
 
 _UNIT_SCALE_TO_METERS = {
@@ -165,6 +176,16 @@ def _text_value(entity) -> str:
     return str(entity.dxf.text).strip()
 
 
+def _parse_float_text(value: str) -> float | None:
+    cleaned = value.strip()
+    if cleaned.lower().endswith("m"):
+        cleaned = cleaned[:-1].strip()
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
 def _polygon_from_room(room: RoomBoundary) -> Polygon:
     return Polygon((point.x, point.y) for point in room.points)
 
@@ -204,6 +225,10 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     doors: list[DoorMarker] = []
     walls: list[PolylineMarker] = []
     openings: list[PolylineMarker] = []
+    heights: list[HeightMarker] = []
+    voids: list[VoidMarker] = []
+    exterior_walls: list[PolylineMarker] = []
+    exterior_openings: list[PolylineMarker] = []
 
     for entity in _iter_modelspace(doc):
         layer = _layer(entity)
@@ -225,6 +250,26 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
             value = _text_value(entity)
             if value:
                 texts.append(TextMarker(id=_entity_id(entity), text=value, point=_text_point(entity, options.confirmed_unit)))
+        elif layer == LayerName.QUOTE_HEIGHT.value and entity.dxftype() in {"TEXT", "MTEXT"}:
+            value = _text_value(entity)
+            height = _parse_float_text(value)
+            if height is None:
+                issues.append(
+                    AdapterIssue(
+                        code="HEIGHT_TEXT_INVALID",
+                        message=f"Height text must be a numeric meter value: {value!r}.",
+                        entity_id=_entity_id(entity),
+                        layer=layer,
+                    )
+                )
+            else:
+                heights.append(
+                    HeightMarker(
+                        id=_entity_id(entity),
+                        point=_text_point(entity, options.confirmed_unit),
+                        height=height,
+                    )
+                )
         elif layer == LayerName.QUOTE_WINDOW.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if not entity.closed or len(points) < 4:
@@ -293,6 +338,20 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
                 openings.append(PolylineMarker(id=_entity_id(entity), layer=LayerName.QUOTE_OPENING, points=points))
+        elif layer == LayerName.QUOTE_VOID.value and entity.dxftype() == "LWPOLYLINE":
+            points = _lwpolyline_points(entity, options.confirmed_unit)
+            if points:
+                voids.append(VoidMarker(id=_entity_id(entity), points=points))
+        elif layer == LayerName.QUOTE_EXT_WALL.value and entity.dxftype() == "LWPOLYLINE":
+            points = _lwpolyline_points(entity, options.confirmed_unit)
+            if len(points) >= 2:
+                exterior_walls.append(PolylineMarker(id=_entity_id(entity), layer=LayerName.QUOTE_EXT_WALL, points=points))
+        elif layer == LayerName.QUOTE_EXT_OPENING.value and entity.dxftype() == "LWPOLYLINE":
+            points = _lwpolyline_points(entity, options.confirmed_unit)
+            if len(points) >= 2:
+                exterior_openings.append(
+                    PolylineMarker(id=_entity_id(entity), layer=LayerName.QUOTE_EXT_OPENING, points=points)
+                )
 
     if not rooms:
         issues.append(
@@ -320,5 +379,9 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         doors=doors,
         walls=walls,
         openings=openings,
+        heights=heights,
+        voids=voids,
+        exterior_walls=exterior_walls,
+        exterior_openings=exterior_openings,
     )
     return CadImportResult(project=project, issues=issues, source_path=options.source_path, dxf_path=options.source_path)
