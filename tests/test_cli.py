@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import ezdxf
 from openpyxl import load_workbook
 from typer.testing import CliRunner
 
@@ -210,3 +211,90 @@ def test_cli_reports_invalid_room_geometry_without_traceback(tmp_path: Path):
     error_text = (result.stdout or "") + (result.stderr or "")
     assert "Failed to calculate quantities" in error_text
     assert "Traceback" not in error_text
+
+
+def test_cli_import_cad_dxf_writes_project_json(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    dxf_path = tmp_path / "plan.dxf"
+    doc.saveas(dxf_path)
+    output = tmp_path / "project.json"
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "import-cad",
+            str(dxf_path),
+            "--json-output",
+            str(output),
+            "--unit",
+            "mm",
+        ],
+    )
+
+    assert result.exit_code == 0
+    data = json.loads(output.read_text(encoding="utf-8"))
+    assert data["project_name"] == "plan"
+    assert len(data["rooms"]) == 1
+
+
+def test_cli_import_cad_dwg_requires_converter(tmp_path: Path):
+    dwg_path = tmp_path / "plan.dwg"
+    dwg_path.write_bytes(b"fake")
+    output = tmp_path / "project.json"
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["import-cad", str(dwg_path), "--json-output", str(output)])
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "DWG input requires a configured DWG-to-DXF converter" in error_text
+    assert not output.exists()
+
+
+def test_cli_import_cad_unsupported_extension_exits_1(tmp_path: Path):
+    cad_path = tmp_path / "plan.txt"
+    cad_path.write_text("fake", encoding="utf-8")
+    output = tmp_path / "project.json"
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["import-cad", str(cad_path), "--json-output", str(output)])
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "Unsupported CAD file extension" in error_text
+    assert ".txt" in error_text
+    assert not output.exists()
+
+
+def test_cli_import_cad_dxf_blocker_exits_1_without_writing(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    dxf_path = tmp_path / "empty.dxf"
+    doc.saveas(dxf_path)
+    output = tmp_path / "project.json"
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "import-cad",
+            str(dxf_path),
+            "--json-output",
+            str(output),
+            "--unit",
+            "mm",
+        ],
+    )
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "blocker: QUOTE_ROOM_MISSING" in error_text
+    assert not output.exists()

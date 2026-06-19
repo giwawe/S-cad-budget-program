@@ -4,6 +4,9 @@ from pathlib import Path
 import typer
 from pydantic import ValidationError
 
+from cad_budget.cad_adapter_models import CadImportOptions, CadUnit
+from cad_budget.dwg_converter import convert_dwg_to_dxf
+from cad_budget.dxf_adapter import import_dxf
 from cad_budget.models import ProjectInput
 from cad_budget.export_excel import export_quantity_result
 from cad_budget.quantity import calculate_quantities
@@ -62,3 +65,60 @@ def calculate(
 
     for message in wrote_outputs:
         typer.echo(message)
+
+
+@app.command("import-cad")
+def import_cad(
+    input_cad: Path,
+    json_output: Path = typer.Option(..., "--json-output", help="Path for generated ProjectInput JSON."),
+    unit: CadUnit = typer.Option(CadUnit.MILLIMETER, "--unit", help="Confirmed project CAD unit."),
+    project_name: str | None = typer.Option(None, "--project-name", help="Optional project name override."),
+    dwg_converter: list[str] | None = typer.Option(
+        None,
+        "--dwg-converter",
+        help="DWG converter command parts; use {input} and {output} placeholders.",
+    ),
+) -> None:
+    extension = input_cad.suffix.lower()
+    dxf_path = input_cad
+    import_project_name = project_name
+
+    if extension == ".dwg":
+        conversion = convert_dwg_to_dxf(input_cad, json_output.parent / "_converted", dwg_converter)
+        if conversion.issue is not None:
+            typer.echo(conversion.issue.message, err=True)
+            raise typer.Exit(code=1)
+        if conversion.dxf_path is None:
+            typer.echo("DWG conversion did not return a DXF path.", err=True)
+            raise typer.Exit(code=1)
+        dxf_path = conversion.dxf_path
+        import_project_name = project_name or input_cad.stem
+    elif extension != ".dxf":
+        typer.echo(f"Unsupported CAD file extension '{input_cad.suffix}'. Expected .dxf or .dwg.", err=True)
+        raise typer.Exit(code=1)
+
+    result = import_dxf(
+        CadImportOptions(
+            source_path=dxf_path,
+            confirmed_unit=unit,
+            project_name_override=import_project_name,
+            dwg_converter_command=dwg_converter,
+        )
+    )
+
+    for issue in result.issues:
+        typer.echo(f"{issue.severity.value}: {issue.code}: {issue.message}", err=True)
+
+    if result.has_blockers or result.project is None:
+        if result.project is None and not result.has_blockers:
+            typer.echo("CAD import did not produce a project.", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(result.project.model_dump_json(indent=2), encoding="utf-8")
+    except OSError as exc:
+        typer.echo(f"Failed to write JSON output '{json_output}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Wrote {json_output}")
