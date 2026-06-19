@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from math import ceil, cos, pi, sin
+from math import ceil, cos, hypot, pi, sin
 
 import ezdxf
 from ezdxf.math import Vec2, bulge_to_arc
@@ -13,7 +13,7 @@ from cad_budget.cad_adapter_models import (
     CadImportResult,
     CadUnit,
 )
-from cad_budget.models import LayerName, Point, ProjectInput, RoomBoundary, TextMarker
+from cad_budget.models import DoorMarker, LayerName, Point, PolylineMarker, ProjectInput, RoomBoundary, TextMarker, WindowMarker
 
 
 _UNIT_SCALE_TO_METERS = {
@@ -90,9 +90,36 @@ def _lwpolyline_points(entity, unit: CadUnit) -> list[Point]:
         if start != end:
             points.extend(_segment_points(start, end, float(last[2] or 0), unit))
 
-    if points and (points[0].x != points[-1].x or points[0].y != points[-1].y):
+    if entity.closed and points and (points[0].x != points[-1].x or points[0].y != points[-1].y):
         points.append(points[0])
     return points
+
+
+def _polyline_length(points: list[Point]) -> float:
+    return round(
+        sum(
+            hypot(following.x - current.x, following.y - current.y)
+            for current, following in zip(points, points[1:])
+        ),
+        10,
+    )
+
+
+def _outline_centroid(points: list[Point]) -> Point:
+    centroid = Polygon((point.x, point.y) for point in points).centroid
+    return Point(x=centroid.x, y=centroid.y)
+
+
+def _outline_width(points: list[Point]) -> float:
+    x_values = [point.x for point in points]
+    y_values = [point.y for point in points]
+    return round(max(max(x_values) - min(x_values), max(y_values) - min(y_values)), 10)
+
+
+def _line_midpoint(points: list[Point]) -> Point:
+    first = points[0]
+    last = points[-1]
+    return Point(x=(first.x + last.x) / 2, y=(first.y + last.y) / 2)
 
 
 def _file_unit_issue(doc, options: CadImportOptions) -> AdapterIssue | None:
@@ -158,6 +185,10 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
 
     rooms: list[RoomBoundary] = []
     texts: list[TextMarker] = []
+    windows: list[WindowMarker] = []
+    doors: list[DoorMarker] = []
+    walls: list[PolylineMarker] = []
+    openings: list[PolylineMarker] = []
 
     for entity in _iter_modelspace(doc):
         layer = _layer(entity)
@@ -179,6 +210,46 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
             value = _text_value(entity)
             if value:
                 texts.append(TextMarker(id=_entity_id(entity), text=value, point=_text_point(entity, options.confirmed_unit)))
+        elif layer == LayerName.QUOTE_WINDOW.value and entity.dxftype() == "LWPOLYLINE":
+            points = _lwpolyline_points(entity, options.confirmed_unit)
+            if not entity.closed or len(points) < 4:
+                issues.append(
+                    AdapterIssue(
+                        code="WINDOW_OUTLINE_NOT_CLOSED",
+                        message="Window outline must be a closed LWPOLYLINE with enough points.",
+                        entity_id=_entity_id(entity),
+                        layer=layer,
+                    )
+                )
+            else:
+                windows.append(
+                    WindowMarker(
+                        id=_entity_id(entity),
+                        point=_outline_centroid(points),
+                        width=_outline_width(points),
+                        height=None,
+                        attributes={"source": "closed_outline"},
+                    )
+                )
+        elif layer == LayerName.QUOTE_DOOR.value and entity.dxftype() == "LWPOLYLINE":
+            points = _lwpolyline_points(entity, options.confirmed_unit)
+            if len(points) >= 2:
+                doors.append(
+                    DoorMarker(
+                        id=_entity_id(entity),
+                        point=_line_midpoint(points),
+                        width=_polyline_length(points),
+                        attributes={"source": "geometry"},
+                    )
+                )
+        elif layer == LayerName.QUOTE_WALL.value and entity.dxftype() == "LWPOLYLINE":
+            points = _lwpolyline_points(entity, options.confirmed_unit)
+            if len(points) >= 2:
+                walls.append(PolylineMarker(id=_entity_id(entity), layer=LayerName.QUOTE_WALL, points=points))
+        elif layer == LayerName.QUOTE_OPENING.value and entity.dxftype() == "LWPOLYLINE":
+            points = _lwpolyline_points(entity, options.confirmed_unit)
+            if len(points) >= 2:
+                openings.append(PolylineMarker(id=_entity_id(entity), layer=LayerName.QUOTE_OPENING, points=points))
 
     if not rooms:
         issues.append(
@@ -202,5 +273,9 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         floor_heights=options.floor_heights,
         rooms=rooms,
         texts=texts,
+        windows=windows,
+        doors=doors,
+        walls=walls,
+        openings=openings,
     )
     return CadImportResult(project=project, issues=issues, source_path=options.source_path, dxf_path=options.source_path)

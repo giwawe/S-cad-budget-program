@@ -93,3 +93,116 @@ def test_import_dxf_blocks_when_large_coordinate_meter_unit_conflicts_with_confi
 
     assert result.has_blockers
     assert any(issue.code == "CAD_UNIT_CONFLICT" for issue in result.issues)
+
+
+def test_import_dxf_reads_window_outline_door_wall_and_opening(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_WINDOW", "QUOTE_DOOR", "QUOTE_WALL", "QUOTE_OPENING"]:
+        doc.layers.add(layer)
+    modelspace.add_lwpolyline(
+        [(0, 0), (5000, 0), (5000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(1000, -100), (2500, -100), (2500, 100), (1000, 100), (1000, -100)],
+        dxfattribs={"layer": "QUOTE_WINDOW", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(3000, 0), (3900, 0)],
+        dxfattribs={"layer": "QUOTE_DOOR"},
+    )
+    modelspace.add_lwpolyline(
+        [(0, 0), (5000, 0)],
+        dxfattribs={"layer": "QUOTE_WALL"},
+    )
+    modelspace.add_lwpolyline(
+        [(5000, 1000), (5000, 2200)],
+        dxfattribs={"layer": "QUOTE_OPENING"},
+    )
+    dxf_path = _save_doc(tmp_path / "openings.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.windows) == 1
+    assert result.project.windows[0].width == 1.5
+    assert result.project.windows[0].height is None
+    assert result.project.windows[0].attributes["source"] == "closed_outline"
+    assert len(result.project.doors) == 1
+    assert result.project.doors[0].width == 0.9
+    assert len(result.project.walls) == 1
+    assert len(result.project.openings) == 1
+
+
+def test_import_dxf_infers_polygon_window_width_from_extents(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (6000, 0), (6000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(1000, -100), (2200, -150), (2600, 0), (2200, 150), (1000, 100), (1000, -100)],
+        dxfattribs={"layer": "QUOTE_WINDOW", "closed": True},
+    )
+    dxf_path = _save_doc(tmp_path / "polygon_window.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.windows[0].width == 1.6
+
+
+def test_import_dxf_flattens_arc_based_window_outline(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (6000, 0), (6000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(1000, 0, 0.5), (2000, 0, 0), (2000, 200, 0), (1000, 200, 0), (1000, 0, 0)],
+        format="xyb",
+        dxfattribs={"layer": "QUOTE_WINDOW", "closed": True},
+    )
+    dxf_path = _save_doc(tmp_path / "arc_window.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.windows[0].width >= 1.0
+
+
+def test_import_dxf_warns_for_open_window_outline(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (6000, 0), (6000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(1000, 0), (2000, 0)],
+        dxfattribs={"layer": "QUOTE_WINDOW"},
+    )
+    dxf_path = _save_doc(tmp_path / "open_window.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.windows == []
+    assert any(issue.code == "WINDOW_OUTLINE_NOT_CLOSED" for issue in result.issues)
