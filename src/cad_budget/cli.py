@@ -84,7 +84,15 @@ def import_cad(
     import_project_name = project_name
 
     if extension == ".dwg":
-        conversion = convert_dwg_to_dxf(input_cad, json_output.parent / "_converted", dwg_converter)
+        conversion_output_dir = json_output.parent / "_converted"
+        try:
+            conversion = convert_dwg_to_dxf(input_cad, conversion_output_dir, dwg_converter)
+        except OSError as exc:
+            typer.echo(
+                f"Failed to prepare DWG conversion output '{conversion_output_dir}': {exc}",
+                err=True,
+            )
+            raise typer.Exit(code=1)
         if conversion.issue is not None:
             typer.echo(conversion.issue.message, err=True)
             raise typer.Exit(code=1)

@@ -259,6 +259,33 @@ def test_cli_import_cad_dwg_requires_converter(tmp_path: Path):
     assert not output.exists()
 
 
+def test_cli_import_cad_dwg_reports_conversion_output_path_error(tmp_path: Path):
+    dwg_path = tmp_path / "plan.dwg"
+    dwg_path.write_bytes(b"fake")
+    blocked_parent = tmp_path / "not_a_dir"
+    blocked_parent.write_text("blocked", encoding="utf-8")
+    output = blocked_parent / "project.json"
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "import-cad",
+            str(dwg_path),
+            "--json-output",
+            str(output),
+            "--dwg-converter",
+            "dummy-converter",
+        ],
+    )
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "Failed to prepare DWG conversion output" in error_text
+    assert "Traceback" not in error_text
+    assert not output.exists()
+
+
 def test_cli_import_cad_unsupported_extension_exits_1(tmp_path: Path):
     cad_path = tmp_path / "plan.txt"
     cad_path.write_text("fake", encoding="utf-8")
