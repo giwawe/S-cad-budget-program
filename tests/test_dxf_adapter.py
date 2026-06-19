@@ -13,6 +13,7 @@ def _save_doc(path: Path, doc: ezdxf.EzDxf) -> Path:
 
 def test_import_dxf_reads_closed_room_and_text(tmp_path: Path):
     doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
     modelspace = doc.modelspace()
     doc.layers.add("QUOTE_ROOM")
     doc.layers.add("QUOTE_TEXT")
@@ -70,6 +71,23 @@ def test_import_dxf_blocks_when_file_unit_conflicts_with_confirmed_unit(tmp_path
         dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
     )
     dxf_path = _save_doc(tmp_path / "meters.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path, confirmed_unit=CadUnit.MILLIMETER))
+
+    assert result.has_blockers
+    assert any(issue.code == "CAD_UNIT_CONFLICT" for issue in result.issues)
+
+
+def test_import_dxf_blocks_when_large_coordinate_meter_unit_conflicts_with_confirmed_unit(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 6
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    dxf_path = _save_doc(tmp_path / "large-meter-header.dxf", doc)
 
     result = import_dxf(CadImportOptions(source_path=dxf_path, confirmed_unit=CadUnit.MILLIMETER))
 

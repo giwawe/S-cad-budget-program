@@ -95,30 +95,6 @@ def _lwpolyline_points(entity, unit: CadUnit) -> list[Point]:
     return points
 
 
-def _max_room_dimension(doc) -> float | None:
-    max_dimension: float | None = None
-    for entity in _iter_modelspace(doc):
-        if _layer(entity) != LayerName.QUOTE_ROOM.value or entity.dxftype() != "LWPOLYLINE" or not entity.closed:
-            continue
-        vertices = list(entity.get_points("xy"))
-        if not vertices:
-            continue
-        xs = [float(vertex[0]) for vertex in vertices]
-        ys = [float(vertex[1]) for vertex in vertices]
-        dimension = max(max(xs) - min(xs), max(ys) - min(ys))
-        max_dimension = dimension if max_dimension is None else max(max_dimension, dimension)
-    return max_dimension
-
-
-def _looks_like_default_meter_header(file_unit: CadUnit, confirmed_unit: CadUnit, max_dimension: float | None) -> bool:
-    return (
-        file_unit == CadUnit.METER
-        and confirmed_unit in {CadUnit.MILLIMETER, CadUnit.CENTIMETER}
-        and max_dimension is not None
-        and max_dimension > 100
-    )
-
-
 def _file_unit_issue(doc, options: CadImportOptions) -> AdapterIssue | None:
     insunits = int(doc.header.get("$INSUNITS", 0) or 0)
     file_unit = _DXF_INSUNITS.get(insunits)
@@ -128,11 +104,6 @@ def _file_unit_issue(doc, options: CadImportOptions) -> AdapterIssue | None:
             message="DXF unit is missing or unsupported; using user-confirmed unit.",
         )
     if file_unit != options.confirmed_unit:
-        if _looks_like_default_meter_header(file_unit, options.confirmed_unit, _max_room_dimension(doc)):
-            return AdapterIssue(
-                code="CAD_UNIT_UNCONFIRMED",
-                message="DXF unit appears to be an unconfirmed default; using user-confirmed unit.",
-            )
         return AdapterIssue(
             code="CAD_UNIT_CONFLICT",
             message=f"DXF unit is {file_unit.value}, but user confirmed {options.confirmed_unit.value}.",
