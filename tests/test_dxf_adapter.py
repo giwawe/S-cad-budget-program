@@ -70,6 +70,31 @@ def test_import_dxf_blocks_self_intersecting_room_boundary(tmp_path: Path):
     assert any(issue.code == "ROOM_BOUNDARY_INVALID" for issue in result.issues)
 
 
+def test_import_dxf_blocks_open_quote_room_without_dropping_valid_rooms(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(5000, 0), (7000, 0), (7000, 2000), (5000, 2000)],
+        dxfattribs={"layer": "QUOTE_ROOM"},
+    )
+    dxf_path = _save_doc(tmp_path / "open_quote_room.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert result.has_blockers
+    assert result.project is not None
+    assert len(result.project.rooms) == 1
+    issue = next(issue for issue in result.issues if issue.code == "ROOM_BOUNDARY_INVALID")
+    assert issue.entity_id is not None
+    assert issue.layer == "QUOTE_ROOM"
+
+
 def test_import_dxf_blocks_when_file_cannot_be_read(tmp_path: Path):
     bad_path = tmp_path / "bad.dxf"
     bad_path.write_text("not a dxf", encoding="utf-8")

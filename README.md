@@ -89,6 +89,6 @@ QUOTE_EXT_OPENING
 
 `QUOTE_FLOOR` remains reserved in the CAD standard and is planned for floor assignment in a later CAD adapter increment; the current importer does not parse it.
 
-Window recognition supports block attributes when available. Without attributes, the adapter reads the closed window opening outline on `QUOTE_WINDOW`; the outline may be rectangular, polygonal, or arc-based. Window height comes from attributes or tags when available. Otherwise, the default window height is used later and marked inferred.
+The first import adapter recognizes closed `QUOTE_WINDOW` LWPOLYLINE outlines; the outline may be rectangular, polygonal, or arc-based. Window height is not imported yet: imported windows keep `height=None`, then the quantity engine applies the default window height and marks it inferred. Window block attributes and tags remain part of the CAD standard and are planned for a future importer increment.
 
 Door recognition records door count and door opening area when width and height are available. Door area is not deducted from wall area by default.

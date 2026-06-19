@@ -240,7 +240,18 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
 
     for entity in _iter_modelspace(doc):
         layer = _layer(entity)
-        if layer == LayerName.QUOTE_ROOM.value and entity.dxftype() == "LWPOLYLINE" and entity.closed:
+        if layer == LayerName.QUOTE_ROOM.value and entity.dxftype() == "LWPOLYLINE":
+            if not entity.closed:
+                issues.append(
+                    AdapterIssue(
+                        code="ROOM_BOUNDARY_INVALID",
+                        message="Room boundary must be a closed LWPOLYLINE.",
+                        severity=AdapterSeverity.BLOCKER,
+                        entity_id=_entity_id(entity),
+                        layer=layer,
+                    )
+                )
+                continue
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if not _valid_room_polygon(points):
                 issues.append(
