@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "CAD renovation quantity takeoff core"
 requires-python = ">=3.11"
 dependencies = [
+  "ezdxf>=1.3.4",
   "openpyxl>=3.1.5",
   "pydantic>=2.8.0",
   "shapely>=2.0.4",
