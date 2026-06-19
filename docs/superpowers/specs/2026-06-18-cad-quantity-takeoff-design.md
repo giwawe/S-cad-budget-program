@@ -16,12 +16,54 @@ Use a lightweight CAD drawing standard plus automatic recognition.
 
 The system should automatically read standard layers, generate an initial takeoff table, and only ask users to handle exceptions or uncertain data. The expected workflow is:
 
-1. Designer prepares the DWG with the required `QUOTE_*` layers.
-2. User uploads the DWG.
-3. System parses room boundaries, room names, walls, windows, openings, doors, floors, and heights.
-4. System generates an editable takeoff table.
-5. User reviews only exceptions or default-inferred values.
-6. Confirmed takeoff data is exported and used later as pricing input.
+1. Designer prepares the DWG or DXF with the required `QUOTE_*` layers.
+2. User uploads the DWG or DXF.
+3. DXF is parsed directly; DWG is automatically converted to DXF first. If conversion fails, the designer is asked to save the drawing as DXF and upload again.
+4. System parses room boundaries, room names, walls, windows, openings, doors, floors, and heights.
+5. System generates an editable takeoff table.
+6. User reviews only exceptions or default-inferred values.
+7. Confirmed takeoff data is exported and used later as pricing input.
+
+## CAD Adapter Input Strategy
+
+The first version uses `direct DXF parsing + automatic DWG-to-DXF conversion + fallback guidance when conversion fails`.
+
+The system boundary should stay explicit:
+
+```text
+DWG / DXF file -> CAD Adapter -> ProjectInput JSON -> Quantity Engine -> Editable Excel / JSON table
+```
+
+The CAD Adapter only translates CAD files into the standard `ProjectInput` data contract. It should not own quotation formulas or final pricing logic. This keeps CAD parsing, quantity formulas, and future quotation modules independently evolvable.
+
+File handling rules:
+
+```text
+DXF
+- Read directly with a DXF parser.
+- Convert parsed entities into ProjectInput JSON.
+
+DWG
+- Convert to DXF through a backend conversion tool.
+- Reuse the same DXF parsing logic after conversion.
+- If conversion fails, block parsing and ask the designer to save as DXF from CAD and upload again.
+```
+
+The system should retain these traceability artifacts:
+
+```text
+Original uploaded file
+Converted DXF file
+CAD Adapter parse log
+Generated ProjectInput JSON
+Exception list
+```
+
+CAD unit handling uses double validation:
+
+1. Read the unit from the DXF/DWG file.
+2. Ask the user to confirm the project unit during upload.
+3. If the file unit conflicts with the user-confirmed unit, block or raise a severe exception to avoid global scale errors.
 
 ## CAD Layer Standard
 
@@ -35,15 +77,24 @@ Space boundary. Each room or space should have one closed polyline. This is the 
 
 Window marker. The system reads width and height from block attributes when available. If height is missing, the system uses a default window height and marks the value as default-inferred.
 
+The first version also supports the current window drawing convention: a closed window opening outline on the `QUOTE_WINDOW` layer. The outline may be a rectangle, polygon, or closed shape with arcs, and may contain internal line segments as window-symbol features. The system should recognize the closed outline, prefer block attributes or tags for width, and otherwise infer width from the outline's principal-direction projection length or the boundary length that overlaps or follows the wall. It then combines the inferred width with window height to calculate window area.
+
 ### Optional Core Layers
 
 `QUOTE_TEXT`
 
 Room name text. If this layer is present, it is the preferred room name source. If absent, the system should try to read existing CAD text inside the `QUOTE_ROOM` boundary.
 
+Room name priority:
+
+1. Block attributes or standard tags.
+2. `QUOTE_TEXT`.
+3. Ordinary CAD text inside the `QUOTE_ROOM` boundary.
+4. Manual table entry.
+
 `QUOTE_DOOR`
 
-Door opening marker. The first version reads and stores door opening data, but door opening area is not deducted from wall area by default.
+Door opening marker. The first version reads and stores door opening data, but door opening area is not deducted from wall area by default. Doors may use the existing model or block library; the system should prefer block name, insertion point, rotation, scale, and attributes, and fall back to geometric door-width inference when attributes are missing.
 
 ### Recommended Accuracy Layers
 
@@ -325,6 +376,34 @@ The user changed the generated value.
 
 Later quotation generation should use only confirmed or manually accepted data.
 
+## Exception Severity
+
+Parse results use severity levels so the system does not silently produce wrong quantities.
+
+Severe issues block formal table generation:
+
+```text
+DWG-to-DXF conversion failed
+CAD unit cannot be confirmed or conflicts with the user-confirmed unit
+Required layers are missing
+Room boundary is not closed
+Room area is zero or clearly abnormal
+Required floor information is missing in a multistory project
+```
+
+Minor issues still generate the table, but the relevant row and the exception summary must mark them as needing confirmation:
+
+```text
+Window height is missing and default height was used
+Room name came from ordinary CAD text with low confidence
+Door model has no attributes and geometric width inference was used
+Window closed outline has a slight wall matching offset
+Wall-measure boundary has uncertain segments
+Special space type was inferred from name instead of explicit attributes
+```
+
+The quantity table should include value source, confidence, review flag, and issue notes. Later quotation should use only `confirmed`, `manually_edited`, or user-accepted values by default.
+
 ## Recognition and Calculation Rules
 
 Room recognition:
@@ -339,15 +418,19 @@ Window recognition:
 
 1. Read `QUOTE_WINDOW`.
 2. Prefer block attributes for width and height.
-3. If height is missing, use default window height and mark as `default_inferred`.
-4. Match windows to room boundaries or wall segments.
-5. Calculate window area and deduct it from wall area.
+3. If the window is not represented by block attributes, recognize a closed window opening outline on `QUOTE_WINDOW`; the outline may be a rectangle, polygon, or closed shape with arcs, and internal line segments may be used as auxiliary symbol features.
+4. For rectangular windows, infer width from the long side. For polygonal or arc-based windows, infer width from the principal-direction projection length or from the boundary length that overlaps or follows the wall.
+5. If height is missing, use default window height and mark as `default_inferred`.
+6. Match windows to room boundaries or wall segments.
+7. Calculate window area and deduct it from wall area.
 
 Door recognition:
 
 1. Read `QUOTE_DOOR`.
-2. Store door count and door opening area if available.
-3. Do not deduct door area from wall area by default in the first version.
+2. Prefer block name, insertion point, rotation, scale, and attributes from the existing door model or block.
+3. If attributes are missing, infer door width from door-end distance or model geometry.
+4. Store door count and door opening area if available.
+5. Do not deduct door area from wall area by default in the first version.
 
 Wall recognition:
 
