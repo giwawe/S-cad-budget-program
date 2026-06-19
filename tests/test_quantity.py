@@ -1,5 +1,6 @@
 from cad_budget.models import (
     DataStatus,
+    DoorMarker,
     HeightMode,
     HeightMarker,
     VoidMarker,
@@ -222,6 +223,32 @@ def test_shared_boundary_window_is_ambiguous_and_not_counted():
     )
 
 
+def test_shared_boundary_door_is_ambiguous_and_not_counted():
+    project = ProjectInput(
+        project_name="Adjacent Door Rooms",
+        default_height=2.8,
+        rooms=[
+            RoomBoundary(id="left", points=rect(0, 0, 4, 3), name="Left"),
+            RoomBoundary(id="right", points=rect(4, 0, 8, 3), name="Right"),
+        ],
+        doors=[
+            DoorMarker(id="shared", point=Point(x=4, y=1), width=0.9, height=2.1),
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    left, right = result.rows
+    assert left.door_opening_count == 0
+    assert right.door_opening_count == 0
+    assert left.status is DataStatus.NEEDS_REVIEW
+    assert right.status is DataStatus.NEEDS_REVIEW
+    assert any(
+        exception.code == "ambiguous_door_assignment" and exception.room_id in {"left", "right"}
+        for exception in result.exceptions
+    )
+
+
 def test_missing_room_name_is_defaulted_and_needs_review():
     project = ProjectInput(
         project_name="Missing Name",
@@ -254,6 +281,39 @@ def test_missing_window_height_uses_project_default_and_marks_default_inferred()
     assert row.status is DataStatus.DEFAULT_INFERRED
     assert any("default height" in note for note in row.exception_notes)
     assert any(exception.code == "window_height_defaulted" for exception in result.exceptions)
+
+
+def test_door_with_width_and_height_reports_opening_area_without_reducing_net_wall_area():
+    project = ProjectInput(
+        project_name="Door Area",
+        default_height=2.8,
+        rooms=[RoomBoundary(id="r1", points=rect(0, 0, 4, 3), name="Bedroom")],
+        windows=[WindowMarker(id="win1", point=Point(x=1, y=1), width=1.0, height=1.0)],
+        doors=[DoorMarker(id="door1", point=Point(x=2, y=1), width=0.9, height=2.1)],
+    )
+
+    result = calculate_quantities(project)
+
+    row = result.rows[0]
+    assert row.door_opening_count == 1
+    assert row.door_opening_area == 1.89
+    assert row.gross_wall_area == 39.2
+    assert row.window_area == 1.0
+    assert row.net_wall_area == 38.2
+
+
+def test_door_with_width_only_reports_count_and_zero_area():
+    project = ProjectInput(
+        project_name="Door Width Only",
+        rooms=[RoomBoundary(id="r1", points=rect(0, 0, 4, 3), name="Bedroom")],
+        doors=[DoorMarker(id="door1", point=Point(x=2, y=1), width=0.9)],
+    )
+
+    result = calculate_quantities(project)
+
+    row = result.rows[0]
+    assert row.door_opening_count == 1
+    assert row.door_opening_area == 0.0
 
 
 def test_void_space_uses_custom_height_and_keeps_single_floor_area():
@@ -578,6 +638,7 @@ def test_floorless_markers_for_floored_room_are_ignored_and_flagged():
         rooms=[RoomBoundary(id="r1", floor="1F", points=rect(0, 0, 4, 3))],
         texts=[TextMarker(id="t1", text="Bedroom", point=Point(x=2, y=1))],
         windows=[WindowMarker(id="w1", point=Point(x=1, y=1), width=1.2)],
+        doors=[DoorMarker(id="d1", point=Point(x=2, y=1), width=0.9)],
         heights=[HeightMarker(id="h1", point=Point(x=3, y=1), height=4.8)],
     )
 
@@ -589,10 +650,12 @@ def test_floorless_markers_for_floored_room_are_ignored_and_flagged():
     assert row.height_mode is HeightMode.FLOOR_DEFAULT
     assert row.window_count == 0
     assert row.window_area == 0
+    assert row.door_opening_count == 0
     assert row.status is DataStatus.NEEDS_REVIEW
     assert {exc.code for exc in result.exceptions if exc.room_id == "r1"} >= {
         "marker_floor_mismatch_text",
         "marker_floor_mismatch_window",
+        "marker_floor_mismatch_door",
         "marker_floor_mismatch_height",
     }
 

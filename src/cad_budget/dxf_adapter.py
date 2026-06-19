@@ -142,6 +142,14 @@ def _outline_polygon(points: list[Point]) -> Polygon | None:
     return polygon
 
 
+def _valid_room_polygon(points: list[Point]) -> bool:
+    try:
+        polygon = Polygon((point.x, point.y) for point in points)
+    except ValueError:
+        return False
+    return not polygon.is_empty and polygon.area > 0 and polygon.is_valid
+
+
 def _line_midpoint(points: list[Point]) -> Point:
     first = points[0]
     last = points[-1]
@@ -234,6 +242,17 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         layer = _layer(entity)
         if layer == LayerName.QUOTE_ROOM.value and entity.dxftype() == "LWPOLYLINE" and entity.closed:
             points = _lwpolyline_points(entity, options.confirmed_unit)
+            if not _valid_room_polygon(points):
+                issues.append(
+                    AdapterIssue(
+                        code="ROOM_BOUNDARY_INVALID",
+                        message="Room boundary must be a valid closed polygon with positive area.",
+                        severity=AdapterSeverity.BLOCKER,
+                        entity_id=_entity_id(entity),
+                        layer=layer,
+                    )
+                )
+                continue
             try:
                 rooms.append(RoomBoundary(id=_entity_id(entity), points=points))
             except ValueError as exc:

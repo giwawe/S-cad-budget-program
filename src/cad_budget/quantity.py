@@ -197,6 +197,42 @@ def _resolve_window_assignments(
     return assignments, exceptions
 
 
+def _resolve_door_assignments(
+    project: ProjectInput, rooms: list[RoomBoundary]
+) -> tuple[dict[str, list[Any]], list[QuantityException]]:
+    assignments: dict[str, list] = defaultdict(list)
+    exceptions: list[QuantityException] = []
+
+    for door in project.doors:
+        matched_room_ids: list[str] = []
+        for room in rooms:
+            if not point_inside_polygon(door.point, room.points):
+                continue
+            if _floor_compatible(room.floor, door.floor):
+                matched_room_ids.append(room.id)
+            else:
+                exceptions.append(
+                    QuantityException(
+                        code="marker_floor_mismatch_door",
+                        message=f"Door {door.id} skipped for room {room.id} due floor mismatch",
+                        room_id=room.id,
+                    )
+                )
+        if len(matched_room_ids) == 1:
+            assignments[matched_room_ids[0]].append(door)
+        elif len(matched_room_ids) > 1:
+            for room_id in matched_room_ids:
+                exceptions.append(
+                    QuantityException(
+                        code="ambiguous_door_assignment",
+                        message=f"Door {door.id} matches multiple rooms",
+                        room_id=room_id,
+                    )
+                )
+
+    return assignments, exceptions
+
+
 def _resolve_void_height_assignments(
     project: ProjectInput, rooms: list[RoomBoundary]
 ) -> tuple[dict[str, tuple[float, HeightMode]], list[QuantityException]]:
@@ -357,9 +393,11 @@ def _determine_status(exceptions: list[QuantityException], default_inferred: boo
             "ambiguous_room_text",
             "marker_floor_mismatch_text",
             "marker_floor_mismatch_window",
+            "marker_floor_mismatch_door",
             "marker_floor_mismatch_opening",
             "marker_floor_mismatch_height",
             "ambiguous_window_assignment",
+            "ambiguous_door_assignment",
             "ambiguous_height_assignment",
             "ambiguous_void_marker",
             "void_related_floor_height_missing",
@@ -386,6 +424,9 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
 
     window_assignments, window_exceptions = _resolve_window_assignments(project, project.rooms)
     exceptions.extend(window_exceptions)
+
+    door_assignments, door_exceptions = _resolve_door_assignments(project, project.rooms)
+    exceptions.extend(door_exceptions)
 
     for room in project.rooms:
         room_exceptions: list[QuantityException] = [
@@ -468,6 +509,13 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
         else:
             net_wall_area = round(gross_wall_area - window_area, 6)
 
+        room_doors = door_assignments.get(room.id, [])
+        door_opening_count = len(room_doors)
+        door_opening_area = 0.0
+        for door in room_doors:
+            if door.width is not None and door.height is not None:
+                door_opening_area += door.width * door.height
+
         status = _determine_status(room_exceptions, has_defaulted_window_height)
 
         is_excluded_area_space = room.space_type in {SpaceType.ELEVATOR_SHAFT, SpaceType.VOID_OPENING}
@@ -480,6 +528,8 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
             gross_wall_area = 0.0
             window_count = 0
             window_area = 0.0
+            door_opening_count = 0
+            door_opening_area = 0.0
             net_wall_area = 0.0
 
             include_in_floor_quantity = False
@@ -503,8 +553,8 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
                 gross_wall_area=gross_wall_area,
                 window_count=window_count,
                 window_area=round(window_area, 6),
-                door_opening_count=0,
-                door_opening_area=0.0,
+                door_opening_count=door_opening_count,
+                door_opening_area=round(door_opening_area, 6),
                 net_wall_area=net_wall_area,
                 is_outdoor=room.is_outdoor,
                 include_in_floor_quantity=include_in_floor_quantity,
