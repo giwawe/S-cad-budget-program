@@ -66,7 +66,13 @@ cad-budget calculate project.json --json-output result.json --excel-output resul
 
 DWG direct parsing is not implemented. DWG files must first be converted to DXF through a configured converter command that includes both `{input}` and `{output}` placeholders. The adapter runs the converter, reads the generated DXF, and then follows the same ProjectInput JSON and calculation path. If DWG conversion fails, ask the designer to save the drawing as DXF and upload the DXF file.
 
-Supported first-version import layers:
+For example, pass the converter command as repeated `--dwg-converter` parts. The actual converter executable is environment-specific:
+
+```bash
+cad-budget import-cad plan.dwg --json-output project.json --unit mm --dwg-converter "converter" --dwg-converter "{input}" --dwg-converter "{output}"
+```
+
+Current import-supported layers:
 
 ```text
 QUOTE_ROOM
@@ -80,6 +86,8 @@ QUOTE_VOID
 QUOTE_EXT_WALL
 QUOTE_EXT_OPENING
 ```
+
+`QUOTE_FLOOR` remains reserved in the CAD standard and is planned for floor assignment in a later CAD adapter increment; the current importer does not parse it.
 
 Window recognition supports block attributes when available. Without attributes, the adapter reads the closed window opening outline on `QUOTE_WINDOW`; the outline may be rectangular, polygonal, or arc-based. Window height comes from attributes or tags when available. Otherwise, the default window height is used later and marked inferred.
 
