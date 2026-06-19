@@ -1,6 +1,8 @@
+from math import cos, radians, sin
 from pathlib import Path
 
 import ezdxf
+import pytest
 
 from cad_budget.cad_adapter_models import CadImportOptions, CadUnit
 from cad_budget.dxf_adapter import import_dxf
@@ -206,3 +208,70 @@ def test_import_dxf_warns_for_open_window_outline(tmp_path: Path):
     assert result.project is not None
     assert result.project.windows == []
     assert any(issue.code == "WINDOW_OUTLINE_NOT_CLOSED" for issue in result.issues)
+
+
+def test_import_dxf_infers_closed_door_outline_width_and_centroid(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_DOOR")
+    modelspace.add_lwpolyline(
+        [(0, 0), (6000, 0), (6000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(1000, -100), (1900, -100), (1900, 100), (1000, 100), (1000, -100)],
+        dxfattribs={"layer": "QUOTE_DOOR", "closed": True},
+    )
+    dxf_path = _save_doc(tmp_path / "door_outline.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.doors) == 1
+    assert result.project.doors[0].width == pytest.approx(0.9)
+    assert result.project.doors[0].point.x == pytest.approx(1.45)
+    assert result.project.doors[0].point.y == pytest.approx(0.0)
+
+
+def test_import_dxf_infers_rotated_window_width_from_outline_major_dimension(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (6000, 0), (6000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    angle = radians(8)
+    center_x = 1800
+    center_y = 1200
+    half_width = 750
+    half_depth = 100
+    corners = []
+    for local_x, local_y in [
+        (-half_width, -half_depth),
+        (half_width, -half_depth),
+        (half_width, half_depth),
+        (-half_width, half_depth),
+    ]:
+        corners.append(
+            (
+                center_x + local_x * cos(angle) - local_y * sin(angle),
+                center_y + local_x * sin(angle) + local_y * cos(angle),
+            )
+        )
+    modelspace.add_lwpolyline(
+        [*corners, corners[0]],
+        dxfattribs={"layer": "QUOTE_WINDOW", "closed": True},
+    )
+    dxf_path = _save_doc(tmp_path / "rotated_window.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.windows[0].width == pytest.approx(1.5, abs=0.001)

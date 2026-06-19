@@ -111,9 +111,15 @@ def _outline_centroid(points: list[Point]) -> Point:
 
 
 def _outline_width(points: list[Point]) -> float:
-    x_values = [point.x for point in points]
-    y_values = [point.y for point in points]
-    return round(max(max(x_values) - min(x_values), max(y_values) - min(y_values)), 10)
+    rectangle = Polygon((point.x, point.y) for point in points).minimum_rotated_rectangle
+    rectangle_points = list(rectangle.exterior.coords)
+    return round(
+        max(
+            hypot(following[0] - current[0], following[1] - current[1])
+            for current, following in zip(rectangle_points, rectangle_points[1:])
+        ),
+        10,
+    )
 
 
 def _line_midpoint(points: list[Point]) -> Point:
@@ -234,11 +240,17 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         elif layer == LayerName.QUOTE_DOOR.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
+                if entity.closed and len(points) >= 4:
+                    point = _outline_centroid(points)
+                    width = _outline_width(points)
+                else:
+                    point = _line_midpoint(points)
+                    width = _polyline_length(points)
                 doors.append(
                     DoorMarker(
                         id=_entity_id(entity),
-                        point=_line_midpoint(points),
-                        width=_polyline_length(points),
+                        point=point,
+                        width=width,
                         attributes={"source": "geometry"},
                     )
                 )
