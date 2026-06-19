@@ -110,8 +110,10 @@ def _outline_centroid(points: list[Point]) -> Point:
     return Point(x=centroid.x, y=centroid.y)
 
 
-def _outline_width(points: list[Point]) -> float:
-    rectangle = Polygon((point.x, point.y) for point in points).minimum_rotated_rectangle
+def _outline_width(polygon: Polygon) -> float:
+    rectangle = polygon.minimum_rotated_rectangle
+    if not hasattr(rectangle, "exterior"):
+        return 0.0
     rectangle_points = list(rectangle.exterior.coords)
     return round(
         max(
@@ -120,6 +122,13 @@ def _outline_width(points: list[Point]) -> float:
         ),
         10,
     )
+
+
+def _outline_polygon(points: list[Point]) -> Polygon | None:
+    polygon = Polygon((point.x, point.y) for point in points)
+    if polygon.is_empty or polygon.area <= 0:
+        return None
+    return polygon
 
 
 def _line_midpoint(points: list[Point]) -> Point:
@@ -228,11 +237,22 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                     )
                 )
             else:
+                polygon = _outline_polygon(points)
+                if polygon is None:
+                    issues.append(
+                        AdapterIssue(
+                            code="WINDOW_OUTLINE_INVALID",
+                            message="Window outline must enclose a non-zero area.",
+                            entity_id=_entity_id(entity),
+                            layer=layer,
+                        )
+                    )
+                    continue
                 windows.append(
                     WindowMarker(
                         id=_entity_id(entity),
                         point=_outline_centroid(points),
-                        width=_outline_width(points),
+                        width=_outline_width(polygon),
                         height=None,
                         attributes={"source": "closed_outline"},
                     )
@@ -241,8 +261,19 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
                 if entity.closed and len(points) >= 4:
+                    polygon = _outline_polygon(points)
+                    if polygon is None:
+                        issues.append(
+                            AdapterIssue(
+                                code="DOOR_OUTLINE_INVALID",
+                                message="Door outline must enclose a non-zero area.",
+                                entity_id=_entity_id(entity),
+                                layer=layer,
+                            )
+                        )
+                        continue
                     point = _outline_centroid(points)
-                    width = _outline_width(points)
+                    width = _outline_width(polygon)
                 else:
                     point = _line_midpoint(points)
                     width = _polyline_length(points)

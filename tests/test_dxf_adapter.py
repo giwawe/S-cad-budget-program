@@ -275,3 +275,51 @@ def test_import_dxf_infers_rotated_window_width_from_outline_major_dimension(tmp
     assert not result.has_blockers
     assert result.project is not None
     assert result.project.windows[0].width == pytest.approx(1.5, abs=0.001)
+
+
+def test_import_dxf_warns_for_degenerate_closed_window_outline(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (6000, 0), (6000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(1000, 1000), (1500, 1000), (2000, 1000), (1000, 1000)],
+        dxfattribs={"layer": "QUOTE_WINDOW", "closed": True},
+    )
+    dxf_path = _save_doc(tmp_path / "degenerate_window.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.windows == []
+    assert any(issue.code == "WINDOW_OUTLINE_INVALID" for issue in result.issues)
+
+
+def test_import_dxf_warns_for_degenerate_closed_door_outline(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_DOOR")
+    modelspace.add_lwpolyline(
+        [(0, 0), (6000, 0), (6000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(1000, 1000), (1500, 1000), (2000, 1000), (1000, 1000)],
+        dxfattribs={"layer": "QUOTE_DOOR", "closed": True},
+    )
+    dxf_path = _save_doc(tmp_path / "degenerate_door.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.doors == []
+    assert any(issue.code == "DOOR_OUTLINE_INVALID" for issue in result.issues)
