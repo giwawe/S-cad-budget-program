@@ -32,7 +32,17 @@ def convert_dwg_to_dxf(
         for part in converter_command
     ]
 
-    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    except (OSError, ValueError, IndexError) as exc:
+        return DwgConversionResult(
+            issue=AdapterIssue(
+                code="DWG_CONVERSION_FAILED",
+                message=f"DWG converter could not be launched: {exc}",
+                severity=AdapterSeverity.BLOCKER,
+            )
+        )
+
     if completed.returncode != 0:
         return DwgConversionResult(
             issue=AdapterIssue(
