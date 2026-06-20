@@ -43,6 +43,8 @@ _DXF_INSUNITS = {
 _ROOM_CLOSURE_TOLERANCE_METERS = 0.001
 _FLOOR_POINT_MATCH_TOLERANCE_METERS = 0.3
 _FLOOR_LINE_MATCH_TOLERANCE_METERS = 0.1
+_WINDOW_WIDTH_ATTRIBUTE_KEYS = ("width", "窗宽", "宽")
+_WINDOW_HEIGHT_ATTRIBUTE_KEYS = ("height", "窗高", "高")
 
 
 def _scale(value: float, unit: CadUnit) -> float:
@@ -215,6 +217,47 @@ def _insert_width(entity, unit: CadUnit) -> float | None:
     if width <= 0:
         return None
     return _scale(width, unit)
+
+
+def _insert_attributes(entity) -> dict[str, str]:
+    return {
+        str(attrib.dxf.tag).strip().lower(): str(attrib.dxf.text).strip()
+        for attrib in getattr(entity, "attribs", [])
+        if str(attrib.dxf.tag).strip()
+    }
+
+
+def _parse_window_dimension(value: str) -> float | None:
+    cleaned = value.strip().lower().replace(" ", "")
+    if not cleaned:
+        return None
+
+    factor = 1.0
+    if cleaned.endswith("mm"):
+        cleaned = cleaned[:-2]
+        factor = 0.001
+    elif cleaned.endswith("m"):
+        cleaned = cleaned[:-1]
+
+    try:
+        number = float(cleaned)
+    except ValueError:
+        return None
+
+    dimension = number * factor
+    if factor == 1.0 and number > 20:
+        dimension = number * 0.001
+    if dimension <= 0:
+        return None
+    return dimension
+
+
+def _window_dimension_from_attributes(attrs: dict[str, str], keys: tuple[str, ...]) -> float | None:
+    for key in keys:
+        value = attrs.get(key)
+        if value is not None:
+            return _parse_window_dimension(value)
+    return None
 
 
 def _text_value(entity) -> str:
@@ -449,6 +492,29 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                         height=height,
                     )
                 )
+        elif layer == LayerName.QUOTE_WINDOW.value and entity.dxftype() == "INSERT":
+            attrs = _insert_attributes(entity)
+            width = _window_dimension_from_attributes(attrs, _WINDOW_WIDTH_ATTRIBUTE_KEYS)
+            height = _window_dimension_from_attributes(attrs, _WINDOW_HEIGHT_ATTRIBUTE_KEYS)
+            if width is None:
+                issues.append(
+                    AdapterIssue(
+                        code="WINDOW_WIDTH_ATTRIBUTE_INVALID",
+                        message="Window block must have a parseable width attribute.",
+                        entity_id=_entity_id(entity),
+                        layer=layer,
+                    )
+                )
+                continue
+            windows.append(
+                WindowMarker(
+                    id=_entity_id(entity),
+                    point=_insert_point(entity, options.confirmed_unit),
+                    width=width,
+                    height=height,
+                    attributes={"source": "insert_attributes", "block_name": str(entity.dxf.name)},
+                )
+            )
         elif layer == LayerName.QUOTE_WINDOW.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) < 4 and not entity.closed:

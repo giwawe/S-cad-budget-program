@@ -90,6 +90,6 @@ QUOTE_EXT_OPENING
 
 `QUOTE_FLOOR` text markers are optional. Commodity apartment drawings can omit them and use the project default height. Villa or multi-floor drawings can add `QUOTE_FLOOR` text markers inside room boundaries; imported windows, doors, walls, openings, height markers, voids, and exterior linework inherit the matched room floor when the match is unambiguous, so per-floor default heights can be used during quantity calculation.
 
-The first import adapter recognizes closed `QUOTE_WINDOW` LWPOLYLINE outlines; the outline may be rectangular, polygonal, or arc-based. Window height is not imported yet: imported windows keep `height=None`, then the quantity engine applies the default window height and marks it inferred. Window block attributes and tags remain part of the CAD standard and are planned for a future importer increment.
+The import adapter recognizes `QUOTE_WINDOW` window blocks and closed LWPOLYLINE outlines. Window blocks read width and height from common attributes such as `WIDTH`, `HEIGHT`, `窗宽`, and `窗高`; numeric values greater than 20 are treated as millimeters, while smaller values are treated as meters. Closed outlines may be rectangular, polygonal, or arc-based; they infer width from the outline and keep `height=None`, so the quantity engine applies the default window height and marks it inferred.
 
 Door recognition records door count and door opening area when width and height are available. Door area is not deducted from wall area by default.

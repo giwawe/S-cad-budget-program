@@ -321,6 +321,129 @@ def test_import_dxf_accepts_window_outline_when_first_and_last_points_match_with
     assert result.project.windows[0].width == 1.5
 
 
+def test_import_dxf_reads_window_insert_width_and_height_attributes(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.blocks.new("window_block")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    insert = modelspace.add_blockref("window_block", (2000, 0), dxfattribs={"layer": "QUOTE_WINDOW"})
+    insert.add_attrib("WIDTH", "1200")
+    insert.add_attrib("HEIGHT", "1500")
+    dxf_path = _save_doc(tmp_path / "window_insert_attrs.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.windows) == 1
+    assert result.project.windows[0].width == 1.2
+    assert result.project.windows[0].height == 1.5
+    assert result.project.windows[0].attributes["source"] == "insert_attributes"
+
+
+def test_import_dxf_reads_chinese_window_insert_attributes(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.blocks.new("window_block")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    insert = modelspace.add_blockref("window_block", (2000, 0), dxfattribs={"layer": "QUOTE_WINDOW"})
+    insert.add_attrib("窗宽", "1200")
+    insert.add_attrib("窗高", "1500")
+    dxf_path = _save_doc(tmp_path / "window_insert_chinese_attrs.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.windows) == 1
+    assert result.project.windows[0].width == 1.2
+    assert result.project.windows[0].height == 1.5
+
+
+def test_import_dxf_treats_small_window_attribute_values_as_meters(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.blocks.new("window_block")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    insert = modelspace.add_blockref("window_block", (2000, 0), dxfattribs={"layer": "QUOTE_WINDOW"})
+    insert.add_attrib("width", "1.2")
+    insert.add_attrib("height", "1.5")
+    dxf_path = _save_doc(tmp_path / "window_insert_meter_attrs.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.windows) == 1
+    assert result.project.windows[0].width == 1.2
+    assert result.project.windows[0].height == 1.5
+
+
+def test_import_dxf_imports_window_insert_width_without_height(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.blocks.new("window_block")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    insert = modelspace.add_blockref("window_block", (2000, 0), dxfattribs={"layer": "QUOTE_WINDOW"})
+    insert.add_attrib("WIDTH", "1200")
+    dxf_path = _save_doc(tmp_path / "window_insert_width_only.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.windows) == 1
+    assert result.project.windows[0].width == 1.2
+    assert result.project.windows[0].height is None
+
+
+def test_import_dxf_warns_for_window_insert_without_parseable_width(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.blocks.new("window_block")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    insert = modelspace.add_blockref("window_block", (2000, 0), dxfattribs={"layer": "QUOTE_WINDOW"})
+    insert.add_attrib("WIDTH", "wide")
+    dxf_path = _save_doc(tmp_path / "window_insert_bad_width.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.windows == []
+    assert any(issue.code == "WINDOW_WIDTH_ATTRIBUTE_INVALID" for issue in result.issues)
+
+
 def test_import_dxf_reads_height_void_and_exterior_layers(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4

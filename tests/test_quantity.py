@@ -345,6 +345,23 @@ def test_missing_window_height_uses_project_default_and_marks_default_inferred()
     assert any(exception.code == "window_height_defaulted" for exception in result.exceptions)
 
 
+def test_explicit_window_height_does_not_mark_default_inferred():
+    project = ProjectInput(
+        project_name="Window Height",
+        default_height=2.8,
+        default_window_height=1.7,
+        rooms=[RoomBoundary(id="r1", points=rect(0, 0, 4, 3), name="Bedroom")],
+        windows=[WindowMarker(id="win1", point=Point(x=1, y=1), width=1.2, height=1.5)],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.window_area == 1.8
+    assert row.status is DataStatus.CONFIRMED
+    assert not any(exception.code == "window_height_defaulted" for exception in result.exceptions)
+
+
 def test_door_with_width_and_height_reports_opening_area_without_reducing_net_wall_area():
     project = ProjectInput(
         project_name="Door Area",
