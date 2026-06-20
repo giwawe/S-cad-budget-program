@@ -109,3 +109,13 @@ cad-budget import-excel result.xlsx --json-output edited-result.json
 ```
 
 The importer reads the editable quantity fields, preserves the hidden room id, and recalculates gross/net wall areas from the edited row values. It does not modify the original CAD file or the original `ProjectInput` JSON.
+
+## Residential Quote Export
+
+Generate a commodity-apartment fitout quote workbook from a `QuantityResult` JSON:
+
+```powershell
+cad-budget quote result.json --template "D:\Desktop\清单式报价表（商品房）.xlsx" --excel-output quote.xlsx
+```
+
+The first quote version reads only the `整装` worksheet from the template and ignores `半包`. It creates actual room sections from the quantity result, fills quantities that can be derived from room floor/wall areas, and preserves template quantities for manual/non-CAD items such as doors, whole-house custom cabinetry, sanitary ware, water/electric work, and other package lines.

@@ -408,3 +408,128 @@ def test_cli_import_excel_writes_edited_quantity_json(tmp_path: Path):
     data = json.loads(imported_json.read_text(encoding="utf-8"))
     assert data["rows"][0]["gross_wall_area"] == 30.0
     assert data["rows"][0]["net_wall_area"] == 28.0
+
+
+def test_cli_quote_writes_residential_fitout_excel(tmp_path: Path):
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    output = tmp_path / "quote.xlsx"
+    input_json.write_text(json.dumps(_quantity_result_payload()), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True)
+
+    result = runner.invoke(app, ["quote", str(input_json), "--template", str(template), "--excel-output", str(output)])
+
+    assert result.exit_code == 0
+    assert output.exists()
+    workbook = load_workbook(output, data_only=False)
+    sheet = workbook.active
+    assert workbook.sheetnames == ["商品房整装报价"]
+    assert sheet["B5"].value == "客厅工程"
+    assert "Wrote" in result.output
+
+
+def test_cli_quote_reports_missing_template_without_traceback(tmp_path: Path):
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    input_json.write_text(json.dumps(_quantity_result_payload()), encoding="utf-8")
+    output = tmp_path / "quote.xlsx"
+
+    result = runner.invoke(
+        app,
+        ["quote", str(input_json), "--template", str(tmp_path / "missing.xlsx"), "--excel-output", str(output)],
+    )
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "Failed to generate quote Excel" in error_text
+    assert "Traceback" not in error_text
+    assert not output.exists()
+
+
+def test_cli_quote_reports_missing_fitout_sheet_without_traceback(tmp_path: Path):
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    output = tmp_path / "quote.xlsx"
+    input_json.write_text(json.dumps(_quantity_result_payload()), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=False)
+
+    result = runner.invoke(app, ["quote", str(input_json), "--template", str(template), "--excel-output", str(output)])
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "Failed to generate quote Excel" in error_text
+    assert "整装" in error_text
+    assert "Traceback" not in error_text
+
+
+def test_cli_quote_reports_invalid_quantity_json_without_traceback(tmp_path: Path):
+    runner = CliRunner()
+    input_json = tmp_path / "bad.json"
+    template = tmp_path / "template.xlsx"
+    output = tmp_path / "quote.xlsx"
+    input_json.write_text(json.dumps({"project_name": "Not A Result"}), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True)
+
+    result = runner.invoke(app, ["quote", str(input_json), "--template", str(template), "--excel-output", str(output)])
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "Invalid quantity result JSON" in error_text
+    assert "Traceback" not in error_text
+
+
+def _quantity_result_payload():
+    return {
+        "project_name": "Quote CLI",
+        "rows": [
+            {
+                "room_id": "living",
+                "floor": None,
+                "room_name": "客厅",
+                "space_type": "normal",
+                "height": 2.8,
+                "height_mode": "project_default",
+                "floor_area": 20.0,
+                "floor_perimeter": 0,
+                "wall_measure_perimeter": 0,
+                "open_boundary_length": 0,
+                "gross_wall_area": 50.0,
+                "window_count": 0,
+                "window_area": 0,
+                "door_opening_count": 0,
+                "door_opening_area": 0,
+                "net_wall_area": 50.0,
+                "is_outdoor": False,
+                "include_in_floor_quantity": True,
+                "include_in_wall_paint_quantity": True,
+                "status": "confirmed",
+                "exception_notes": [],
+            }
+        ],
+        "exterior_rows": [],
+        "exceptions": [],
+    }
+
+
+def _write_quote_cli_template(path: Path, *, include_fitout: bool) -> None:
+    workbook = load_workbook(path) if path.exists() else None
+    if workbook is None:
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+    half = workbook.active
+    half.title = "半包"
+    half.append(["工程(预) 算表"])
+    if include_fitout:
+        sheet = workbook.create_sheet("整装")
+        sheet.append(["工程(预) 算表"])
+        sheet.append(["名称：Demo"])
+        sheet.append(["编号", "项目名称", "单位", "数量", "材料费(元)", None, "人工费\n(元)", "总价(元)", "材料及工艺说明"])
+        sheet.append([None, None, None, None, "主材\n单价", "辅材\n单价"])
+        sheet.append(["一", "客厅工程"])
+        sheet.append([1, "顶面批嵌", "M2", 1, 0, 15, 10, None, "说明"])
+        sheet.append([2, "墙面乳胶漆", "M2", 1, 10, 0, 10, None, "说明"])
+        sheet.append([3, "地面砖铺贴(750X1500)", "M2", 1, 0, 36, 60, None, "说明"])
+    workbook.save(path)

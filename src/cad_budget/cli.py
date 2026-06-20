@@ -7,9 +7,10 @@ from pydantic import ValidationError
 from cad_budget.cad_adapter_models import CadImportOptions, CadUnit
 from cad_budget.dwg_converter import convert_dwg_to_dxf
 from cad_budget.dxf_adapter import import_dxf
-from cad_budget.models import ProjectInput
+from cad_budget.models import ProjectInput, QuantityResult
 from cad_budget.export_excel import export_quantity_result
 from cad_budget.import_excel import import_quantity_result
+from cad_budget.quote_excel import export_residential_quote
 from cad_budget.quantity import calculate_quantities
 
 app = typer.Typer(help="CAD renovation quantity takeoff tools.")
@@ -152,3 +153,31 @@ def import_excel(
         raise typer.Exit(code=1)
 
     typer.echo(f"Wrote {json_output}")
+
+
+@app.command("quote")
+def quote(
+    input_json: Path,
+    template: Path = typer.Option(..., "--template", help="Residential fitout quote template workbook."),
+    excel_output: Path = typer.Option(..., "--excel-output", help="Path for generated quote Excel output."),
+) -> None:
+    try:
+        raw_json = input_json.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        typer.echo(f"Failed to read quantity result JSON '{input_json}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        result = QuantityResult.model_validate_json(raw_json)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        error_message = str(exc).splitlines()[0] if str(exc).splitlines() else str(exc)
+        typer.echo(f"Invalid quantity result JSON in '{input_json}': {error_message}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        export_residential_quote(result, template, excel_output)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Failed to generate quote Excel '{excel_output}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Wrote {excel_output}")
