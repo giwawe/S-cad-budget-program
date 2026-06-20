@@ -26,6 +26,8 @@ cad-budget calculate tests/fixtures/simple_apartment.json --json-output build/si
 
 ## First-Version CAD Standard
 
+Designer-facing CAD drawing requirements live in [docs/cad-lightweight-drawing-standard-zh.md](docs/cad-lightweight-drawing-standard-zh.md). Keep that document updated whenever CAD import layers, block attributes, unit handling, geometry inference, or quantity rules change.
+
 Core layers:
 
 ```text
@@ -118,4 +120,4 @@ Generate a commodity-apartment fitout quote workbook from a `QuantityResult` JSO
 cad-budget quote result.json --template "D:\Desktop\清单式报价表（商品房）.xlsx" --excel-output quote.xlsx
 ```
 
-The first quote version reads only the `整装` worksheet from the template and ignores `半包`. It creates actual room sections from the quantity result, fills quantities that can be derived from room floor/wall areas, and preserves template quantities for manual/non-CAD items such as doors, whole-house custom cabinetry, sanitary ware, water/electric work, and other package lines.
+The first quote version reads only the `整装` worksheet from the template and ignores `半包`. It creates actual room sections from the quantity result, fills quantities that can be derived from room floor/wall areas, and preserves template quantities for manual/non-CAD items such as doors, whole-house custom cabinetry, sanitary ware, water/electric work, and other package lines. The generated workbook also includes visible review columns for quantity source, source room, room id, measurement basis, review status, and notes.

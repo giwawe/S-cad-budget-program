@@ -426,6 +426,8 @@ def test_cli_quote_writes_residential_fitout_excel(tmp_path: Path):
     sheet = workbook.active
     assert workbook.sheetnames == ["商品房整装报价"]
     assert sheet["B5"].value == "客厅工程"
+    assert sheet["J3"].value == "数量来源"
+    assert sheet["O3"].value == "复核备注"
     assert "Wrote" in result.output
 
 

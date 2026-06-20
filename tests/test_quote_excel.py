@@ -43,6 +43,14 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
     sheet = workbook.active
     rows = list(sheet.iter_rows(values_only=True))
     assert workbook.sheetnames == ["\u5546\u54c1\u623f\u6574\u88c5\u62a5\u4ef7"]
+    assert [sheet.cell(row=3, column=column).value for column in range(10, 16)] == [
+        "\u6570\u91cf\u6765\u6e90",
+        "\u6765\u6e90\u7a7a\u95f4",
+        "\u7a7a\u95f4ID",
+        "\u8ba1\u91cf\u53e3\u5f84",
+        "\u590d\u6838\u72b6\u6001",
+        "\u590d\u6838\u5907\u6ce8",
+    ]
     assert _row_containing(rows, "\u5ba2\u5385\u5de5\u7a0b") is not None
     assert _row_containing(rows, "\u53a8\u623f\u5de5\u7a0b") is not None
     assert _row_containing(rows, "\u4e3b\u536b\u5de5\u7a0b") is not None
@@ -50,20 +58,38 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
     living_wall_paint = _row_containing(rows, "\u5899\u9762\u4e73\u80f6\u6f06")
     assert living_wall_paint[3] == 50.0
     assert living_wall_paint[4:7] == (10, 0, 10)
+    assert living_wall_paint[9:15] == (
+        "\u81ea\u52a8\u7b97\u91cf",
+        "\u5ba2\u5385",
+        "living",
+        "\u5899\u9762\u51c0\u9762\u79ef",
+        "\u5f85\u590d\u6838",
+        None,
+    )
 
     kitchen_floor_tile = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5730\u9762\u7816\u94fa\u8d34(750X1500)")
     assert kitchen_floor_tile[3] == 6.0
 
     bath_waterproof = _row_containing_after(rows, "\u4e3b\u536b\u5de5\u7a0b", "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406")
     assert bath_waterproof[3] == 18.0
+    assert bath_waterproof[12] == "\u5730\u9762\u9762\u79ef+\u5899\u9762\u51c0\u9762\u79ef"
 
     manual_item = _row_containing(rows, "\u5783\u573e\u6e05\u8fd0\u8d39")
     assert manual_item[3] == 99
     assert manual_item[7].startswith("=D")
+    assert manual_item[9:15] == (
+        "\u6a21\u677f\u9ed8\u8ba4",
+        None,
+        None,
+        "\u6a21\u677f\u9ed8\u8ba4\u6570\u91cf",
+        "\u9700\u4eba\u5de5\u786e\u8ba4",
+        None,
+    )
 
     assert _row_containing(rows, "\u76f4\u63a5\u8d39\u5408\u8ba1") is not None
     assert _row_containing(rows, "\u5de5\u7a0b\u7ba1\u7406\u8d39") is not None
     assert _row_containing(rows, "\u5de5\u7a0b\u603b\u9020\u4ef7") is not None
+    assert sheet.auto_filter.ref == f"A3:O{sheet.max_row}"
 
 
 def test_export_residential_quote_uses_one_wall_tile_variant_for_wet_rooms(tmp_path: Path):

@@ -20,6 +20,12 @@ QUOTE_HEADERS = [
     "\u4eba\u5de5\u8d39\n(\u5143)",
     "\u603b\u4ef7(\u5143)",
     "\u6750  \u6599  \u53ca  \u5de5  \u827a  \u8bf4  \u660e",
+    "\u6570\u91cf\u6765\u6e90",
+    "\u6765\u6e90\u7a7a\u95f4",
+    "\u7a7a\u95f4ID",
+    "\u8ba1\u91cf\u53e3\u5f84",
+    "\u590d\u6838\u72b6\u6001",
+    "\u590d\u6838\u5907\u6ce8",
 ]
 QUOTE_SUBHEADERS = [None, None, None, None, "\u4e3b\u6750\n\u5355\u4ef7", "\u8f85\u6750\n\u5355\u4ef7"]
 
@@ -102,6 +108,7 @@ _SECTION_NUMERALS = [
 
 _HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 _SECTION_FILL = PatternFill("solid", fgColor="D9EAD3")
+_REVIEW_FILL = PatternFill("solid", fgColor="EADCF8")
 _WHITE_FONT = Font(color="FFFFFF", bold=True)
 _BOLD_FONT = Font(bold=True)
 
@@ -234,6 +241,7 @@ def _append_section(
     for item_number, item in enumerate(items, start=1):
         row_index = sheet.max_row + 1
         quantity = _quantity_for_item(item.name, room) if room is not None else item.template_quantity
+        review_values = _review_values_for_item(item.name, room)
         sheet.append(
             [
                 item_number,
@@ -245,6 +253,7 @@ def _append_section(
                 item.labor_price,
                 f"=D{row_index}*(E{row_index}+F{row_index}+G{row_index})",
                 item.description,
+                *review_values,
             ]
         )
         _style_item_row(sheet, row_index)
@@ -273,19 +282,37 @@ def _append_summary_rows(sheet, subtotal_rows: list[int]) -> None:
 
 
 def _style_item_row(sheet, row_index: int) -> None:
-    for column_index in range(1, 10):
+    for column_index in range(1, 16):
         cell = sheet.cell(row=row_index, column=column_index)
-        cell.alignment = Alignment(vertical="top", wrap_text=column_index == 9)
+        cell.alignment = Alignment(vertical="top", wrap_text=column_index in {9, 13, 15})
         if column_index in {4, 5, 6, 7, 8}:
             cell.number_format = "0.###"
+        if column_index >= 10:
+            cell.fill = _REVIEW_FILL
 
 
 def _configure_sheet(sheet) -> None:
-    widths = {"A": 8, "B": 24, "C": 8, "D": 10, "E": 12, "F": 12, "G": 12, "H": 14, "I": 48}
+    widths = {
+        "A": 8,
+        "B": 24,
+        "C": 8,
+        "D": 10,
+        "E": 12,
+        "F": 12,
+        "G": 12,
+        "H": 14,
+        "I": 48,
+        "J": 12,
+        "K": 12,
+        "L": 12,
+        "M": 18,
+        "N": 14,
+        "O": 18,
+    }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
     sheet.freeze_panes = "A5"
-    sheet.auto_filter.ref = f"A3:I{sheet.max_row}"
+    sheet.auto_filter.ref = f"A3:O{sheet.max_row}"
 
 
 def _build_item_index(template: QuoteTemplate) -> dict[str, QuoteTemplateItem]:
@@ -331,6 +358,50 @@ def _quantity_for_item(item_name: str, room: QuantityRow) -> float:
     }:
         return _round_quantity(room.net_wall_area)
     return 0
+
+
+def _review_values_for_item(item_name: str, room: QuantityRow | None) -> list[str | None]:
+    if room is None:
+        return [
+            "\u6a21\u677f\u9ed8\u8ba4",
+            None,
+            None,
+            "\u6a21\u677f\u9ed8\u8ba4\u6570\u91cf",
+            "\u9700\u4eba\u5de5\u786e\u8ba4",
+            None,
+        ]
+    return [
+        "\u81ea\u52a8\u7b97\u91cf",
+        room.room_name,
+        room.room_id,
+        _measure_basis_for_item(item_name, room),
+        "\u5f85\u590d\u6838",
+        None,
+    ]
+
+
+def _measure_basis_for_item(item_name: str, room: QuantityRow) -> str:
+    if item_name == "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406":
+        if "\u53a8\u623f" in room.room_name:
+            return "\u5730\u9762\u9762\u79ef"
+        return "\u5730\u9762\u9762\u79ef+\u5899\u9762\u51c0\u9762\u79ef"
+    if item_name in {
+        "\u8f7b\u94a2\u9f99\u9aa8\u5e73\u9876",
+        "\u9876\u9762\u6279\u5d4c",
+        "\u9876\u9762\u4e73\u80f6\u6f06",
+        "\u5730\u9762\u7816\u94fa\u8d34(750X1500)",
+        "\u5730\u9762\u627e\u5e73",
+    }:
+        return "\u5730\u9762\u9762\u79ef"
+    if item_name in {
+        "\u5899\u9762\u754c\u9762\u5242\u5904\u7406",
+        "\u5899\u9762\u6279\u5d4c",
+        "\u5899\u9762\u4e73\u80f6\u6f06",
+        "\u5899\u9762\u8d34\u74f7\u7816(600x1200)",
+        "\u5899\u9762\u8d34\u74f7\u7816(600X1200)",
+    }:
+        return "\u5899\u9762\u51c0\u9762\u79ef"
+    return "\u81ea\u52a8\u7b97\u91cf"
 
 
 def _is_section_row(number: Any, sheet, row_index: int) -> bool:

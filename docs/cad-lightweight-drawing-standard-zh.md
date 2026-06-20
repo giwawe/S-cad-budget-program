@@ -1,0 +1,256 @@
+# CAD 出图轻量规范
+
+本文档面向 CAD 设计师和预算前置算量人员，说明导入 DWG/DXF 前需要遵守的轻量出图规范。目标不是改变设计表达习惯，而是在平面方案中补充少量 `QUOTE_*` 图层，让系统可以稳定生成 `ProjectInput` JSON、算量 JSON 和可修改 Excel。
+
+当前规范以项目实现为准：`src/cad_budget/models.py` 中的 `LayerName`、`src/cad_budget/dxf_adapter.py` 的导入规则，以及 `src/cad_budget/quantity.py` 的算量口径。
+
+## 1. 文件与单位
+
+### 文件格式
+
+- DXF 可以直接导入。
+- DWG 不在项目中直接解析，必须先通过外部转换器转成 DXF。
+- 如果 DWG 自动转换失败，请在 CAD 软件中另存为 DXF 后重新导入。
+- 导入后的 DXF 会走同一套 `QUOTE_*` 图层识别和算量逻辑。
+
+### 单位要求
+
+- 推荐出图单位使用毫米 `mm`。
+- 导入时必须确认项目单位，当前支持 `mm`、`cm`、`m`。
+- 如果 DXF 文件头 `$INSUNITS` 与导入时确认的单位冲突，系统会阻断导入，避免整张图面积和长度比例错误。
+- 如果 DXF 文件单位缺失或不受支持，系统会给出 warning，并按导入时确认的单位处理。
+
+## 2. 图层总表
+
+| 图层 | 必要性 | 支持对象 | 出图要求 | 系统用途 |
+| --- | --- | --- | --- | --- |
+| `QUOTE_ROOM` | 必需 | 闭合 `LWPOLYLINE` | 每个空间一条闭合边界 | 地面面积、地面周长、空间归属 |
+| `QUOTE_TEXT` | 推荐 | `TEXT` / `MTEXT` | 文字点放在对应空间边界内 | 空间名称 |
+| `QUOTE_WINDOW` | 推荐 | `INSERT`、闭合 `LWPOLYLINE` | 窗块带宽高属性，或画闭合窗洞轮廓 | 窗数量、窗面积、墙面扣减 |
+| `QUOTE_DOOR` | 推荐 | `INSERT`、`LWPOLYLINE` | 门块带宽高属性，或画门洞线段/闭合轮廓 | 门洞数量、门洞面积 |
+| `QUOTE_WALL` | 推荐 | `LINE`、`LWPOLYLINE` | 画实际墙体或可施工墙面线 | 墙面计量周长 |
+| `QUOTE_OPENING` | 推荐 | `LWPOLYLINE` | 标出开放边界、非墙边界 | 从墙面计量周长中扣除 |
+| `QUOTE_FLOOR` | 多层项目推荐 | `TEXT` / `MTEXT` | 楼层文字放在空间边界内 | 楼层归属、楼层默认层高 |
+| `QUOTE_HEIGHT` | 可选 | `TEXT` / `MTEXT` | 文本写米值，如 `2.8`、`3.2m` | 单空间层高覆盖 |
+| `QUOTE_VOID` | 特殊项目可选 | `LWPOLYLINE` | 标出挑空区域或楼板洞口 | 挑空高度和洞口复核 |
+| `QUOTE_EXT_WALL` | 外墙可选 | `LWPOLYLINE` | 画外墙计量线 | 外墙表计量长度 |
+| `QUOTE_EXT_OPENING` | 外墙可选 | `LWPOLYLINE` | 画外墙洞口线 | 外墙表洞口扣减 |
+
+## 3. 房间边界 `QUOTE_ROOM`
+
+### 怎么画
+
+- 每个要算量的空间画一条 `QUOTE_ROOM` 闭合多段线。
+- 使用 `LWPOLYLINE`。
+- 首尾点应完全一致，并设置闭合。
+- 如果首尾点没有完全一致，但缝隙在 1mm 以内，系统会尝试自动吸附闭合。
+- 不要把一个空间拆成多条边界线。
+- 不要画自交边界、零面积边界或明显重复的候选边界。
+
+### 系统如何处理
+
+- `QUOTE_ROOM` 始终用于地面面积和地面周长。
+- `QUOTE_ROOM` 不能直接等同于墙面计量周长，开放空间必须配合 `QUOTE_WALL` / `QUOTE_OPENING`。
+- 缺少 `QUOTE_ROOM` 会阻断导入。
+- 未闭合、面积为 0、自交或无效多边形会产生 `ROOM_BOUNDARY_INVALID`。
+- 如果图中有 `QUOTE_TEXT` 并且部分房间成功匹配名称，未匹配名称的多余闭合边界会被忽略，并产生 `ROOM_BOUNDARY_WITHOUT_TEXT_IGNORED`。
+
+## 4. 空间名称 `QUOTE_TEXT`
+
+### 怎么画
+
+- 推荐每个有效空间放一个 `QUOTE_TEXT`。
+- 文字对象使用 `TEXT` 或 `MTEXT`。
+- 文字插入点必须落在对应 `QUOTE_ROOM` 边界内。
+- 一个空间内尽量只放一个规范空间名称。
+
+### 系统如何处理
+
+- 优先读取 `QUOTE_TEXT`。
+- 如果整张图没有 `QUOTE_TEXT`，系统才会回退读取非 `QUOTE_*` 图层里的普通 `TEXT` / `MTEXT`。
+- 如果存在 `QUOTE_TEXT`，普通 CAD 文字不会覆盖规范文字。
+- 没有匹配到名称的空间会在算量结果中标记为未命名空间，并需要复核。
+
+## 5. 墙面计量 `QUOTE_WALL` 与 `QUOTE_OPENING`
+
+### 怎么画
+
+- `QUOTE_WALL` 画实际墙体或可施工墙面线，支持 `LINE` 和 `LWPOLYLINE`。
+- `QUOTE_OPENING` 画开放边界或非墙边界，支持 `LWPOLYLINE`。
+- 客餐厅、开放厨房、阳台栏杆边、露台开放边等，不应只依赖闭合 `QUOTE_ROOM`，应额外标注开放边界。
+
+### 系统如何处理
+
+- 地面面积 = `QUOTE_ROOM` 闭合边界面积。
+- 地面周长 = `QUOTE_ROOM` 闭合边界周长。
+- 墙面计量周长优先由 `QUOTE_WALL` 与房间边界匹配得到。
+- `QUOTE_OPENING` 标记的长度会从墙面计量周长中扣除。
+- 如果没有 `QUOTE_WALL`，系统会退回为 `floor_perimeter - open_boundary_length`。
+
+## 6. 窗 `QUOTE_WINDOW`
+
+### 推荐画法 A：窗块
+
+- 使用 `INSERT` 放在 `QUOTE_WINDOW` 图层。
+- 块插入点应靠近对应空间外墙或落在对应空间边界附近。
+- 推荐填写属性：
+  - 宽度：`WIDTH`、`width`、`窗宽`、`宽`
+  - 高度：`HEIGHT`、`height`、`窗高`、`高`
+- 属性值支持：
+  - `1200`：大于 20，按毫米处理，即 1.2m。
+  - `1.2`：小于等于 20，按米处理。
+  - `1200mm`：明确按毫米处理。
+  - `1.2m`：明确按米处理。
+
+### 可用画法 B：闭合窗洞轮廓
+
+- 使用闭合 `LWPOLYLINE` 放在 `QUOTE_WINDOW` 图层。
+- 支持矩形、多边形和带 bulge 弧线的闭合轮廓。
+- 轮廓必须有非零面积。
+- 内部辅助线可以保留，系统只读取闭合轮廓。
+
+### 系统如何处理
+
+- 窗块优先读取宽高属性。
+- 窗块没有可解析宽度时，不生成窗，并产生 `WINDOW_WIDTH_ATTRIBUTE_INVALID`。
+- 闭合窗洞轮廓会从最小旋转矩形的主尺寸推断窗宽。
+- 闭合窗洞轮廓不会推断窗高，窗高保持为空，算量时使用 `default_window_height`，并产生 `window_height_defaulted`。
+- 窗面积会从墙面毛面积中扣除。
+- 如果窗落在共享边界上并无法唯一归属空间，会标记歧义并不计入空间窗面积。
+
+## 7. 门 `QUOTE_DOOR`
+
+### 推荐画法 A：门块
+
+- 使用 `INSERT` 放在 `QUOTE_DOOR` 图层。
+- 推荐填写属性：
+  - 宽度：`WIDTH`、`width`、`门宽`、`宽`
+  - 高度：`HEIGHT`、`height`、`门高`、`高`
+- 属性数值规则与窗相同：大于 20 按毫米，小于等于 20 按米，也支持 `mm` / `m` 后缀。
+
+### 可用画法 B：线段或闭合轮廓
+
+- 门洞线段可以用 `LWPOLYLINE` 表示，系统用线段长度推断门宽。
+- 闭合门洞轮廓可以用闭合 `LWPOLYLINE` 表示，系统用轮廓主尺寸推断门宽。
+- 闭合轮廓必须有非零面积。
+
+### 系统如何处理
+
+- 门块优先读取宽高属性。
+- 如果没有宽度属性，系统使用块缩放推断宽度。
+- 如果是几何画法，系统从线段或闭合轮廓推断宽度。
+- 有宽度和高度时，系统记录门洞面积。
+- 第一版默认不从墙面净面积中扣除门洞面积。
+- 共享边界上的门会计入相邻空间。
+
+## 8. 楼层与层高
+
+### 商品房
+
+- 商品房通常可以不画 `QUOTE_FLOOR`。
+- 使用统一项目默认层高即可。
+
+### 别墅或多层项目
+
+- 每个空间建议放一个 `QUOTE_FLOOR` 楼层文字，例如 `1F`、`2F`。
+- `QUOTE_FLOOR` 文字插入点应放在对应 `QUOTE_ROOM` 边界内。
+- 一个空间内不要放多个楼层文字；多个楼层文字会产生 `ROOM_FLOOR_AMBIGUOUS`。
+- 窗、门、墙线、开放边界、层高标记、挑空和外墙线会在楼层匹配明确时继承空间楼层。
+
+### 层高标记 `QUOTE_HEIGHT`
+
+- 使用 `TEXT` 或 `MTEXT`。
+- 文本必须是米值，例如 `2.8`、`3.2`、`3.6m`。
+- 不要写 `2800` 表示层高；当前层高文本按米值解析。
+- 非数字文本会被忽略，并产生 `HEIGHT_TEXT_INVALID`。
+
+### 层高优先级
+
+算量时层高按以下优先级确定：
+
+1. 空间人工覆盖高度，即 `RoomBoundary.attributes["height"]`。
+2. 挑空空间的 `QUOTE_VOID` 高度或关联楼层高度规则。
+3. `QUOTE_HEIGHT`。
+4. 楼层默认层高 `floor_heights`。
+5. 项目默认层高 `project.default_height`。
+
+## 9. 特殊空间
+
+特殊空间当前主要通过结构化数据或后续人工复核确认。CAD 出图时应尽量通过空间名称、备注或后续表格复核明确空间类型。
+
+| 类型 | 出图/复核要求 | 算量口径 |
+| --- | --- | --- |
+| `void` | 挑空空间，可配合 `QUOTE_VOID` 和明确层高 | 地面面积只按所在层空间计算，墙面面积使用实际挑空高度 |
+| `void_opening` | 上层楼板洞口应明确为洞口，不要当普通房间报价 | 默认排除地面和墙面量 |
+| `stair` | 楼梯空间需人工复核专项工程量 | 保留基础空间算量，并标记 `stair_special_quantity_manual` |
+| `stair_hall` | 楼梯过道可按普通空间处理，开放边界需标注 | 按空间和开放边界规则处理 |
+| `balcony` | 阳台栏杆或开放边应画 `QUOTE_OPENING` | 保留室外、地面、墙面计入口径供复核 |
+| `terrace` | 露台开放边应画 `QUOTE_OPENING` | 通常不计入室内墙面乳胶漆量，需复核 |
+| `elevator_shaft` | 电梯井应明确排除 | 默认排除装修算量 |
+
+## 10. 外墙 `QUOTE_EXT_WALL` 与 `QUOTE_EXT_OPENING`
+
+- 外墙工程量与室内空间算量分开。
+- `QUOTE_EXT_WALL` 画外墙计量线。
+- `QUOTE_EXT_OPENING` 画外墙洞口线。
+- 外墙结果会进入 `exterior_rows`。
+- Excel 中存在外墙行时，会生成独立的 `外墙表`。
+- 第一版不自动处理复杂外立面建模、保温系统、石材/涂料构造或装饰造型。
+
+## 11. 出图检查清单
+
+导入前建议逐项检查：
+
+- 已使用 DXF，或 DWG 能通过外部转换器成功转 DXF。
+- 图纸单位与导入确认单位一致，推荐毫米。
+- 每个有效空间都有一条闭合 `QUOTE_ROOM`。
+- `QUOTE_ROOM` 没有自交、零面积、重复候选边界。
+- 每个有效空间都有一个清晰的 `QUOTE_TEXT`，文字点在空间内。
+- 开放空间已用 `QUOTE_OPENING` 标记开放边界。
+- 需要精确墙面计量的空间已画 `QUOTE_WALL`。
+- 窗块已填写可解析宽度；如果用窗洞轮廓，轮廓已闭合且有面积。
+- 门块已尽量填写宽度和高度；如果没有属性，门洞几何能表达宽度。
+- 多层项目每个空间楼层标记唯一，且楼层默认层高配置完整。
+- `QUOTE_HEIGHT` 使用米值文本。
+- 挑空、阳台、露台、楼梯、电梯井等特殊空间已经准备好人工复核口径。
+- 外墙线和外墙洞口使用 `QUOTE_EXT_WALL` / `QUOTE_EXT_OPENING`，不要混入室内墙线。
+
+## 12. 常见错误与处理结果
+
+| 情况 | 处理结果 |
+| --- | --- |
+| 缺少 `QUOTE_ROOM` | 阻断导入，产生 `QUOTE_ROOM_MISSING` |
+| DXF 单位与确认单位冲突 | 阻断导入，产生 `CAD_UNIT_CONFLICT` |
+| 房间边界未闭合且首尾缝隙大于 1mm | 阻断该边界，产生 `ROOM_BOUNDARY_INVALID` |
+| 房间边界自交或面积为 0 | 阻断该边界，产生 `ROOM_BOUNDARY_INVALID` |
+| 有 `QUOTE_TEXT` 但某些闭合边界没有匹配文字 | 未命名候选边界会被忽略，产生 `ROOM_BOUNDARY_WITHOUT_TEXT_IGNORED` |
+| 窗块宽度缺失或无法解析 | 不生成该窗，产生 `WINDOW_WIDTH_ATTRIBUTE_INVALID` |
+| 窗洞轮廓未闭合 | 不生成该窗，产生 `WINDOW_OUTLINE_NOT_CLOSED` |
+| 窗洞轮廓无有效面积 | 不生成该窗，产生 `WINDOW_OUTLINE_INVALID` |
+| 门洞闭合轮廓无有效面积 | 不生成该门，产生 `DOOR_OUTLINE_INVALID` |
+| `QUOTE_HEIGHT` 不是数字米值 | 忽略该高度，产生 `HEIGHT_TEXT_INVALID` |
+| 一个房间内有多个 `QUOTE_FLOOR` | 不分配该房间楼层，产生 `ROOM_FLOOR_AMBIGUOUS` |
+| 窗高缺失 | 使用默认窗高，产生 `window_height_defaulted` |
+| 窗面积大于墙面毛面积 | 净墙面面积置 0，产生 `window_area_exceeds_wall_area` |
+| 共享边界上的窗无法唯一归属 | 不计入空间窗面积，产生 `ambiguous_window_assignment` |
+
+## 13. 以后变化如何更新规范
+
+这份文档是 CAD 出图轻量规范的维护入口。以后发生以下变化时，必须同步更新本文档：
+
+- 修改 `LayerName`，新增、删除或重命名 `QUOTE_*` 图层。
+- 修改 `src/cad_budget/dxf_adapter.py` 中的 DXF 识别规则。
+- 修改窗、门、墙、开放边界、楼层、层高、挑空、外墙等几何推断规则。
+- 修改 `src/cad_budget/quantity.py` 中的算量口径，例如墙面计量周长、窗扣减、门洞扣减、特殊空间处理。
+- 修改 Excel 或报价模块对 CAD 结果的使用口径。
+
+每次规范变化都应同步维护：
+
+- 更新本文档的图层总表。
+- 更新对应章节的“怎么画”和“系统如何处理”。
+- 更新“出图检查清单”。
+- 更新“常见错误与处理结果”。
+- CAD adapter 变更必须补充或更新 `tests/test_dxf_adapter.py`。
+- 算量口径变更必须补充或更新 `tests/test_quantity.py`。
+- Excel 导出或回读口径变更必须补充或更新 `tests/test_export_excel.py` 或 `tests/test_import_excel.py`。
+
