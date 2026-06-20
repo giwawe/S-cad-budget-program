@@ -45,6 +45,8 @@ _FLOOR_POINT_MATCH_TOLERANCE_METERS = 0.3
 _FLOOR_LINE_MATCH_TOLERANCE_METERS = 0.1
 _WINDOW_WIDTH_ATTRIBUTE_KEYS = ("width", "窗宽", "宽")
 _WINDOW_HEIGHT_ATTRIBUTE_KEYS = ("height", "窗高", "高")
+_DOOR_WIDTH_ATTRIBUTE_KEYS = ("width", "门宽", "宽")
+_DOOR_HEIGHT_ATTRIBUTE_KEYS = ("height", "门高", "高")
 
 
 _QUOTE_LAYER_NAMES = {layer.value for layer in LayerName}
@@ -571,14 +573,20 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                     )
                 )
         elif layer == LayerName.QUOTE_DOOR.value and entity.dxftype() == "INSERT":
-            width = _insert_width(entity, options.confirmed_unit)
+            attrs = _insert_attributes(entity)
+            width = _window_dimension_from_attributes(attrs, _DOOR_WIDTH_ATTRIBUTE_KEYS)
+            height = _window_dimension_from_attributes(attrs, _DOOR_HEIGHT_ATTRIBUTE_KEYS)
+            source = "insert_attributes" if width is not None else "insert"
+            if width is None:
+                width = _insert_width(entity, options.confirmed_unit)
             if width is not None:
                 doors.append(
                     DoorMarker(
                         id=_entity_id(entity),
                         point=_insert_point(entity, options.confirmed_unit),
                         width=width,
-                        attributes={"source": "insert", "block_name": str(entity.dxf.name)},
+                        height=height,
+                        attributes={"source": source, "block_name": str(entity.dxf.name)},
                     )
                 )
         elif layer == LayerName.QUOTE_DOOR.value and entity.dxftype() == "LWPOLYLINE":

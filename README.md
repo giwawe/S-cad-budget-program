@@ -94,4 +94,4 @@ The import adapter recognizes `QUOTE_WINDOW` window blocks and closed LWPOLYLINE
 
 Room names prefer `QUOTE_TEXT`. If a drawing has no `QUOTE_TEXT` at all, the importer falls back to ordinary `TEXT` / `MTEXT` on non-`QUOTE_*` layers inside room boundaries.
 
-Door recognition records door count and door opening area when width and height are available. Door area is not deducted from wall area by default.
+Door recognition reads width and height from common block attributes such as `WIDTH`, `HEIGHT`, `门宽`, and `门高` when available, and falls back to block scale or geometry. Door count and door opening area are recorded when width and height are available. Door area is not deducted from wall area by default.

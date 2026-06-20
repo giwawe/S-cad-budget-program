@@ -342,6 +342,57 @@ def test_import_dxf_reads_insert_door_width_from_block_scale(tmp_path: Path):
     assert result.project.doors[0].attributes["source"] == "insert"
 
 
+def test_import_dxf_reads_insert_door_width_and_height_attributes(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.blocks.new("door_block")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_DOOR")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    insert = modelspace.add_blockref("door_block", (2000, 0), dxfattribs={"layer": "QUOTE_DOOR"})
+    insert.add_attrib("WIDTH", "900")
+    insert.add_attrib("HEIGHT", "2100")
+    dxf_path = _save_doc(tmp_path / "insert_door_attrs.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.doors) == 1
+    assert result.project.doors[0].width == 0.9
+    assert result.project.doors[0].height == 2.1
+    assert result.project.doors[0].attributes["source"] == "insert_attributes"
+
+
+def test_import_dxf_reads_chinese_insert_door_attributes(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.blocks.new("door_block")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_DOOR")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    insert = modelspace.add_blockref("door_block", (2000, 0), dxfattribs={"layer": "QUOTE_DOOR"})
+    insert.add_attrib("门宽", "900")
+    insert.add_attrib("门高", "2100")
+    dxf_path = _save_doc(tmp_path / "insert_door_chinese_attrs.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.doors) == 1
+    assert result.project.doors[0].width == 0.9
+    assert result.project.doors[0].height == 2.1
+
+
 def test_import_dxf_accepts_window_outline_when_first_and_last_points_match_without_closed_flag(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4
