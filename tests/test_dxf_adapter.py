@@ -95,6 +95,44 @@ def test_import_dxf_blocks_open_quote_room_without_dropping_valid_rooms(tmp_path
     assert issue.layer == "QUOTE_ROOM"
 
 
+def test_import_dxf_accepts_room_boundary_when_first_and_last_points_match_without_closed_flag(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM"},
+    )
+    dxf_path = _save_doc(tmp_path / "visually_closed_room.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.rooms) == 1
+    assert result.project.rooms[0].points[0] == result.project.rooms[0].points[-1]
+
+
+def test_import_dxf_snaps_room_boundary_closed_when_gap_is_within_one_millimeter(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0.5)],
+        dxfattribs={"layer": "QUOTE_ROOM"},
+    )
+    dxf_path = _save_doc(tmp_path / "nearly_closed_room.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.rooms) == 1
+    assert result.project.rooms[0].points[0] == result.project.rooms[0].points[-1]
+
+
 def test_import_dxf_blocks_when_file_cannot_be_read(tmp_path: Path):
     bad_path = tmp_path / "bad.dxf"
     bad_path.write_text("not a dxf", encoding="utf-8")
@@ -179,6 +217,79 @@ def test_import_dxf_reads_window_outline_door_wall_and_opening(tmp_path: Path):
     assert result.project.doors[0].width == 0.9
     assert len(result.project.walls) == 1
     assert len(result.project.openings) == 1
+
+
+def test_import_dxf_reads_line_wall_geometry(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WALL")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_line((0, 0), (4000, 0), dxfattribs={"layer": "QUOTE_WALL"})
+    dxf_path = _save_doc(tmp_path / "line_wall.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.walls) == 1
+    assert result.project.walls[0].points[1].x == 4
+
+
+def test_import_dxf_reads_insert_door_width_from_block_scale(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.blocks.new("door_block")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_DOOR")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_blockref(
+        "door_block",
+        (2000, 0),
+        dxfattribs={"layer": "QUOTE_DOOR", "xscale": 900, "yscale": -900},
+    )
+    dxf_path = _save_doc(tmp_path / "insert_door.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.doors) == 1
+    assert result.project.doors[0].point.x == 2
+    assert result.project.doors[0].width == 0.9
+    assert result.project.doors[0].attributes["source"] == "insert"
+
+
+def test_import_dxf_accepts_window_outline_when_first_and_last_points_match_without_closed_flag(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(1000, -100), (2500, -100), (2500, 100), (1000, 100), (1000, -100)],
+        dxfattribs={"layer": "QUOTE_WINDOW"},
+    )
+    dxf_path = _save_doc(tmp_path / "visually_closed_window.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.windows) == 1
+    assert result.project.windows[0].width == 1.5
 
 
 def test_import_dxf_reads_height_void_and_exterior_layers(tmp_path: Path):
@@ -290,7 +401,7 @@ def test_import_dxf_warns_for_open_window_outline(tmp_path: Path):
         dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
     )
     modelspace.add_lwpolyline(
-        [(1000, 0), (2000, 0)],
+        [(1000, 0), (2000, 0), (2000, 200), (1000, 200)],
         dxfattribs={"layer": "QUOTE_WINDOW"},
     )
     dxf_path = _save_doc(tmp_path / "open_window.dxf", doc)
@@ -301,6 +412,30 @@ def test_import_dxf_warns_for_open_window_outline(tmp_path: Path):
     assert result.project is not None
     assert result.project.windows == []
     assert any(issue.code == "WINDOW_OUTLINE_NOT_CLOSED" for issue in result.issues)
+
+
+def test_import_dxf_ignores_window_layer_auxiliary_linework(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (6000, 0), (6000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(1000, 0), (2000, 0)],
+        dxfattribs={"layer": "QUOTE_WINDOW"},
+    )
+    dxf_path = _save_doc(tmp_path / "window_auxiliary_linework.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.windows == []
+    assert not any(issue.code == "WINDOW_OUTLINE_NOT_CLOSED" for issue in result.issues)
 
 
 def test_import_dxf_infers_closed_door_outline_width_and_centroid(tmp_path: Path):

@@ -39,6 +39,8 @@ _DXF_INSUNITS = {
     6: CadUnit.METER,
 }
 
+_ROOM_CLOSURE_TOLERANCE_METERS = 0.001
+
 
 def _scale(value: float, unit: CadUnit) -> float:
     return value * _UNIT_SCALE_TO_METERS[unit]
@@ -150,6 +152,22 @@ def _valid_room_polygon(points: list[Point]) -> bool:
     return not polygon.is_empty and polygon.area > 0 and polygon.is_valid
 
 
+def _points_within_tolerance(first: Point, second: Point, tolerance: float) -> bool:
+    return hypot(second.x - first.x, second.y - first.y) <= tolerance
+
+
+def _room_boundary_can_be_closed(points: list[Point]) -> bool:
+    if len(points) < 4:
+        return False
+    return _points_within_tolerance(points[0], points[-1], _ROOM_CLOSURE_TOLERANCE_METERS)
+
+
+def _snap_room_boundary_closed(points: list[Point]) -> list[Point]:
+    if points and _room_boundary_can_be_closed(points):
+        points[-1] = points[0]
+    return points
+
+
 def _line_midpoint(points: list[Point]) -> Point:
     first = points[0]
     last = points[-1]
@@ -176,6 +194,24 @@ def _file_unit_issue(doc, options: CadImportOptions) -> AdapterIssue | None:
 def _text_point(entity, unit: CadUnit) -> Point:
     insert = entity.dxf.insert
     return _point(insert.x, insert.y, unit)
+
+
+def _line_points(entity, unit: CadUnit) -> list[Point]:
+    start = entity.dxf.start
+    end = entity.dxf.end
+    return [_point(start.x, start.y, unit), _point(end.x, end.y, unit)]
+
+
+def _insert_point(entity, unit: CadUnit) -> Point:
+    insert = entity.dxf.insert
+    return _point(insert.x, insert.y, unit)
+
+
+def _insert_width(entity, unit: CadUnit) -> float | None:
+    width = max(abs(float(entity.dxf.xscale)), abs(float(entity.dxf.yscale)))
+    if width <= 0:
+        return None
+    return _scale(width, unit)
 
 
 def _text_value(entity) -> str:
@@ -241,18 +277,19 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     for entity in _iter_modelspace(doc):
         layer = _layer(entity)
         if layer == LayerName.QUOTE_ROOM.value and entity.dxftype() == "LWPOLYLINE":
-            if not entity.closed:
+            points = _lwpolyline_points(entity, options.confirmed_unit)
+            if not entity.closed and not _room_boundary_can_be_closed(points):
                 issues.append(
                     AdapterIssue(
                         code="ROOM_BOUNDARY_INVALID",
-                        message="Room boundary must be a closed LWPOLYLINE.",
+                        message="Room boundary must be closed or have endpoints within 1mm.",
                         severity=AdapterSeverity.BLOCKER,
                         entity_id=_entity_id(entity),
                         layer=layer,
                     )
                 )
                 continue
-            points = _lwpolyline_points(entity, options.confirmed_unit)
+            points = _snap_room_boundary_closed(points)
             if not _valid_room_polygon(points):
                 issues.append(
                     AdapterIssue(
@@ -302,7 +339,20 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                 )
         elif layer == LayerName.QUOTE_WINDOW.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
-            if not entity.closed or len(points) < 4:
+            if len(points) < 4 and not entity.closed:
+                continue
+            if not entity.closed and not _room_boundary_can_be_closed(points):
+                issues.append(
+                    AdapterIssue(
+                        code="WINDOW_OUTLINE_NOT_CLOSED",
+                        message="Window outline must be a closed LWPOLYLINE with enough points.",
+                        entity_id=_entity_id(entity),
+                        layer=layer,
+                    )
+                )
+                continue
+            points = _snap_room_boundary_closed(points)
+            if len(points) < 4:
                 issues.append(
                     AdapterIssue(
                         code="WINDOW_OUTLINE_NOT_CLOSED",
@@ -330,6 +380,17 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                         width=_outline_width(polygon),
                         height=None,
                         attributes={"source": "closed_outline"},
+                    )
+                )
+        elif layer == LayerName.QUOTE_DOOR.value and entity.dxftype() == "INSERT":
+            width = _insert_width(entity, options.confirmed_unit)
+            if width is not None:
+                doors.append(
+                    DoorMarker(
+                        id=_entity_id(entity),
+                        point=_insert_point(entity, options.confirmed_unit),
+                        width=width,
+                        attributes={"source": "insert", "block_name": str(entity.dxf.name)},
                     )
                 )
         elif layer == LayerName.QUOTE_DOOR.value and entity.dxftype() == "LWPOLYLINE":
@@ -364,6 +425,14 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
                 walls.append(PolylineMarker(id=_entity_id(entity), layer=LayerName.QUOTE_WALL, points=points))
+        elif layer == LayerName.QUOTE_WALL.value and entity.dxftype() == "LINE":
+            walls.append(
+                PolylineMarker(
+                    id=_entity_id(entity),
+                    layer=LayerName.QUOTE_WALL,
+                    points=_line_points(entity, options.confirmed_unit),
+                )
+            )
         elif layer == LayerName.QUOTE_OPENING.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:

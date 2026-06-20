@@ -223,6 +223,22 @@ def test_shared_boundary_window_is_ambiguous_and_not_counted():
     )
 
 
+def test_window_marker_near_exterior_boundary_is_assigned_to_room():
+    project = ProjectInput(
+        project_name="Exterior Window",
+        default_height=2.8,
+        rooms=[RoomBoundary(id="room", points=rect(0, 0, 4, 3), name="Room")],
+        windows=[WindowMarker(id="win", point=Point(x=2, y=-0.12), width=1.2, height=1.5)],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.window_count == 1
+    assert row.window_area == 1.8
+    assert not any(exc.code == "ambiguous_window_assignment" for exc in result.exceptions)
+
+
 def test_shared_boundary_door_is_ambiguous_and_not_counted():
     project = ProjectInput(
         project_name="Adjacent Door Rooms",
@@ -247,6 +263,22 @@ def test_shared_boundary_door_is_ambiguous_and_not_counted():
         exception.code == "ambiguous_door_assignment" and exception.room_id in {"left", "right"}
         for exception in result.exceptions
     )
+
+
+def test_door_marker_near_exterior_boundary_is_assigned_to_room():
+    project = ProjectInput(
+        project_name="Exterior Door",
+        default_height=2.8,
+        rooms=[RoomBoundary(id="room", points=rect(0, 0, 4, 3), name="Room")],
+        doors=[DoorMarker(id="door", point=Point(x=2, y=-0.12), width=0.9, height=2.1)],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.door_opening_count == 1
+    assert row.door_opening_area == 1.89
+    assert not any(exc.code == "ambiguous_door_assignment" for exc in result.exceptions)
 
 
 def test_missing_room_name_is_defaulted_and_needs_review():

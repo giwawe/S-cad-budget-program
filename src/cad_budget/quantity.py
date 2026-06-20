@@ -3,7 +3,9 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString
+from shapely.geometry import Point as ShapelyPoint
+from shapely.geometry import Polygon
 
 from cad_budget.geometry import closed_polygon_area, closed_polygon_perimeter, point_inside_polygon
 from cad_budget.models import VoidMarker
@@ -20,8 +22,17 @@ from cad_budget.models import (
 )
 
 
+_MARKER_ASSIGNMENT_TOLERANCE_METERS = 0.3
+
+
 def _floor_compatible(room_floor: str | None, marker_floor: str | None) -> bool:
     return room_floor == marker_floor
+
+
+def _marker_point_matches_room(point, room: RoomBoundary) -> bool:
+    polygon = _room_polygon(room)
+    marker_point = ShapelyPoint(point.x, point.y)
+    return bool(polygon.covers(marker_point)) or polygon.distance(marker_point) <= _MARKER_ASSIGNMENT_TOLERANCE_METERS
 
 
 def _resolve_room_names(project: ProjectInput, rooms: list[RoomBoundary]) -> tuple[dict[str, str], list[QuantityException]]:
@@ -170,7 +181,7 @@ def _resolve_window_assignments(
     for window in project.windows:
         matched_room_ids: list[str] = []
         for room in rooms:
-            if not point_inside_polygon(window.point, room.points):
+            if not _marker_point_matches_room(window.point, room):
                 continue
             if _floor_compatible(room.floor, window.floor):
                 matched_room_ids.append(room.id)
@@ -206,7 +217,7 @@ def _resolve_door_assignments(
     for door in project.doors:
         matched_room_ids: list[str] = []
         for room in rooms:
-            if not point_inside_polygon(door.point, room.points):
+            if not _marker_point_matches_room(door.point, room):
                 continue
             if _floor_compatible(room.floor, door.floor):
                 matched_room_ids.append(room.id)
