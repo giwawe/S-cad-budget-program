@@ -242,6 +242,28 @@ def _assign_text_names(rooms: list[RoomBoundary], texts: list[TextMarker]) -> No
             room.name = matches[0].text
 
 
+def _filter_rooms_by_matched_text(
+    rooms: list[RoomBoundary], texts: list[TextMarker], issues: list[AdapterIssue]
+) -> list[RoomBoundary]:
+    if not texts or not any(room.name for room in rooms):
+        return rooms
+
+    filtered_rooms: list[RoomBoundary] = []
+    for room in rooms:
+        if room.name:
+            filtered_rooms.append(room)
+            continue
+        issues.append(
+            AdapterIssue(
+                code="ROOM_BOUNDARY_WITHOUT_TEXT_IGNORED",
+                message="Room boundary ignored because QUOTE_TEXT matched other room boundaries in this drawing.",
+                entity_id=room.id,
+                layer=LayerName.QUOTE_ROOM.value,
+            )
+        )
+    return filtered_rooms
+
+
 def _iter_modelspace(doc) -> Iterable:
     return doc.modelspace()
 
@@ -467,6 +489,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         issues.append(unit_issue)
 
     _assign_text_names(rooms, texts)
+    rooms = _filter_rooms_by_matched_text(rooms, texts, issues)
     project = ProjectInput(
         project_name=options.project_name,
         default_height=options.default_height,
