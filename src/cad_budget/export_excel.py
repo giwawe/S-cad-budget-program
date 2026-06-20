@@ -29,6 +29,16 @@ HEADERS = [
     "异常说明",
 ]
 
+EXTERIOR_HEADERS = [
+    "楼层",
+    "外墙编号",
+    "高度",
+    "外墙计量长度",
+    "外墙洞口长度",
+    "外墙毛面积",
+    "外墙净面积",
+]
+
 _COLUMN_WIDTHS = {
     "A": 10,
     "B": 16,
@@ -51,9 +61,20 @@ _COLUMN_WIDTHS = {
     "S": 36,
 }
 
+_EXTERIOR_COLUMN_WIDTHS = {
+    "A": 10,
+    "B": 18,
+    "C": 10,
+    "D": 16,
+    "E": 16,
+    "F": 14,
+    "G": 14,
+}
+
 _EDITABLE_COLUMNS = {"A", "B", "C", "D", "G", "H", "J", "K", "L", "M", "O", "P", "Q", "R", "S"}
 _FORMULA_COLUMNS = {"I", "N"}
 _NUMERIC_COLUMNS = {"D", "E", "F", "G", "H", "I", "K", "M", "N"}
+_EXTERIOR_NUMERIC_COLUMNS = {"C", "D", "E", "F", "G"}
 
 _HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 _EDITABLE_FILL = PatternFill("solid", fgColor="FFF2CC")
@@ -105,6 +126,8 @@ def export_quantity_result(result: QuantityResult, output_path: Path) -> None:
 
     _style_data_rows(sheet)
     _configure_sheet(sheet)
+    if result.exterior_rows:
+        _create_exterior_sheet(workbook, result)
     workbook.save(output_path)
 
 
@@ -131,4 +154,45 @@ def _configure_sheet(sheet) -> None:
     sheet.row_dimensions[3].height = 24
 
     for column, width in _COLUMN_WIDTHS.items():
+        sheet.column_dimensions[column].width = width
+
+
+def _create_exterior_sheet(workbook: Workbook, result: QuantityResult) -> None:
+    sheet = workbook.create_sheet("外墙表")
+    sheet["A1"] = "项目名称"
+    sheet["B1"] = result.project_name
+    sheet["A1"].font = _BOLD_FONT
+    sheet.append([])
+    sheet.append(EXTERIOR_HEADERS)
+
+    for cell in sheet[3]:
+        cell.fill = _HEADER_FILL
+        cell.font = _WHITE_FONT
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for row in result.exterior_rows:
+        sheet.append(
+            [
+                row.floor,
+                row.exterior_wall_id,
+                row.height,
+                row.measure_length,
+                row.opening_length,
+                row.gross_area,
+                row.net_area,
+            ]
+        )
+
+    for data_row in sheet.iter_rows(min_row=4, max_row=sheet.max_row, max_col=len(EXTERIOR_HEADERS)):
+        for cell in data_row:
+            column = get_column_letter(cell.column)
+            cell.fill = _STATIC_FILL
+            if column in _EXTERIOR_NUMERIC_COLUMNS:
+                cell.number_format = "0.###"
+            cell.alignment = Alignment(vertical="top")
+
+    sheet.freeze_panes = "A4"
+    sheet.auto_filter.ref = f"A3:{get_column_letter(len(EXTERIOR_HEADERS))}{sheet.max_row}"
+    sheet.row_dimensions[3].height = 24
+    for column, width in _EXTERIOR_COLUMN_WIDTHS.items():
         sheet.column_dimensions[column].width = width

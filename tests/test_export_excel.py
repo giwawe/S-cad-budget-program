@@ -5,6 +5,7 @@ from openpyxl import load_workbook
 from cad_budget.export_excel import HEADERS, export_quantity_result
 from cad_budget.models import (
     DataStatus,
+    ExteriorQuantityRow,
     HeightMode,
     Point,
     ProjectInput,
@@ -134,3 +135,38 @@ def test_export_quantity_result_joins_exception_notes(tmp_path: Path):
     workbook = load_workbook(output)
     sheet = workbook["算量表"]
     assert sheet["S4"].value == "异常编码A；编码描述B"
+
+
+def test_export_quantity_result_creates_exterior_sheet(tmp_path: Path):
+    result = QuantityResult(
+        project_name="Exterior Demo",
+        rows=[],
+        exterior_rows=[
+            ExteriorQuantityRow(
+                exterior_wall_id="ext-wall-1",
+                floor="1F",
+                height=3.0,
+                measure_length=4.0,
+                opening_length=1.0,
+                gross_area=12.0,
+                net_area=9.0,
+            )
+        ],
+        exceptions=[],
+    )
+    output = tmp_path / "exterior_takeoff.xlsx"
+
+    export_quantity_result(result, output)
+
+    workbook = load_workbook(output)
+    sheet = workbook["外墙表"]
+    assert sheet["A1"].value == "项目名称"
+    assert sheet["B1"].value == "Exterior Demo"
+    assert sheet["A3"].value == "楼层"
+    assert sheet["B3"].value == "外墙编号"
+    assert sheet["B4"].value == "ext-wall-1"
+    assert sheet["D4"].value == 4.0
+    assert sheet["F4"].value == 12.0
+    assert sheet["G4"].value == 9.0
+    assert sheet.freeze_panes == "A4"
+    assert sheet.auto_filter.ref == "A3:G4"
