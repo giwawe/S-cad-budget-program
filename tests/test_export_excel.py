@@ -23,7 +23,7 @@ def test_export_quantity_result_creates_workbook(tmp_path: Path):
         rooms=[
             RoomBoundary(
                 id="room",
-                name="\u4e66\u623f",
+                name="书房",
                 points=[
                     Point(x=0, y=0),
                     Point(x=3, y=0),
@@ -40,13 +40,61 @@ def test_export_quantity_result_creates_workbook(tmp_path: Path):
     export_quantity_result(result, output)
 
     workbook = load_workbook(output)
-    sheet = workbook["\u7b97\u91cf\u8868"]
-    assert sheet["A1"].value == "\u9879\u76ee\u540d\u79f0"
+    sheet = workbook["算量表"]
+    assert sheet["A1"].value == "项目名称"
     assert sheet["B1"].value == project_name
     assert sheet["A3"].value == "楼层"
     assert sheet["A3"].value == HEADERS[0]
-    assert sheet["B4"].value == "\u4e66\u623f"
+    assert sheet["B4"].value == "书房"
     assert len(sheet[3]) == len(HEADERS)
+    assert sheet.freeze_panes == "A4"
+    assert sheet.auto_filter.ref == f"A3:S{sheet.max_row}"
+    assert sheet.column_dimensions["B"].width >= 12
+
+
+def test_export_quantity_result_uses_formulas_and_editable_styles(tmp_path: Path):
+    result = QuantityResult(
+        project_name="Formula Demo",
+        rows=[
+            QuantityRow(
+                room_id="room",
+                floor="1F",
+                room_name="书房",
+                space_type=SpaceType.NORMAL,
+                height=2.8,
+                height_mode=HeightMode.PROJECT_DEFAULT,
+                floor_area=9.0,
+                floor_perimeter=12.0,
+                wall_measure_perimeter=11.5,
+                open_boundary_length=0.5,
+                gross_wall_area=32.2,
+                window_count=1,
+                window_area=1.8,
+                door_opening_count=1,
+                door_opening_area=0.0,
+                net_wall_area=30.4,
+                is_outdoor=False,
+                include_in_floor_quantity=True,
+                include_in_wall_paint_quantity=True,
+                status=DataStatus.DEFAULT_INFERRED,
+                exception_notes=[],
+            )
+        ],
+        exceptions=[],
+    )
+    output = tmp_path / "formula_takeoff.xlsx"
+
+    export_quantity_result(result, output)
+
+    workbook = load_workbook(output, data_only=False)
+    sheet = workbook["算量表"]
+    assert sheet["I4"].value == "=G4*D4"
+    assert sheet["N4"].value == "=I4-K4"
+    assert sheet["D4"].number_format == "0.###"
+    assert sheet["I4"].number_format == "0.###"
+    assert sheet["D4"].fill.fill_type == "solid"
+    assert sheet["I4"].fill.fill_type == "solid"
+    assert sheet["D4"].fill.fgColor.rgb != sheet["I4"].fill.fgColor.rgb
 
 
 def test_export_quantity_result_joins_exception_notes(tmp_path: Path):
@@ -56,7 +104,7 @@ def test_export_quantity_result_joins_exception_notes(tmp_path: Path):
             QuantityRow(
                 room_id="room",
                 floor="1F",
-                room_name="\u4e66\u623f",
+                room_name="书房",
                 space_type=SpaceType.NORMAL,
                 height=2.8,
                 height_mode=HeightMode.PROJECT_DEFAULT,
@@ -74,7 +122,7 @@ def test_export_quantity_result_joins_exception_notes(tmp_path: Path):
                 include_in_floor_quantity=True,
                 include_in_wall_paint_quantity=True,
                 status=DataStatus.CONFIRMED,
-                exception_notes=["\u5f02\u5e38\u7f16\u7801A", "\u7f16\u7801\u63cf\u8ff0B"],
+                exception_notes=["异常编码A", "编码描述B"],
             )
         ],
         exceptions=[],
@@ -84,5 +132,5 @@ def test_export_quantity_result_joins_exception_notes(tmp_path: Path):
     export_quantity_result(result, output)
 
     workbook = load_workbook(output)
-    sheet = workbook["\u7b97\u91cf\u8868"]
-    assert sheet["S4"].value == "\u5f02\u5e38\u7f16\u7801A\uff1b\u7f16\u7801\u63cf\u8ff0B"
+    sheet = workbook["算量表"]
+    assert sheet["S4"].value == "异常编码A；编码描述B"
