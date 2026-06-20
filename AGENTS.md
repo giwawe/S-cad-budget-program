@@ -132,7 +132,7 @@ DWG / DXF
 
 - `void`：挑空空间。地面面积只按所在层空间计算，墙面面积使用实际挑空高度。
 - `void_opening`：上层楼板洞口，默认排除面积和墙面量。
-- `stair` / `stair_hall`：可作为空间类型，但第一版不自动算踏步、踢面、斜板、扶手等专项工程量。
+- `stair` / `stair_hall`：可作为空间类型；`stair` 会保留基础空间算量并标记 `stair_special_quantity_manual`，提示人工补录踏步、踢面、斜板、扶手等专项工程量。
 - `balcony` / `terrace`：通过 `is_outdoor` 和是否计入室内地面、室内墙面乳胶漆字段控制。
 - `elevator_shaft`：默认排除在装修算量之外。
 - 外墙工程量与室内空间行分开；当前 `result.json` 输出 `exterior_rows`，Excel 在存在外墙行时输出独立 `外墙表`。
@@ -195,5 +195,5 @@ $env:PYTHONPATH='src'; py -3.14 -m pytest -q
 ## 后续可能的工作
 
 - 修复或统一中文显示/编码问题，确保 README、Excel 表头和测试断言都是真实中文。
-- 楼梯专项工程量仍需人工字段或后续专门规则。
+- 楼梯专项工程量后续可增加专门字段或专门规则，目前只做人工补录提示。
 - Excel 修改后的数据暂不回写 JSON，后续如要闭环报价系统需要定义回写接口。

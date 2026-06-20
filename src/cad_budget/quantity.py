@@ -525,6 +525,7 @@ def _determine_status(exceptions: list[QuantityException], default_inferred: boo
             "ambiguous_void_marker",
             "void_related_floor_height_missing",
             "window_area_exceeds_wall_area",
+            "stair_special_quantity_manual",
         }:
             return DataStatus.NEEDS_REVIEW
     if default_inferred:
@@ -644,6 +645,18 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
         for door in room_doors:
             if door.width is not None and door.height is not None:
                 door_opening_area += door.width * door.height
+
+        if room.space_type is SpaceType.STAIR:
+            exception = QuantityException(
+                code="stair_special_quantity_manual",
+                message=(
+                    "stair_special_quantity_manual: "
+                    f"Room {room.id} requires manual stair-specific quantities"
+                ),
+                room_id=room.id,
+            )
+            room_exceptions.append(exception)
+            exceptions.append(exception)
 
         status = _determine_status(room_exceptions, has_defaulted_window_height)
 

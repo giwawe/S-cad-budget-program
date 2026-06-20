@@ -97,3 +97,5 @@ Room names prefer `QUOTE_TEXT`. If a drawing has no `QUOTE_TEXT` at all, the imp
 Door recognition reads width and height from common block attributes such as `WIDTH`, `HEIGHT`, `门宽`, and `门高` when available, and falls back to block scale or geometry. Door count and door opening area are recorded when width and height are available. Door area is not deducted from wall area by default.
 
 Exterior wall quantities are kept separate from room rows. `QUOTE_EXT_WALL` and matching `QUOTE_EXT_OPENING` linework produce `exterior_rows` in the calculated JSON result, with measure length, opening length, gross area, and net area. When exterior rows exist, Excel export includes a separate `外墙表` worksheet.
+
+Stair spaces keep their basic room quantities, but `space_type=stair` is marked with `stair_special_quantity_manual` because stair treads, risers, sloped slabs, handrails, and other stair-specific quantities are manual in the first version.

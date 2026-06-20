@@ -452,6 +452,31 @@ def test_elevator_shaft_is_excluded_by_default():
     assert row.include_in_wall_paint_quantity is False
 
 
+def test_stair_space_is_flagged_for_manual_stair_special_quantities():
+    project = ProjectInput(
+        project_name="Stair Manual",
+        rooms=[
+            RoomBoundary(
+                id="stair",
+                points=rect(0, 0, 3, 4),
+                name="楼梯",
+                space_type=SpaceType.STAIR,
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.floor_area == 12
+    assert row.status is DataStatus.NEEDS_REVIEW
+    assert any(
+        exc.code == "stair_special_quantity_manual" and exc.room_id == "stair"
+        for exc in result.exceptions
+    )
+    assert any("stair_special_quantity_manual" in note for note in row.exception_notes)
+
+
 def test_balcony_keeps_outdoor_flags():
     project = ProjectInput(
         project_name="Balcony",
