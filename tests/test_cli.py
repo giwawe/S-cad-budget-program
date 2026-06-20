@@ -325,3 +325,43 @@ def test_cli_import_cad_dxf_blocker_exits_1_without_writing(tmp_path: Path):
     error_text = (result.stdout or "") + (result.stderr or "")
     assert "blocker: QUOTE_ROOM_MISSING" in error_text
     assert not output.exists()
+
+
+def test_cli_calculate_writes_exterior_rows_to_json(tmp_path: Path):
+    input_json = tmp_path / "exterior_project.json"
+    output = tmp_path / "result.json"
+    input_json.write_text(
+        json.dumps(
+            {
+                "project_name": "Exterior CLI",
+                "default_height": 2.8,
+                "floor_heights": {"1F": 3.0},
+                "exterior_walls": [
+                    {
+                        "id": "ext-wall",
+                        "layer": "QUOTE_EXT_WALL",
+                        "floor": "1F",
+                        "points": [{"x": 0, "y": 0}, {"x": 4, "y": 0}],
+                    }
+                ],
+                "exterior_openings": [
+                    {
+                        "id": "ext-open",
+                        "layer": "QUOTE_EXT_OPENING",
+                        "floor": "1F",
+                        "points": [{"x": 1, "y": 0}, {"x": 2, "y": 0}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["calculate", str(input_json), "--json-output", str(output)])
+
+    assert result.exit_code == 0
+    data = json.loads(output.read_text(encoding="utf-8"))
+    assert data["rows"] == []
+    assert data["exterior_rows"][0]["gross_area"] == 12.0
+    assert data["exterior_rows"][0]["net_area"] == 9.0

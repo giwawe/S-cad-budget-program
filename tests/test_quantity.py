@@ -761,3 +761,40 @@ def test_explicit_height_markers_for_same_room_id_become_ambiguous():
         exc.code == "ambiguous_height_assignment" and exc.room_id == "r1"
         for exc in result.exceptions
     )
+
+
+def test_exterior_wall_quantities_are_reported_separately_from_room_rows():
+    project = ProjectInput(
+        project_name="Exterior Facade",
+        default_height=2.8,
+        floor_heights={"1F": 3.0},
+        exterior_walls=[
+            PolylineMarker(
+                id="ext-wall-1",
+                layer=LayerName.QUOTE_EXT_WALL,
+                floor="1F",
+                points=[Point(x=0, y=0), Point(x=4, y=0)],
+            )
+        ],
+        exterior_openings=[
+            PolylineMarker(
+                id="ext-open-1",
+                layer=LayerName.QUOTE_EXT_OPENING,
+                floor="1F",
+                points=[Point(x=1, y=0), Point(x=2, y=0)],
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    assert result.rows == []
+    assert len(result.exterior_rows) == 1
+    row = result.exterior_rows[0]
+    assert row.exterior_wall_id == "ext-wall-1"
+    assert row.floor == "1F"
+    assert row.height == 3.0
+    assert row.measure_length == 4.0
+    assert row.opening_length == 1.0
+    assert row.gross_area == 12.0
+    assert row.net_area == 9.0

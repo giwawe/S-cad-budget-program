@@ -12,6 +12,7 @@ from cad_budget.geometry import closed_polygon_area, closed_polygon_perimeter, p
 from cad_budget.models import VoidMarker
 from cad_budget.models import (
     DataStatus,
+    ExteriorQuantityRow,
     HeightMode,
     LayerName,
     ProjectInput,
@@ -459,6 +460,55 @@ def _merged_interval_length(intervals: list[tuple[float, float]]) -> float:
     return sum(end - start for start, end in merged)
 
 
+def _height_for_floor(project: ProjectInput, floor: str | None) -> float:
+    if floor and floor in project.floor_heights:
+        return project.floor_heights[floor]
+    return project.default_height
+
+
+def _polyline_points(marker) -> list[tuple[float, float]]:
+    return [(point.x, point.y) for point in marker.points]
+
+
+def _exterior_opening_length(project: ProjectInput, wall) -> float:
+    wall_line = LineString(_polyline_points(wall))
+    if wall_line.is_empty:
+        return 0.0
+
+    total = 0.0
+    for opening in project.exterior_openings:
+        if opening.layer != LayerName.QUOTE_EXT_OPENING:
+            continue
+        if not _floor_compatible(wall.floor, opening.floor):
+            continue
+        total += _opening_overlap(_polyline_points(opening), wall_line)
+    return round(max(total, 0.0), 6)
+
+
+def _calculate_exterior_rows(project: ProjectInput) -> list[ExteriorQuantityRow]:
+    rows: list[ExteriorQuantityRow] = []
+    for wall in project.exterior_walls:
+        if wall.layer != LayerName.QUOTE_EXT_WALL:
+            continue
+        measure_length = round(LineString(_polyline_points(wall)).length, 6)
+        height = _height_for_floor(project, wall.floor)
+        opening_length = min(_exterior_opening_length(project, wall), measure_length)
+        gross_area = round(measure_length * height, 6)
+        net_area = round((measure_length - opening_length) * height, 6)
+        rows.append(
+            ExteriorQuantityRow(
+                exterior_wall_id=wall.id,
+                floor=wall.floor,
+                height=height,
+                measure_length=measure_length,
+                opening_length=opening_length,
+                gross_area=gross_area,
+                net_area=net_area,
+            )
+        )
+    return rows
+
+
 def _determine_status(exceptions: list[QuantityException], default_inferred: bool) -> DataStatus:
     for exc in exceptions:
         if exc.code in {
@@ -484,6 +534,7 @@ def _determine_status(exceptions: list[QuantityException], default_inferred: boo
 
 def calculate_quantities(project: ProjectInput) -> QuantityResult:
     rows: list[QuantityRow] = []
+    exterior_rows = _calculate_exterior_rows(project)
     exceptions: list[QuantityException] = []
 
     room_name_assignments, name_exceptions = _resolve_room_names(project, project.rooms)
@@ -642,4 +693,9 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
             )
         )
 
-    return QuantityResult(project_name=project.project_name, rows=rows, exceptions=exceptions)
+    return QuantityResult(
+        project_name=project.project_name,
+        rows=rows,
+        exterior_rows=exterior_rows,
+        exceptions=exceptions,
+    )

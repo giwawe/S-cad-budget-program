@@ -189,7 +189,18 @@ class QuantityRow(BaseModel):
     exception_notes: list[str] = Field(default_factory=list)
 
 
+class ExteriorQuantityRow(BaseModel):
+    exterior_wall_id: str
+    floor: str | None
+    height: float
+    measure_length: float
+    opening_length: float
+    gross_area: float
+    net_area: float
+
+
 class QuantityResult(BaseModel):
     project_name: str
     rows: list[QuantityRow]
+    exterior_rows: list[ExteriorQuantityRow] = Field(default_factory=list)
     exceptions: list[QuantityException]
