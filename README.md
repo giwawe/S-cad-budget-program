@@ -101,3 +101,11 @@ Exterior wall quantities are kept separate from room rows. `QUOTE_EXT_WALL` and 
 Stair spaces keep their basic room quantities, but `space_type=stair` is marked with `stair_special_quantity_manual` because stair treads, risers, sloped slabs, handrails, and other stair-specific quantities are manual in the first version.
 
 The main Excel quantity sheet keeps a hidden `空间ID` column with the original room id. It is not part of the visible review table, but it gives a stable key for future Excel-to-JSON writeback.
+
+Edited Excel workbooks can be imported back into a `QuantityResult` JSON:
+
+```powershell
+cad-budget import-excel result.xlsx --json-output edited-result.json
+```
+
+The importer reads the editable quantity fields, preserves the hidden room id, and recalculates gross/net wall areas from the edited row values. It does not modify the original CAD file or the original `ProjectInput` JSON.

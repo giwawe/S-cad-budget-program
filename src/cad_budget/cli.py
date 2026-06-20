@@ -9,6 +9,7 @@ from cad_budget.dwg_converter import convert_dwg_to_dxf
 from cad_budget.dxf_adapter import import_dxf
 from cad_budget.models import ProjectInput
 from cad_budget.export_excel import export_quantity_result
+from cad_budget.import_excel import import_quantity_result
 from cad_budget.quantity import calculate_quantities
 
 app = typer.Typer(help="CAD renovation quantity takeoff tools.")
@@ -125,6 +126,27 @@ def import_cad(
     try:
         json_output.parent.mkdir(parents=True, exist_ok=True)
         json_output.write_text(result.project.model_dump_json(indent=2), encoding="utf-8")
+    except OSError as exc:
+        typer.echo(f"Failed to write JSON output '{json_output}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Wrote {json_output}")
+
+
+@app.command("import-excel")
+def import_excel(
+    input_excel: Path,
+    json_output: Path = typer.Option(..., "--json-output", help="Path for generated QuantityResult JSON."),
+) -> None:
+    try:
+        result = import_quantity_result(input_excel)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Failed to import Excel workbook '{input_excel}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(result.model_dump_json(indent=2), encoding="utf-8")
     except OSError as exc:
         typer.echo(f"Failed to write JSON output '{json_output}': {exc}", err=True)
         raise typer.Exit(code=1)

@@ -365,3 +365,46 @@ def test_cli_calculate_writes_exterior_rows_to_json(tmp_path: Path):
     assert data["rows"] == []
     assert data["exterior_rows"][0]["gross_area"] == 12.0
     assert data["exterior_rows"][0]["net_area"] == 9.0
+
+
+def test_cli_import_excel_writes_edited_quantity_json(tmp_path: Path):
+    runner = CliRunner()
+    fixture = Path(__file__).parent / "fixtures" / "simple_apartment.json"
+    calculated_json = tmp_path / "result.json"
+    excel_output = tmp_path / "result.xlsx"
+
+    calculate_result = runner.invoke(
+        app,
+        [
+            "calculate",
+            str(fixture),
+            "--json-output",
+            str(calculated_json),
+            "--excel-output",
+            str(excel_output),
+        ],
+    )
+    assert calculate_result.exit_code == 0
+
+    workbook = load_workbook(excel_output)
+    sheet = workbook.active
+    sheet["D4"] = 3.0
+    sheet["G4"] = 10.0
+    sheet["K4"] = 2.0
+    workbook.save(excel_output)
+
+    imported_json = tmp_path / "edited-result.json"
+    import_result = runner.invoke(
+        app,
+        [
+            "import-excel",
+            str(excel_output),
+            "--json-output",
+            str(imported_json),
+        ],
+    )
+
+    assert import_result.exit_code == 0
+    data = json.loads(imported_json.read_text(encoding="utf-8"))
+    assert data["rows"][0]["gross_wall_area"] == 30.0
+    assert data["rows"][0]["net_wall_area"] == 28.0
