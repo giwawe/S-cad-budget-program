@@ -239,7 +239,7 @@ def test_window_marker_near_exterior_boundary_is_assigned_to_room():
     assert not any(exc.code == "ambiguous_window_assignment" for exc in result.exceptions)
 
 
-def test_shared_boundary_door_is_ambiguous_and_not_counted():
+def test_shared_boundary_door_is_counted_for_each_adjacent_room():
     project = ProjectInput(
         project_name="Adjacent Door Rooms",
         default_height=2.8,
@@ -255,14 +255,11 @@ def test_shared_boundary_door_is_ambiguous_and_not_counted():
     result = calculate_quantities(project)
 
     left, right = result.rows
-    assert left.door_opening_count == 0
-    assert right.door_opening_count == 0
-    assert left.status is DataStatus.NEEDS_REVIEW
-    assert right.status is DataStatus.NEEDS_REVIEW
-    assert any(
-        exception.code == "ambiguous_door_assignment" and exception.room_id in {"left", "right"}
-        for exception in result.exceptions
-    )
+    assert left.door_opening_count == 1
+    assert right.door_opening_count == 1
+    assert left.door_opening_area == 1.89
+    assert right.door_opening_area == 1.89
+    assert not any(exception.code == "ambiguous_door_assignment" for exception in result.exceptions)
 
 
 def test_door_marker_near_exterior_boundary_is_assigned_to_room():

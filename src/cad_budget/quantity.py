@@ -229,17 +229,8 @@ def _resolve_door_assignments(
                         room_id=room.id,
                     )
                 )
-        if len(matched_room_ids) == 1:
-            assignments[matched_room_ids[0]].append(door)
-        elif len(matched_room_ids) > 1:
-            for room_id in matched_room_ids:
-                exceptions.append(
-                    QuantityException(
-                        code="ambiguous_door_assignment",
-                        message=f"Door {door.id} matches multiple rooms",
-                        room_id=room_id,
-                    )
-                )
+        for room_id in matched_room_ids:
+            assignments[room_id].append(door)
 
     return assignments, exceptions
 
