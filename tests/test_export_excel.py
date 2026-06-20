@@ -47,10 +47,13 @@ def test_export_quantity_result_creates_workbook(tmp_path: Path):
     assert sheet["A3"].value == "楼层"
     assert sheet["A3"].value == HEADERS[0]
     assert sheet["B4"].value == "书房"
-    assert len(sheet[3]) == len(HEADERS)
+    assert [cell.value for cell in sheet[3][: len(HEADERS)]] == HEADERS
     assert sheet.freeze_panes == "A4"
-    assert sheet.auto_filter.ref == f"A3:S{sheet.max_row}"
+    assert sheet.auto_filter.ref == f"A3:T{sheet.max_row}"
     assert sheet.column_dimensions["B"].width >= 12
+    assert sheet["T3"].value == "空间ID"
+    assert sheet["T4"].value == "room"
+    assert sheet.column_dimensions["T"].hidden is True
 
 
 def test_export_quantity_result_uses_formulas_and_editable_styles(tmp_path: Path):

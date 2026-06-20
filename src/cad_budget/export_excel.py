@@ -28,6 +28,7 @@ HEADERS = [
     "识别状态",
     "异常说明",
 ]
+_HIDDEN_HEADERS = ["空间ID"]
 
 EXTERIOR_HEADERS = [
     "楼层",
@@ -121,6 +122,7 @@ def export_quantity_result(result: QuantityResult, output_path: Path) -> None:
                 row.include_in_wall_paint_quantity,
                 row.status.value,
                 "；".join(row.exception_notes),
+                row.room_id,
             ]
         )
 
@@ -132,7 +134,7 @@ def export_quantity_result(result: QuantityResult, output_path: Path) -> None:
 
 
 def _style_data_rows(sheet) -> None:
-    for row in sheet.iter_rows(min_row=4, max_row=sheet.max_row, max_col=len(HEADERS)):
+    for row in sheet.iter_rows(min_row=4, max_row=sheet.max_row, max_col=len(HEADERS) + len(_HIDDEN_HEADERS)):
         for cell in row:
             column = get_column_letter(cell.column)
             if column in _FORMULA_COLUMNS:
@@ -150,11 +152,21 @@ def _style_data_rows(sheet) -> None:
 
 def _configure_sheet(sheet) -> None:
     sheet.freeze_panes = "A4"
-    sheet.auto_filter.ref = f"A3:{get_column_letter(len(HEADERS))}{sheet.max_row}"
+    hidden_start = len(HEADERS) + 1
+    for index, header in enumerate(_HIDDEN_HEADERS, start=hidden_start):
+        cell = sheet.cell(row=3, column=index, value=header)
+        cell.fill = _HEADER_FILL
+        cell.font = _WHITE_FONT
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    max_column = len(HEADERS) + len(_HIDDEN_HEADERS)
+    sheet.auto_filter.ref = f"A3:{get_column_letter(max_column)}{sheet.max_row}"
     sheet.row_dimensions[3].height = 24
 
     for column, width in _COLUMN_WIDTHS.items():
         sheet.column_dimensions[column].width = width
+    for index in range(hidden_start, max_column + 1):
+        sheet.column_dimensions[get_column_letter(index)].hidden = True
 
 
 def _create_exterior_sheet(workbook: Workbook, result: QuantityResult) -> None:
