@@ -5,7 +5,7 @@ from typing import Any
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
-from cad_budget.models import QuantityResult, QuantityRow
+from cad_budget.models import DataStatus, QuantityResult, QuantityRow
 
 
 FITOUT_SHEET_NAME = "\u6574\u88c5"
@@ -184,6 +184,8 @@ def export_residential_quote(result: QuantityResult, template_path: Path, output
     item_index = _build_item_index(template)
 
     for room in result.rows:
+        if room.status == DataStatus.EXCLUDED:
+            continue
         if not room.include_in_floor_quantity and not room.include_in_wall_paint_quantity:
             continue
         section_index += 1
@@ -367,7 +369,7 @@ def _review_values_for_item(item_name: str, room: QuantityRow | None) -> list[st
             None,
             None,
             "\u6a21\u677f\u9ed8\u8ba4\u6570\u91cf",
-            "\u9700\u4eba\u5de5\u786e\u8ba4",
+            "\u6309\u6a21\u677f\u751f\u6210",
             None,
         ]
     return [
@@ -375,9 +377,26 @@ def _review_values_for_item(item_name: str, room: QuantityRow | None) -> list[st
         room.room_name,
         room.room_id,
         _measure_basis_for_item(item_name, room),
-        "\u5f85\u590d\u6838",
-        None,
+        _review_status_for_room(room),
+        _review_note_for_room(room),
     ]
+
+
+def _review_status_for_room(room: QuantityRow) -> str:
+    if room.status == DataStatus.DEFAULT_INFERRED:
+        return "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    if room.status == DataStatus.NEEDS_REVIEW:
+        return "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
+    return "\u81ea\u52a8\u751f\u6210"
+
+
+def _review_note_for_room(room: QuantityRow) -> str | None:
+    if room.status not in {DataStatus.DEFAULT_INFERRED, DataStatus.NEEDS_REVIEW}:
+        return None
+    notes = list(room.exception_notes)
+    if not notes:
+        return f"\u7b97\u91cf\u72b6\u6001\uff1a{room.status.value}"
+    return "\uff1b".join(notes)
 
 
 def _measure_basis_for_item(item_name: str, room: QuantityRow) -> str:

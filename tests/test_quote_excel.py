@@ -63,7 +63,7 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
         "\u5ba2\u5385",
         "living",
         "\u5899\u9762\u51c0\u9762\u79ef",
-        "\u5f85\u590d\u6838",
+        "\u81ea\u52a8\u751f\u6210",
         None,
     )
 
@@ -82,7 +82,7 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
         None,
         None,
         "\u6a21\u677f\u9ed8\u8ba4\u6570\u91cf",
-        "\u9700\u4eba\u5de5\u786e\u8ba4",
+        "\u6309\u6a21\u677f\u751f\u6210",
         None,
     )
 
@@ -90,6 +90,88 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
     assert _row_containing(rows, "\u5de5\u7a0b\u7ba1\u7406\u8d39") is not None
     assert _row_containing(rows, "\u5de5\u7a0b\u603b\u9020\u4ef7") is not None
     assert sheet.auto_filter.ref == f"A3:O{sheet.max_row}"
+
+
+def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path)
+    result = QuantityResult(
+        project_name="Default Inferred Demo",
+        rows=[
+            _quantity_row(
+                "living",
+                "\u5ba2\u5385",
+                floor_area=20.0,
+                net_wall_area=50.0,
+                status=DataStatus.DEFAULT_INFERRED,
+                exception_notes=["window_height_defaulted: Window w1 used default height 1.5"],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    living_wall_paint = _row_containing(rows, "\u5899\u9762\u4e73\u80f6\u6f06")
+    assert living_wall_paint[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert "window_height_defaulted" in living_wall_paint[14]
+    assert "default height 1.5" in living_wall_paint[14]
+
+
+def test_export_residential_quote_marks_needs_review_rows_as_auto_generated_with_issue_note(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path)
+    result = QuantityResult(
+        project_name="Needs Review Demo",
+        rows=[
+            _quantity_row(
+                "stair",
+                "\u697c\u68af",
+                floor_area=8.0,
+                net_wall_area=22.0,
+                status=DataStatus.NEEDS_REVIEW,
+                exception_notes=["stair_special_quantity_manual: Room stair requires stair-specific quantities"],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    stair_wall_paint = _row_containing(rows, "\u5899\u9762\u4e73\u80f6\u6f06")
+    assert stair_wall_paint[13] == "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
+    assert "stair_special_quantity_manual" in stair_wall_paint[14]
+
+
+def test_export_residential_quote_skips_excluded_rooms(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path)
+    result = QuantityResult(
+        project_name="Excluded Demo",
+        rows=[
+            _quantity_row(
+                "shaft",
+                "\u7535\u68af\u4e95",
+                floor_area=4.0,
+                net_wall_area=12.0,
+                status=DataStatus.EXCLUDED,
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    assert _row_containing(rows, "\u7535\u68af\u4e95\u5de5\u7a0b") is None
 
 
 def test_export_residential_quote_uses_one_wall_tile_variant_for_wet_rooms(tmp_path: Path):
@@ -165,7 +247,15 @@ def _write_quote_header(sheet) -> None:
     sheet.append([None, None, None, None, "\u4e3b\u6750\n\u5355\u4ef7", "\u8f85\u6750\n\u5355\u4ef7"])
 
 
-def _quantity_row(room_id: str, name: str, *, floor_area: float, net_wall_area: float) -> QuantityRow:
+def _quantity_row(
+    room_id: str,
+    name: str,
+    *,
+    floor_area: float,
+    net_wall_area: float,
+    status: DataStatus = DataStatus.CONFIRMED,
+    exception_notes: list[str] | None = None,
+) -> QuantityRow:
     return QuantityRow(
         room_id=room_id,
         floor=None,
@@ -186,7 +276,8 @@ def _quantity_row(room_id: str, name: str, *, floor_area: float, net_wall_area: 
         is_outdoor=False,
         include_in_floor_quantity=True,
         include_in_wall_paint_quantity=True,
-        status=DataStatus.CONFIRMED,
+        status=status,
+        exception_notes=exception_notes or [],
     )
 
 

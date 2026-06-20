@@ -121,3 +121,5 @@ cad-budget quote result.json --template "D:\Desktop\清单式报价表（商品�
 ```
 
 The first quote version reads only the `整装` worksheet from the template and ignores `半包`. It creates actual room sections from the quantity result, fills quantities that can be derived from room floor/wall areas, and preserves template quantities for manual/non-CAD items such as doors, whole-house custom cabinetry, sanitary ware, water/electric work, and other package lines. The generated workbook also includes visible review columns for quantity source, source room, room id, measurement basis, review status, and notes.
+
+Quote generation is automation-first: `confirmed` and `manually_edited` room quantities are marked `自动生成`; `default_inferred` rows are still generated and marked `自动生成-默认推断`; `needs_review` rows are still generated and marked `自动生成-异常提示`; template-default items are marked `按模板生成`. These statuses are review hints and do not block quote generation.
