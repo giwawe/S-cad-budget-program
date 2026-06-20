@@ -72,6 +72,51 @@ def test_import_dxf_filters_unlabeled_room_candidates_when_quote_text_matches_ro
     )
 
 
+def test_import_dxf_uses_ordinary_text_when_quote_text_layer_is_absent(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("A-ROOM-NAME")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("Bedroom", dxfattribs={"layer": "A-ROOM-NAME", "height": 250}).set_placement((1500, 1200))
+    dxf_path = _save_doc(tmp_path / "ordinary_text_name.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.texts) == 1
+    assert result.project.rooms[0].name == "Bedroom"
+
+
+def test_import_dxf_prefers_quote_text_over_ordinary_text(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_TEXT")
+    doc.layers.add("A-ROOM-NAME")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("Bedroom", dxfattribs={"layer": "A-ROOM-NAME", "height": 250}).set_placement((1500, 1200))
+    modelspace.add_text("Primary Bedroom", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1600, 1300))
+    dxf_path = _save_doc(tmp_path / "quote_text_preferred.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.texts) == 1
+    assert result.project.texts[0].text == "Primary Bedroom"
+    assert result.project.rooms[0].name == "Primary Bedroom"
+
+
 def test_import_dxf_blocks_when_quote_room_is_missing(tmp_path: Path):
     doc = ezdxf.new("R2010")
     dxf_path = _save_doc(tmp_path / "empty.dxf", doc)

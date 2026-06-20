@@ -47,6 +47,9 @@ _WINDOW_WIDTH_ATTRIBUTE_KEYS = ("width", "窗宽", "宽")
 _WINDOW_HEIGHT_ATTRIBUTE_KEYS = ("height", "窗高", "高")
 
 
+_QUOTE_LAYER_NAMES = {layer.value for layer in LayerName}
+
+
 def _scale(value: float, unit: CadUnit) -> float:
     return value * _UNIT_SCALE_TO_METERS[unit]
 
@@ -408,6 +411,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
 
     rooms: list[RoomBoundary] = []
     texts: list[TextMarker] = []
+    ordinary_texts: list[TextMarker] = []
     floor_markers: list[TextMarker] = []
     windows: list[WindowMarker] = []
     doors: list[DoorMarker] = []
@@ -461,6 +465,12 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
             value = _text_value(entity)
             if value:
                 texts.append(TextMarker(id=_entity_id(entity), text=value, point=_text_point(entity, options.confirmed_unit)))
+        elif entity.dxftype() in {"TEXT", "MTEXT"} and layer not in _QUOTE_LAYER_NAMES:
+            value = _text_value(entity)
+            if value:
+                ordinary_texts.append(
+                    TextMarker(id=_entity_id(entity), text=value, point=_text_point(entity, options.confirmed_unit))
+                )
         elif layer == LayerName.QUOTE_FLOOR.value and entity.dxftype() in {"TEXT", "MTEXT"}:
             value = _text_value(entity)
             if value:
@@ -643,6 +653,9 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     unit_issue = _file_unit_issue(doc, options)
     if unit_issue is not None:
         issues.append(unit_issue)
+
+    if not texts:
+        texts = ordinary_texts
 
     _assign_text_names(rooms, texts)
     _assign_room_floors(rooms, floor_markers, issues)

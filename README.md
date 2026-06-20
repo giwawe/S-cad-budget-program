@@ -92,4 +92,6 @@ QUOTE_EXT_OPENING
 
 The import adapter recognizes `QUOTE_WINDOW` window blocks and closed LWPOLYLINE outlines. Window blocks read width and height from common attributes such as `WIDTH`, `HEIGHT`, `窗宽`, and `窗高`; numeric values greater than 20 are treated as millimeters, while smaller values are treated as meters. Closed outlines may be rectangular, polygonal, or arc-based; they infer width from the outline and keep `height=None`, so the quantity engine applies the default window height and marks it inferred.
 
+Room names prefer `QUOTE_TEXT`. If a drawing has no `QUOTE_TEXT` at all, the importer falls back to ordinary `TEXT` / `MTEXT` on non-`QUOTE_*` layers inside room boundaries.
+
 Door recognition records door count and door opening area when width and height are available. Door area is not deducted from wall area by default.
