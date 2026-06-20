@@ -351,6 +351,93 @@ def test_import_dxf_reads_height_void_and_exterior_layers(tmp_path: Path):
     assert len(result.project.exterior_openings) == 1
 
 
+def test_import_dxf_assigns_room_floor_from_quote_floor_text(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_FLOOR")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("2F", dxfattribs={"layer": "QUOTE_FLOOR", "height": 250}).set_placement((1500, 1200))
+    dxf_path = _save_doc(tmp_path / "floor_marker.dxf", doc)
+
+    result = import_dxf(
+        CadImportOptions(
+            source_path=dxf_path,
+            floor_heights={"2F": 3.2},
+        )
+    )
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.rooms) == 1
+    assert result.project.rooms[0].floor == "2F"
+    assert result.project.floor_heights == {"2F": 3.2}
+
+
+def test_import_dxf_warns_when_room_has_multiple_quote_floor_texts(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_FLOOR")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("1F", dxfattribs={"layer": "QUOTE_FLOOR", "height": 250}).set_placement((1000, 1000))
+    modelspace.add_text("2F", dxfattribs={"layer": "QUOTE_FLOOR", "height": 250}).set_placement((2500, 1000))
+    dxf_path = _save_doc(tmp_path / "ambiguous_floor_marker.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.rooms[0].floor is None
+    assert any(issue.code == "ROOM_FLOOR_AMBIGUOUS" for issue in result.issues)
+
+
+def test_import_dxf_assigns_room_floor_to_imported_markers(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.blocks.new("door_block")
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_FLOOR", "QUOTE_WINDOW", "QUOTE_DOOR", "QUOTE_WALL", "QUOTE_OPENING", "QUOTE_HEIGHT"]:
+        doc.layers.add(layer)
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("2F", dxfattribs={"layer": "QUOTE_FLOOR", "height": 250}).set_placement((1500, 1200))
+    modelspace.add_lwpolyline(
+        [(1000, -100), (2500, -100), (2500, 100), (1000, 100), (1000, -100)],
+        dxfattribs={"layer": "QUOTE_WINDOW", "closed": True},
+    )
+    modelspace.add_blockref(
+        "door_block",
+        (3000, 0),
+        dxfattribs={"layer": "QUOTE_DOOR", "xscale": 900, "yscale": 900},
+    )
+    modelspace.add_line((0, 0), (4000, 0), dxfattribs={"layer": "QUOTE_WALL"})
+    modelspace.add_lwpolyline([(4000, 1000), (4000, 2200)], dxfattribs={"layer": "QUOTE_OPENING"})
+    modelspace.add_text("3.2", dxfattribs={"layer": "QUOTE_HEIGHT", "height": 250}).set_placement((3000, 1200))
+    dxf_path = _save_doc(tmp_path / "floor_marker_inheritance.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.rooms[0].floor == "2F"
+    assert result.project.windows[0].floor == "2F"
+    assert result.project.doors[0].floor == "2F"
+    assert result.project.walls[0].floor == "2F"
+    assert result.project.openings[0].floor == "2F"
+    assert result.project.heights[0].floor == "2F"
+
+
 def test_import_dxf_warns_for_invalid_height_text(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4

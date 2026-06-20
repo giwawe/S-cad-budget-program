@@ -3,6 +3,7 @@ from math import ceil, cos, hypot, pi, sin
 
 import ezdxf
 from ezdxf.math import Vec2, bulge_to_arc
+from shapely.geometry import LineString
 from shapely.geometry import Point as ShapelyPoint
 from shapely.geometry import Polygon
 
@@ -40,6 +41,8 @@ _DXF_INSUNITS = {
 }
 
 _ROOM_CLOSURE_TOLERANCE_METERS = 0.001
+_FLOOR_POINT_MATCH_TOLERANCE_METERS = 0.3
+_FLOOR_LINE_MATCH_TOLERANCE_METERS = 0.1
 
 
 def _scale(value: float, unit: CadUnit) -> float:
@@ -242,6 +245,81 @@ def _assign_text_names(rooms: list[RoomBoundary], texts: list[TextMarker]) -> No
             room.name = matches[0].text
 
 
+def _assign_room_floors(
+    rooms: list[RoomBoundary], floor_markers: list[TextMarker], issues: list[AdapterIssue]
+) -> None:
+    for room in rooms:
+        polygon = _polygon_from_room(room)
+        matches = [
+            marker
+            for marker in floor_markers
+            if polygon.covers(ShapelyPoint(marker.point.x, marker.point.y))
+        ]
+        if len(matches) == 1:
+            room.floor = matches[0].text
+            continue
+        if len(matches) > 1:
+            marker_ids = ", ".join(marker.id for marker in matches)
+            issues.append(
+                AdapterIssue(
+                    code="ROOM_FLOOR_AMBIGUOUS",
+                    message=f"Room {room.id} contains multiple QUOTE_FLOOR markers: {marker_ids}.",
+                    entity_id=room.id,
+                    layer=LayerName.QUOTE_FLOOR.value,
+                )
+            )
+
+
+def _matching_room_floors_for_point(point: Point, rooms: list[RoomBoundary]) -> set[str]:
+    marker_point = ShapelyPoint(point.x, point.y)
+    floors: set[str] = set()
+    for room in rooms:
+        if not room.floor:
+            continue
+        polygon = _polygon_from_room(room)
+        if polygon.covers(marker_point) or polygon.distance(marker_point) <= _FLOOR_POINT_MATCH_TOLERANCE_METERS:
+            floors.add(room.floor)
+    return floors
+
+
+def _matching_room_floors_for_polyline(points: list[Point], rooms: list[RoomBoundary]) -> set[str]:
+    marker_line = LineString((point.x, point.y) for point in points)
+    floors: set[str] = set()
+    for room in rooms:
+        if not room.floor:
+            continue
+        polygon = _polygon_from_room(room)
+        if polygon.intersects(marker_line) or polygon.distance(marker_line) <= _FLOOR_LINE_MATCH_TOLERANCE_METERS:
+            floors.add(room.floor)
+    return floors
+
+
+def _assign_imported_marker_floors(
+    rooms: list[RoomBoundary],
+    windows: list[WindowMarker],
+    doors: list[DoorMarker],
+    heights: list[HeightMarker],
+    walls: list[PolylineMarker],
+    openings: list[PolylineMarker],
+    voids: list[VoidMarker],
+    exterior_walls: list[PolylineMarker],
+    exterior_openings: list[PolylineMarker],
+) -> None:
+    for marker in [*windows, *doors, *heights]:
+        if marker.floor is not None:
+            continue
+        floors = _matching_room_floors_for_point(marker.point, rooms)
+        if len(floors) == 1:
+            marker.floor = next(iter(floors))
+
+    for marker in [*walls, *openings, *voids, *exterior_walls, *exterior_openings]:
+        if marker.floor is not None:
+            continue
+        floors = _matching_room_floors_for_polyline(marker.points, rooms)
+        if len(floors) == 1:
+            marker.floor = next(iter(floors))
+
+
 def _filter_rooms_by_matched_text(
     rooms: list[RoomBoundary], texts: list[TextMarker], issues: list[AdapterIssue]
 ) -> list[RoomBoundary]:
@@ -287,6 +365,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
 
     rooms: list[RoomBoundary] = []
     texts: list[TextMarker] = []
+    floor_markers: list[TextMarker] = []
     windows: list[WindowMarker] = []
     doors: list[DoorMarker] = []
     walls: list[PolylineMarker] = []
@@ -339,6 +418,17 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
             value = _text_value(entity)
             if value:
                 texts.append(TextMarker(id=_entity_id(entity), text=value, point=_text_point(entity, options.confirmed_unit)))
+        elif layer == LayerName.QUOTE_FLOOR.value and entity.dxftype() in {"TEXT", "MTEXT"}:
+            value = _text_value(entity)
+            if value:
+                floor_markers.append(
+                    TextMarker(
+                        id=_entity_id(entity),
+                        layer=LayerName.QUOTE_FLOOR,
+                        text=value,
+                        point=_text_point(entity, options.confirmed_unit),
+                    )
+                )
         elif layer == LayerName.QUOTE_HEIGHT.value and entity.dxftype() in {"TEXT", "MTEXT"}:
             value = _text_value(entity)
             height = _parse_float_text(value)
@@ -489,7 +579,19 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         issues.append(unit_issue)
 
     _assign_text_names(rooms, texts)
+    _assign_room_floors(rooms, floor_markers, issues)
     rooms = _filter_rooms_by_matched_text(rooms, texts, issues)
+    _assign_imported_marker_floors(
+        rooms,
+        windows,
+        doors,
+        heights,
+        walls,
+        openings,
+        voids,
+        exterior_walls,
+        exterior_openings,
+    )
     project = ProjectInput(
         project_name=options.project_name,
         default_height=options.default_height,
