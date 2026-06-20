@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from math import hypot
 from typing import Any
 
 from shapely.geometry import LineString
@@ -23,6 +24,8 @@ from cad_budget.models import (
 
 
 _MARKER_ASSIGNMENT_TOLERANCE_METERS = 0.3
+_WALL_BOUNDARY_TOLERANCE_METERS = 0.1
+_WALL_PARALLEL_CROSS_TOLERANCE = 0.1
 
 
 def _floor_compatible(room_floor: str | None, marker_floor: str | None) -> bool:
@@ -388,6 +391,74 @@ def _open_boundary_length(
     return round(max(total, 0.0), 6), exceptions
 
 
+def _wall_backed_boundary_length(project: ProjectInput, room: RoomBoundary) -> float | None:
+    wall_segments = [
+        (start, end)
+        for wall in project.walls
+        if wall.layer == LayerName.QUOTE_WALL and _floor_compatible(room.floor, wall.floor)
+        for start, end in zip(wall.points, wall.points[1:])
+    ]
+    if not wall_segments:
+        return None
+
+    total = 0.0
+    for boundary_start, boundary_end in zip(room.points, room.points[1:]):
+        boundary_dx = boundary_end.x - boundary_start.x
+        boundary_dy = boundary_end.y - boundary_start.y
+        boundary_length = hypot(boundary_dx, boundary_dy)
+        if boundary_length == 0:
+            continue
+
+        unit_x = boundary_dx / boundary_length
+        unit_y = boundary_dy / boundary_length
+        intervals: list[tuple[float, float]] = []
+
+        for wall_start, wall_end in wall_segments:
+            wall_dx = wall_end.x - wall_start.x
+            wall_dy = wall_end.y - wall_start.y
+            wall_length = hypot(wall_dx, wall_dy)
+            if wall_length == 0:
+                continue
+
+            wall_unit_x = wall_dx / wall_length
+            wall_unit_y = wall_dy / wall_length
+            cross = abs(unit_x * wall_unit_y - unit_y * wall_unit_x)
+            if cross > _WALL_PARALLEL_CROSS_TOLERANCE:
+                continue
+
+            boundary_line = LineString([(boundary_start.x, boundary_start.y), (boundary_end.x, boundary_end.y)])
+            wall_line = LineString([(wall_start.x, wall_start.y), (wall_end.x, wall_end.y)])
+            if boundary_line.distance(wall_line) > _WALL_BOUNDARY_TOLERANCE_METERS:
+                continue
+
+            start_projection = (wall_start.x - boundary_start.x) * unit_x + (wall_start.y - boundary_start.y) * unit_y
+            end_projection = (wall_end.x - boundary_start.x) * unit_x + (wall_end.y - boundary_start.y) * unit_y
+            interval_start = max(min(start_projection, end_projection), 0.0)
+            interval_end = min(max(start_projection, end_projection), boundary_length)
+            if interval_end > interval_start:
+                intervals.append((interval_start, interval_end))
+
+        total += _merged_interval_length(intervals)
+
+    return round(max(total, 0.0), 6)
+
+
+def _merged_interval_length(intervals: list[tuple[float, float]]) -> float:
+    if not intervals:
+        return 0.0
+
+    sorted_intervals = sorted(intervals)
+    merged: list[tuple[float, float]] = [sorted_intervals[0]]
+    for start, end in sorted_intervals[1:]:
+        previous_start, previous_end = merged[-1]
+        if start <= previous_end:
+            merged[-1] = (previous_start, max(previous_end, end))
+        else:
+            merged.append((start, end))
+
+    return sum(end - start for start, end in merged)
+
+
 def _determine_status(exceptions: list[QuantityException], default_inferred: bool) -> DataStatus:
     for exc in exceptions:
         if exc.code in {
@@ -470,7 +541,12 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
         if open_boundary_exceptions:
             room_exceptions.extend(open_boundary_exceptions)
             exceptions.extend(open_boundary_exceptions)
-        wall_measure_perimeter = max(floor_perimeter - open_boundary_length, 0.0)
+        wall_backed_boundary_length = _wall_backed_boundary_length(project, room)
+        if wall_backed_boundary_length is None:
+            wall_measure_perimeter = max(floor_perimeter - open_boundary_length, 0.0)
+        else:
+            wall_measure_perimeter = max(wall_backed_boundary_length - open_boundary_length, 0.0)
+            open_boundary_length = round(max(floor_perimeter - wall_measure_perimeter, 0.0), 6)
 
         room_windows = window_assignments.get(room.id, [])
         window_count = len(room_windows)

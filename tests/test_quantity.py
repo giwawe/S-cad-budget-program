@@ -73,6 +73,39 @@ def test_open_boundary_reduces_wall_measure_perimeter():
     assert row.gross_wall_area == 30.8
 
 
+def test_wall_lines_infer_open_boundary_without_opening_marker():
+    project = ProjectInput(
+        project_name="Wall Derived Opening",
+        default_height=2.8,
+        rooms=[RoomBoundary(id="living", points=rect(0, 0, 4, 3), name="Living")],
+        walls=[
+            PolylineMarker(
+                id="bottom",
+                layer=LayerName.QUOTE_WALL,
+                points=[Point(x=0, y=0), Point(x=4, y=0)],
+            ),
+            PolylineMarker(
+                id="top",
+                layer=LayerName.QUOTE_WALL,
+                points=[Point(x=0, y=3), Point(x=4, y=3)],
+            ),
+            PolylineMarker(
+                id="left",
+                layer=LayerName.QUOTE_WALL,
+                points=[Point(x=0, y=0), Point(x=0, y=3)],
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.floor_perimeter == 14
+    assert row.open_boundary_length == 3
+    assert row.wall_measure_perimeter == 11
+    assert row.gross_wall_area == 30.8
+
+
 def test_floorless_opening_for_floored_rooms_is_flagged_as_floor_mismatch():
     project = ProjectInput(
         project_name="Stacked Openings",
