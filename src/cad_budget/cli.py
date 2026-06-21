@@ -159,6 +159,7 @@ def import_excel(
 def quote(
     input_json: Path,
     template: Path = typer.Option(..., "--template", help="Residential fitout quote template workbook."),
+    rules: Path | None = typer.Option(None, "--rules", help="Optional residential quote rules JSON."),
     excel_output: Path = typer.Option(..., "--excel-output", help="Path for generated quote Excel output."),
 ) -> None:
     try:
@@ -175,7 +176,7 @@ def quote(
         raise typer.Exit(code=1)
 
     try:
-        export_residential_quote(result, template, excel_output)
+        export_residential_quote(result, template, excel_output, rules_path=rules)
     except (OSError, ValueError) as exc:
         typer.echo(f"Failed to generate quote Excel '{excel_output}': {exc}", err=True)
         raise typer.Exit(code=1)

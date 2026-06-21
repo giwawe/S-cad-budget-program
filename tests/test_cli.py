@@ -433,6 +433,85 @@ def test_cli_quote_writes_residential_fitout_excel(tmp_path: Path):
     assert "Wrote" in result.output
 
 
+def test_cli_quote_uses_external_rules_file(tmp_path: Path):
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    rules = tmp_path / "rules.json"
+    output = tmp_path / "quote.xlsx"
+    input_json.write_text(json.dumps(_quantity_result_payload(include_kitchen=True)), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True, include_kitchen=True)
+    _write_quote_rules(rules, kitchen_height=0.5, bathroom_height=1.2, tile_height=2.0)
+
+    result = runner.invoke(
+        app,
+        ["quote", str(input_json), "--template", str(template), "--rules", str(rules), "--excel-output", str(output)],
+    )
+
+    assert result.exit_code == 0
+    workbook = load_workbook(output, data_only=False)
+    sheet = workbook.active
+    rows = list(sheet.iter_rows(values_only=True))
+    kitchen_waterproof = _row_containing_after(rows, "厨房工程", "墙地面防漏处理")
+    kitchen_wall_tile = _row_containing_after(rows, "厨房工程", "墙面贴瓷砖(600X1200)")
+    assert kitchen_waterproof[3] == 11.0
+    assert kitchen_wall_tile[3] == 19.0
+    assert sheet["Q7"].value == "规则来源"
+    assert sheet["R7"].value == str(rules)
+
+
+def test_cli_quote_reports_invalid_external_rules_without_traceback(tmp_path: Path):
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    rules = tmp_path / "rules.json"
+    output = tmp_path / "quote.xlsx"
+    input_json.write_text(json.dumps(_quantity_result_payload()), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True)
+    rules.write_text("{invalid}", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["quote", str(input_json), "--template", str(template), "--rules", str(rules), "--excel-output", str(output)],
+    )
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "Failed to generate quote Excel" in error_text
+    assert "Invalid quote rules" in error_text
+    assert "Traceback" not in error_text
+
+
+def test_cli_quote_reports_missing_external_rules_without_traceback(tmp_path: Path):
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    output = tmp_path / "quote.xlsx"
+    input_json.write_text(json.dumps(_quantity_result_payload()), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True)
+    missing_rules = tmp_path / "missing-rules.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "quote",
+            str(input_json),
+            "--template",
+            str(template),
+            "--rules",
+            str(missing_rules),
+            "--excel-output",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "Failed to generate quote Excel" in error_text
+    assert "missing-rules.json" in error_text
+    assert "Traceback" not in error_text
+
+
 def test_cli_quote_reports_missing_template_without_traceback(tmp_path: Path):
     runner = CliRunner()
     input_json = tmp_path / "result.json"
@@ -484,40 +563,67 @@ def test_cli_quote_reports_invalid_quantity_json_without_traceback(tmp_path: Pat
     assert "Traceback" not in error_text
 
 
-def _quantity_result_payload():
-    return {
-        "project_name": "Quote CLI",
-        "rows": [
+def _quantity_result_payload(*, include_kitchen: bool = False):
+    rows = [
+        {
+            "room_id": "living",
+            "floor": None,
+            "room_name": "客厅",
+            "space_type": "normal",
+            "height": 2.8,
+            "height_mode": "project_default",
+            "floor_area": 20.0,
+            "floor_perimeter": 0,
+            "wall_measure_perimeter": 0,
+            "open_boundary_length": 0,
+            "gross_wall_area": 50.0,
+            "window_count": 0,
+            "window_area": 0,
+            "door_opening_count": 0,
+            "door_opening_area": 0,
+            "net_wall_area": 50.0,
+            "is_outdoor": False,
+            "include_in_floor_quantity": True,
+            "include_in_wall_paint_quantity": True,
+            "status": "confirmed",
+            "exception_notes": [],
+        }
+    ]
+    if include_kitchen:
+        rows.append(
             {
-                "room_id": "living",
+                "room_id": "kitchen",
                 "floor": None,
-                "room_name": "客厅",
+                "room_name": "厨房",
                 "space_type": "normal",
                 "height": 2.8,
                 "height_mode": "project_default",
-                "floor_area": 20.0,
+                "floor_area": 6.0,
                 "floor_perimeter": 0,
-                "wall_measure_perimeter": 0,
+                "wall_measure_perimeter": 10.0,
                 "open_boundary_length": 0,
-                "gross_wall_area": 50.0,
-                "window_count": 0,
-                "window_area": 0,
+                "gross_wall_area": 18.0,
+                "window_count": 1,
+                "window_area": 1.0,
                 "door_opening_count": 0,
                 "door_opening_area": 0,
-                "net_wall_area": 50.0,
+                "net_wall_area": 18.0,
                 "is_outdoor": False,
                 "include_in_floor_quantity": True,
                 "include_in_wall_paint_quantity": True,
                 "status": "confirmed",
                 "exception_notes": [],
             }
-        ],
+        )
+    return {
+        "project_name": "Quote CLI",
+        "rows": rows,
         "exterior_rows": [],
         "exceptions": [],
     }
 
 
-def _write_quote_cli_template(path: Path, *, include_fitout: bool) -> None:
+def _write_quote_cli_template(path: Path, *, include_fitout: bool, include_kitchen: bool = False) -> None:
     workbook = load_workbook(path) if path.exists() else None
     if workbook is None:
         from openpyxl import Workbook
@@ -536,4 +642,39 @@ def _write_quote_cli_template(path: Path, *, include_fitout: bool) -> None:
         sheet.append([1, "顶面批嵌", "M2", 1, 0, 15, 10, None, "说明"])
         sheet.append([2, "墙面乳胶漆", "M2", 1, 10, 0, 10, None, "说明"])
         sheet.append([3, "地面砖铺贴(750X1500)", "M2", 1, 0, 36, 60, None, "说明"])
+        if include_kitchen:
+            sheet.append(["二", "厨房工程"])
+            sheet.append([1, "地面找平", "M2", 1, 0, 26, 30, None, "说明"])
+            sheet.append([2, "墙地面防漏处理", "M2", 1, 28, 10.5, 13, None, "说明"])
+            sheet.append([3, "墙面贴瓷砖(600X1200)", "M2", 1, 0, 40, 60, None, "说明"])
+            sheet.append([4, "地面砖铺贴(750X1500)", "M2", 1, 0, 36, 60, None, "说明"])
     workbook.save(path)
+
+
+def _write_quote_rules(path: Path, *, kitchen_height: float, bathroom_height: float, tile_height: float) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": kitchen_height,
+                    "bathroom_waterproof_wall_height": bathroom_height,
+                    "wall_tile_height": tile_height,
+                },
+                "floor_area_aggregate_items": ["垃圾清运费"],
+                "tile_area_aggregate_items": ["美缝"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _row_containing_after(rows, section_name: str, item_name: str):
+    section_seen = False
+    for row in rows:
+        if any(section_name in cell for cell in row if isinstance(cell, str)):
+            section_seen = True
+            continue
+        if section_seen and any(item_name in cell for cell in row if isinstance(cell, str)):
+            return row
+    return None

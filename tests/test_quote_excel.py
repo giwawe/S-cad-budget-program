@@ -1,10 +1,11 @@
+import json
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
 from cad_budget.models import DataStatus, HeightMode, QuantityRow, QuantityResult, SpaceType
 from cad_budget import quote_excel
-from cad_budget.quote_excel import export_residential_quote, load_default_quote_rules, parse_quote_template
+from cad_budget.quote_excel import export_residential_quote, load_default_quote_rules, load_quote_rules, parse_quote_template
 
 
 def test_parse_quote_template_reads_fitout_sheet_and_ignores_half_package(tmp_path: Path):
@@ -42,7 +43,7 @@ def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkey
     custom_rules.kitchen_waterproof_wall_height = 0.5
     custom_rules.bathroom_waterproof_wall_height = 1.2
     custom_rules.wall_tile_height = 2.0
-    monkeypatch.setattr(quote_excel, "load_default_quote_rules", lambda: custom_rules)
+    monkeypatch.setattr(quote_excel, "load_quote_rules", lambda rules_path=None: custom_rules)
     result = QuantityResult(
         project_name="Custom Rules Demo",
         rows=[
@@ -76,6 +77,102 @@ def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkey
     assert kitchen_waterproof[3] == 11.0
     assert bath_waterproof[3] == 12.6
     assert kitchen_wall_tile[3] == 19.0
+
+
+def test_load_quote_rules_reads_external_rule_file(tmp_path: Path):
+    rules_path = tmp_path / "rules.json"
+    _write_custom_quote_rules(rules_path, kitchen_height=0.5, bathroom_height=1.2, tile_height=2.0)
+
+    rules = load_quote_rules(rules_path)
+
+    assert rules.kitchen_waterproof_wall_height == 0.5
+    assert rules.bathroom_waterproof_wall_height == 1.2
+    assert rules.wall_tile_height == 2.0
+    assert rules.source_label == str(rules_path)
+
+
+def test_load_quote_rules_reports_invalid_external_rule_file(tmp_path: Path):
+    rules_path = tmp_path / "rules.json"
+    rules_path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": 0.3,
+                    "wall_tile_height": 2.5,
+                },
+                "floor_area_aggregate_items": [],
+                "tile_area_aggregate_items": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        load_quote_rules(rules_path)
+    except ValueError as exc:
+        assert "Invalid quote rules" in str(exc)
+        assert "bathroom_waterproof_wall_height" in str(exc)
+    else:
+        raise AssertionError("Expected invalid quote rules to raise ValueError")
+
+
+def test_load_quote_rules_reports_non_numeric_height(tmp_path: Path):
+    rules_path = tmp_path / "rules.json"
+    rules_path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": "bad",
+                    "bathroom_waterproof_wall_height": 1.8,
+                    "wall_tile_height": 2.5,
+                },
+                "floor_area_aggregate_items": [],
+                "tile_area_aggregate_items": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        load_quote_rules(rules_path)
+    except ValueError as exc:
+        assert "kitchen_waterproof_wall_height must be a number" in str(exc)
+    else:
+        raise AssertionError("Expected invalid quote rules to raise ValueError")
+
+
+def test_export_residential_quote_accepts_external_rules_and_records_source(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    rules_path = tmp_path / "rules.json"
+    _create_quote_template(template_path)
+    _write_custom_quote_rules(rules_path, kitchen_height=0.5, bathroom_height=1.2, tile_height=2.0)
+    result = QuantityResult(
+        project_name="External Rules Demo",
+        rows=[
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                wall_measure_perimeter=10.0,
+                window_area=1.0,
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path, rules_path=rules_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    sheet = workbook.active
+    rows = list(sheet.iter_rows(values_only=True))
+    kitchen_waterproof = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406")
+    kitchen_wall_tile = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
+    assert kitchen_waterproof[3] == 11.0
+    assert kitchen_wall_tile[3] == 19.0
+    assert sheet["Q7"].value == "\u89c4\u5219\u6765\u6e90"
+    assert sheet["R7"].value == str(rules_path)
 
 
 def test_export_residential_quote_generates_actual_room_sections_and_preserves_manual_items(tmp_path: Path):
@@ -409,6 +506,24 @@ def _write_quote_header(sheet) -> None:
         "\u6750  \u6599  \u53ca  \u5de5  \u827a  \u8bf4  \u660e",
     ])
     sheet.append([None, None, None, None, "\u4e3b\u6750\n\u5355\u4ef7", "\u8f85\u6750\n\u5355\u4ef7"])
+
+
+def _write_custom_quote_rules(path: Path, *, kitchen_height: float, bathroom_height: float, tile_height: float) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": kitchen_height,
+                    "bathroom_waterproof_wall_height": bathroom_height,
+                    "wall_tile_height": tile_height,
+                },
+                "floor_area_aggregate_items": ["\u5783\u573e\u6e05\u8fd0\u8d39"],
+                "tile_area_aggregate_items": ["\u7f8e\u7f1d"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _quantity_row(

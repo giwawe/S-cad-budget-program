@@ -152,19 +152,56 @@ class ResidentialQuoteRules:
     wall_tile_height: float
     floor_area_aggregate_items: set[str]
     tile_area_aggregate_items: set[str]
+    source_label: str
 
 
 def load_default_quote_rules() -> ResidentialQuoteRules:
-    rules_path = resources.files("cad_budget").joinpath("config/residential_quote_rules.json")
-    data = json.loads(rules_path.read_text(encoding="utf-8"))
+    return load_quote_rules(None)
+
+
+def load_quote_rules(rules_path: Path | None = None) -> ResidentialQuoteRules:
+    source_label = "\u5185\u7f6e\u9ed8\u8ba4\u89c4\u5219"
+    if rules_path is None:
+        resolved_rules_path = resources.files("cad_budget").joinpath("config/residential_quote_rules.json")
+    else:
+        resolved_rules_path = rules_path
+        source_label = str(rules_path)
+    try:
+        data = json.loads(resolved_rules_path.read_text(encoding="utf-8"))
+        return _quote_rules_from_dict(data, source_label)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid quote rules '{source_label}': invalid JSON: {exc}") from exc
+    except KeyError as exc:
+        raise ValueError(f"Invalid quote rules '{source_label}': missing field {exc.args[0]!r}") from exc
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid quote rules '{source_label}': {exc}") from exc
+
+
+def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> ResidentialQuoteRules:
     wet_room_heights = data["wet_room_heights"]
+    floor_area_items = data["floor_area_aggregate_items"]
+    tile_area_items = data["tile_area_aggregate_items"]
+    if not isinstance(floor_area_items, list):
+        raise ValueError("floor_area_aggregate_items must be a list")
+    if not isinstance(tile_area_items, list):
+        raise ValueError("tile_area_aggregate_items must be a list")
     return ResidentialQuoteRules(
-        kitchen_waterproof_wall_height=float(wet_room_heights["kitchen_waterproof_wall_height"]),
-        bathroom_waterproof_wall_height=float(wet_room_heights["bathroom_waterproof_wall_height"]),
-        wall_tile_height=float(wet_room_heights["wall_tile_height"]),
-        floor_area_aggregate_items=set(data["floor_area_aggregate_items"]),
-        tile_area_aggregate_items=set(data["tile_area_aggregate_items"]),
+        kitchen_waterproof_wall_height=_required_float(wet_room_heights, "kitchen_waterproof_wall_height"),
+        bathroom_waterproof_wall_height=_required_float(wet_room_heights, "bathroom_waterproof_wall_height"),
+        wall_tile_height=_required_float(wet_room_heights, "wall_tile_height"),
+        floor_area_aggregate_items={str(item) for item in floor_area_items},
+        tile_area_aggregate_items={str(item) for item in tile_area_items},
+        source_label=source_label,
     )
+
+
+def _required_float(data: dict[str, Any], key: str) -> float:
+    try:
+        return float(data[key])
+    except KeyError:
+        raise
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{key} must be a number") from exc
 
 
 def parse_quote_template(template_path: Path) -> QuoteTemplate:
@@ -202,8 +239,13 @@ def parse_quote_template(template_path: Path) -> QuoteTemplate:
     return QuoteTemplate(sheet_name=FITOUT_SHEET_NAME, sections=[section for section in sections if section.items])
 
 
-def export_residential_quote(result: QuantityResult, template_path: Path, output_path: Path) -> None:
-    rules = load_default_quote_rules()
+def export_residential_quote(
+    result: QuantityResult,
+    template_path: Path,
+    output_path: Path,
+    rules_path: Path | None = None,
+) -> None:
+    rules = load_quote_rules(rules_path)
     template = parse_quote_template(template_path)
     workbook = Workbook()
     sheet = workbook.active
@@ -230,7 +272,7 @@ def export_residential_quote(result: QuantityResult, template_path: Path, output
         subtotal_rows.append(_append_section(sheet, _section_label(section_index), section.name, section.items, None, included_rooms, rules))
 
     _append_summary_rows(sheet, subtotal_rows)
-    _write_automation_summary(sheet)
+    _write_automation_summary(sheet, rules.source_label)
     _configure_sheet(sheet)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
@@ -359,7 +401,7 @@ def _configure_sheet(sheet) -> None:
     sheet.auto_filter.ref = f"A3:O{sheet.max_row}"
 
 
-def _write_automation_summary(sheet) -> None:
+def _write_automation_summary(sheet, rules_source: str) -> None:
     labels = [
         "\u81ea\u52a8\u7b97\u91cf",
         "\u81ea\u52a8\u6c47\u603b",
@@ -387,6 +429,11 @@ def _write_automation_summary(sheet) -> None:
         percent_cell.number_format = "0.0%"
         for column_index in range(17, 20):
             sheet.cell(row=offset, column=column_index).fill = _REVIEW_FILL
+    sheet["Q7"] = "\u89c4\u5219\u6765\u6e90"
+    sheet["R7"] = rules_source
+    sheet["Q7"].font = _BOLD_FONT
+    sheet["Q7"].fill = _SECTION_FILL
+    sheet["R7"].fill = _REVIEW_FILL
 
 
 def _build_item_index(template: QuoteTemplate) -> dict[str, QuoteTemplateItem]:
