@@ -3,7 +3,8 @@ from pathlib import Path
 from openpyxl import Workbook, load_workbook
 
 from cad_budget.models import DataStatus, HeightMode, QuantityRow, QuantityResult, SpaceType
-from cad_budget.quote_excel import export_residential_quote, parse_quote_template
+from cad_budget import quote_excel
+from cad_budget.quote_excel import export_residential_quote, load_default_quote_rules, parse_quote_template
 
 
 def test_parse_quote_template_reads_fitout_sheet_and_ignores_half_package(tmp_path: Path):
@@ -21,6 +22,60 @@ def test_parse_quote_template_reads_fitout_sheet_and_ignores_half_package(tmp_pa
     assert template.sections[0].items[0].name == "\u9876\u9762\u6279\u5d4c"
     assert template.sections[0].items[0].labor_price == 10
     assert all(item.name != "\u534a\u5305\u9879\u76ee" for section in template.sections for item in section.items)
+
+
+def test_load_default_quote_rules_reads_packaged_rule_file():
+    rules = load_default_quote_rules()
+
+    assert rules.kitchen_waterproof_wall_height == 0.3
+    assert rules.bathroom_waterproof_wall_height == 1.8
+    assert rules.wall_tile_height == 2.5
+    assert "\u5783\u573e\u6e05\u8fd0\u8d39" in rules.floor_area_aggregate_items
+    assert "\u7f8e\u7f1d" in rules.tile_area_aggregate_items
+
+
+def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkeypatch):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path)
+    custom_rules = load_default_quote_rules()
+    custom_rules.kitchen_waterproof_wall_height = 0.5
+    custom_rules.bathroom_waterproof_wall_height = 1.2
+    custom_rules.wall_tile_height = 2.0
+    monkeypatch.setattr(quote_excel, "load_default_quote_rules", lambda: custom_rules)
+    result = QuantityResult(
+        project_name="Custom Rules Demo",
+        rows=[
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                wall_measure_perimeter=10.0,
+                window_area=1.0,
+            ),
+            _quantity_row(
+                "bath",
+                "\u4e3b\u536b",
+                floor_area=3.0,
+                net_wall_area=15.0,
+                wall_measure_perimeter=8.0,
+                window_area=0.5,
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    kitchen_waterproof = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406")
+    bath_waterproof = _row_containing_after(rows, "\u4e3b\u536b\u5de5\u7a0b", "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406")
+    kitchen_wall_tile = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
+    assert kitchen_waterproof[3] == 11.0
+    assert bath_waterproof[3] == 12.6
+    assert kitchen_wall_tile[3] == 19.0
 
 
 def test_export_residential_quote_generates_actual_room_sections_and_preserves_manual_items(tmp_path: Path):

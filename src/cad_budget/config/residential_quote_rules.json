@@ -1,0 +1,20 @@
+{
+  "wet_room_heights": {
+    "kitchen_waterproof_wall_height": 0.3,
+    "bathroom_waterproof_wall_height": 1.8,
+    "wall_tile_height": 2.5
+  },
+  "floor_area_aggregate_items": [
+    "垃圾清运费",
+    "材料搬运费",
+    "地面砖现场维护费",
+    "强电布线",
+    "弱电布线",
+    "水路布管",
+    "水泥墙开槽",
+    "补线、管槽及零星修补"
+  ],
+  "tile_area_aggregate_items": [
+    "美缝"
+  ]
+}

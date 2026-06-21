@@ -1,4 +1,6 @@
 from dataclasses import dataclass, field
+import json
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -112,11 +114,6 @@ _REVIEW_FILL = PatternFill("solid", fgColor="EADCF8")
 _WHITE_FONT = Font(color="FFFFFF", bold=True)
 _BOLD_FONT = Font(bold=True)
 
-_KITCHEN_WATERPROOF_WALL_HEIGHT = 0.3
-_BATHROOM_WATERPROOF_WALL_HEIGHT = 1.8
-_WALL_TILE_HEIGHT = 2.5
-
-
 @dataclass
 class QuoteTemplateItem:
     number: int
@@ -146,6 +143,28 @@ class QuoteAggregateQuantity:
     quantity: float
     basis: str
     rooms: list[QuantityRow]
+
+
+@dataclass
+class ResidentialQuoteRules:
+    kitchen_waterproof_wall_height: float
+    bathroom_waterproof_wall_height: float
+    wall_tile_height: float
+    floor_area_aggregate_items: set[str]
+    tile_area_aggregate_items: set[str]
+
+
+def load_default_quote_rules() -> ResidentialQuoteRules:
+    rules_path = resources.files("cad_budget").joinpath("config/residential_quote_rules.json")
+    data = json.loads(rules_path.read_text(encoding="utf-8"))
+    wet_room_heights = data["wet_room_heights"]
+    return ResidentialQuoteRules(
+        kitchen_waterproof_wall_height=float(wet_room_heights["kitchen_waterproof_wall_height"]),
+        bathroom_waterproof_wall_height=float(wet_room_heights["bathroom_waterproof_wall_height"]),
+        wall_tile_height=float(wet_room_heights["wall_tile_height"]),
+        floor_area_aggregate_items=set(data["floor_area_aggregate_items"]),
+        tile_area_aggregate_items=set(data["tile_area_aggregate_items"]),
+    )
 
 
 def parse_quote_template(template_path: Path) -> QuoteTemplate:
@@ -184,6 +203,7 @@ def parse_quote_template(template_path: Path) -> QuoteTemplate:
 
 
 def export_residential_quote(result: QuantityResult, template_path: Path, output_path: Path) -> None:
+    rules = load_default_quote_rules()
     template = parse_quote_template(template_path)
     workbook = Workbook()
     sheet = workbook.active
@@ -201,13 +221,13 @@ def export_residential_quote(result: QuantityResult, template_path: Path, output
         items = [item_index[name] for name in item_names if name in item_index]
         if not items:
             continue
-        subtotal_rows.append(_append_section(sheet, _section_label(section_index), f"{room.room_name}\u5de5\u7a0b", items, room))
+        subtotal_rows.append(_append_section(sheet, _section_label(section_index), f"{room.room_name}\u5de5\u7a0b", items, room, rules=rules))
 
     for section in template.sections:
         if _is_space_template_section(section.name):
             continue
         section_index += 1
-        subtotal_rows.append(_append_section(sheet, _section_label(section_index), section.name, section.items, None, included_rooms))
+        subtotal_rows.append(_append_section(sheet, _section_label(section_index), section.name, section.items, None, included_rooms, rules))
 
     _append_summary_rows(sheet, subtotal_rows)
     _write_automation_summary(sheet)
@@ -242,7 +262,10 @@ def _append_section(
     items: list[QuoteTemplateItem],
     room: QuantityRow | None,
     included_rooms: list[QuantityRow] | None = None,
+    rules: ResidentialQuoteRules | None = None,
 ) -> int:
+    if rules is None:
+        rules = load_default_quote_rules()
     sheet.append([section_number, section_name])
     section_row = sheet.max_row
     for cell in sheet[section_row]:
@@ -252,9 +275,9 @@ def _append_section(
     first_item_row = sheet.max_row + 1
     for item_number, item in enumerate(items, start=1):
         row_index = sheet.max_row + 1
-        aggregate = _aggregate_quantity_for_item(item.name, included_rooms or []) if room is None else None
+        aggregate = _aggregate_quantity_for_item(item.name, included_rooms or [], rules) if room is None else None
         if room is not None:
-            quantity = _quantity_for_item(item.name, room)
+            quantity = _quantity_for_item(item.name, room, rules)
         elif aggregate is not None:
             quantity = aggregate.quantity
         else:
@@ -387,7 +410,7 @@ def _item_names_for_room(room: QuantityRow, item_index: dict[str, QuoteTemplateI
     return _GENERAL_ROOM_ITEMS
 
 
-def _quantity_for_item(item_name: str, room: QuantityRow) -> float:
+def _quantity_for_item(item_name: str, room: QuantityRow, rules: ResidentialQuoteRules) -> float:
     if item_name in {
         "\u8f7b\u94a2\u9f99\u9aa8\u5e73\u9876",
         "\u9876\u9762\u6279\u5d4c",
@@ -398,8 +421,8 @@ def _quantity_for_item(item_name: str, room: QuantityRow) -> float:
         return _round_quantity(room.floor_area)
     if item_name == "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406":
         if "\u53a8\u623f" in room.room_name:
-            return _round_quantity(room.floor_area + room.wall_measure_perimeter * _KITCHEN_WATERPROOF_WALL_HEIGHT)
-        return _round_quantity(room.floor_area + room.wall_measure_perimeter * _BATHROOM_WATERPROOF_WALL_HEIGHT)
+            return _round_quantity(room.floor_area + room.wall_measure_perimeter * rules.kitchen_waterproof_wall_height)
+        return _round_quantity(room.floor_area + room.wall_measure_perimeter * rules.bathroom_waterproof_wall_height)
     if item_name in {
         "\u5899\u9762\u754c\u9762\u5242\u5904\u7406",
         "\u5899\u9762\u6279\u5d4c",
@@ -410,35 +433,30 @@ def _quantity_for_item(item_name: str, room: QuantityRow) -> float:
         "\u5899\u9762\u8d34\u74f7\u7816(600x1200)",
         "\u5899\u9762\u8d34\u74f7\u7816(600X1200)",
     }:
-        return _wet_wall_tile_area(room)
+        return _wet_wall_tile_area(room, rules)
     return 0
 
 
-def _aggregate_quantity_for_item(item_name: str, rooms: list[QuantityRow]) -> QuoteAggregateQuantity | None:
+def _aggregate_quantity_for_item(
+    item_name: str,
+    rooms: list[QuantityRow],
+    rules: ResidentialQuoteRules,
+) -> QuoteAggregateQuantity | None:
     if not rooms:
         return None
-    if item_name in {
-        "\u5783\u573e\u6e05\u8fd0\u8d39",
-        "\u6750\u6599\u642c\u8fd0\u8d39",
-        "\u5730\u9762\u7816\u73b0\u573a\u7ef4\u62a4\u8d39",
-        "\u5f3a\u7535\u5e03\u7ebf",
-        "\u5f31\u7535\u5e03\u7ebf",
-        "\u6c34\u8def\u5e03\u7ba1",
-        "\u6c34\u6ce5\u5899\u5f00\u69fd",
-        "\u8865\u7ebf\u3001\u7ba1\u69fd\u53ca\u96f6\u661f\u4fee\u8865",
-    }:
+    if item_name in rules.floor_area_aggregate_items:
         floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
         return QuoteAggregateQuantity(
             quantity=_round_quantity(sum(room.floor_area for room in floor_rooms)),
             basis="\u5ba4\u5185\u5730\u9762\u9762\u79ef\u6c47\u603b",
             rooms=floor_rooms,
         )
-    if item_name == "\u7f8e\u7f1d":
+    if item_name in rules.tile_area_aggregate_items:
         floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
         wall_tile_rooms = [room for room in rooms if _room_has_wall_tile(room)]
         return QuoteAggregateQuantity(
             quantity=_round_quantity(
-                sum(room.floor_area for room in floor_rooms) + sum(_wet_wall_tile_area(room) for room in wall_tile_rooms)
+                sum(room.floor_area for room in floor_rooms) + sum(_wet_wall_tile_area(room, rules) for room in wall_tile_rooms)
             ),
             basis="\u5730\u7816\u9762\u79ef+2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef",
             rooms=list({room.room_id: room for room in [*floor_rooms, *wall_tile_rooms]}.values()),
@@ -539,8 +557,8 @@ def _measure_basis_for_item(item_name: str, room: QuantityRow) -> str:
     return "\u81ea\u52a8\u7b97\u91cf"
 
 
-def _wet_wall_tile_area(room: QuantityRow) -> float:
-    return _round_quantity(max(0, room.wall_measure_perimeter * _WALL_TILE_HEIGHT - room.window_area))
+def _wet_wall_tile_area(room: QuantityRow, rules: ResidentialQuoteRules) -> float:
+    return _round_quantity(max(0, room.wall_measure_perimeter * rules.wall_tile_height - room.window_area))
 
 
 def _should_generate_room_section(room: QuantityRow) -> bool:
