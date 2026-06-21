@@ -114,6 +114,7 @@ _REVIEW_FILL = PatternFill("solid", fgColor="EADCF8")
 _WHITE_FONT = Font(color="FFFFFF", bold=True)
 _BOLD_FONT = Font(bold=True)
 
+
 @dataclass
 class QuoteTemplateItem:
     number: int
@@ -153,6 +154,11 @@ class ResidentialQuoteRules:
     floor_area_aggregate_items: set[str]
     tile_area_aggregate_items: set[str]
     source_label: str
+
+
+def default_quote_rules_text() -> str:
+    rules_path = resources.files("cad_budget").joinpath("config/residential_quote_rules.json")
+    return rules_path.read_text(encoding="utf-8")
 
 
 def load_default_quote_rules() -> ResidentialQuoteRules:

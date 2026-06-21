@@ -10,7 +10,7 @@ from cad_budget.dxf_adapter import import_dxf
 from cad_budget.models import ProjectInput, QuantityResult
 from cad_budget.export_excel import export_quantity_result
 from cad_budget.import_excel import import_quantity_result
-from cad_budget.quote_excel import export_residential_quote
+from cad_budget.quote_excel import default_quote_rules_text, export_residential_quote
 from cad_budget.quantity import calculate_quantities
 
 app = typer.Typer(help="CAD renovation quantity takeoff tools.")
@@ -182,3 +182,21 @@ def quote(
         raise typer.Exit(code=1)
 
     typer.echo(f"Wrote {excel_output}")
+
+
+@app.command("init-rules")
+def init_rules(
+    output: Path = typer.Option(..., "--output", help="Path for generated residential quote rules JSON."),
+) -> None:
+    if output.exists():
+        typer.echo(f"Rules output already exists '{output}'. Delete it first or choose another path.", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(default_quote_rules_text(), encoding="utf-8")
+    except OSError as exc:
+        typer.echo(f"Failed to write quote rules '{output}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Wrote {output}")

@@ -128,7 +128,13 @@ Several non-room quote lines are auto-filled from whole-house aggregates when th
 
 Wet-room quote quantities use dedicated height rules instead of full wall net area: kitchen waterproofing is floor area plus wall length below 0.3m; bathroom waterproofing is floor area plus wall length below 1.8m; wall tile area is wall length below 2.5m minus known window area.
 
-Default residential quote rules live in `src/cad_budget/config/residential_quote_rules.json`. The CLI automatically uses this packaged rule file unless `--rules` points to an external JSON file:
+Default residential quote rules live in `src/cad_budget/config/residential_quote_rules.json`. The CLI automatically uses this packaged rule file. To customize wet-room heights or whole-house aggregate item names, export an editable copy first:
+
+```powershell
+cad-budget init-rules --output my-rules.json
+```
+
+Then pass the edited file to `quote`:
 
 ```powershell
 cad-budget quote result.json --template "D:\Desktop\清单式报价表（商品房）.xlsx" --rules my-rules.json --excel-output quote.xlsx

@@ -6,6 +6,7 @@ from openpyxl import load_workbook
 from typer.testing import CliRunner
 
 from cad_budget.cli import app
+from cad_budget.quote_excel import load_quote_rules
 
 
 def test_cli_calculates_json_output(tmp_path: Path):
@@ -431,6 +432,47 @@ def test_cli_quote_writes_residential_fitout_excel(tmp_path: Path):
     assert sheet["O3"].value == "复核备注"
     assert sheet["Q1"].value == "报价自动化统计"
     assert "Wrote" in result.output
+
+
+def test_cli_init_rules_writes_default_rules_json(tmp_path: Path):
+    runner = CliRunner()
+    output = tmp_path / "rules.json"
+
+    result = runner.invoke(app, ["init-rules", "--output", str(output)])
+
+    assert result.exit_code == 0
+    assert output.exists()
+    data = json.loads(output.read_text(encoding="utf-8"))
+    assert data["wet_room_heights"]["wall_tile_height"] == 2.5
+    assert "垃圾清运费" in data["floor_area_aggregate_items"]
+    rules = load_quote_rules(output)
+    assert rules.wall_tile_height == 2.5
+    assert "Wrote" in result.output
+
+
+def test_cli_init_rules_creates_nested_output_directory(tmp_path: Path):
+    runner = CliRunner()
+    output = tmp_path / "nested" / "rules" / "rules.json"
+
+    result = runner.invoke(app, ["init-rules", "--output", str(output)])
+
+    assert result.exit_code == 0
+    assert output.exists()
+    assert output.parent.is_dir()
+
+
+def test_cli_init_rules_refuses_to_overwrite_existing_file(tmp_path: Path):
+    runner = CliRunner()
+    output = tmp_path / "rules.json"
+    output.write_text("keep", encoding="utf-8")
+
+    result = runner.invoke(app, ["init-rules", "--output", str(output)])
+
+    assert result.exit_code == 1
+    error_text = (result.stdout or "") + (result.stderr or "")
+    assert "already exists" in error_text
+    assert "Traceback" not in error_text
+    assert output.read_text(encoding="utf-8") == "keep"
 
 
 def test_cli_quote_uses_external_rules_file(tmp_path: Path):
