@@ -429,6 +429,7 @@ def test_cli_quote_writes_residential_fitout_excel(tmp_path: Path):
     assert sheet["J3"].value == "数量来源"
     assert sheet["N6"].value == "自动生成"
     assert sheet["O3"].value == "复核备注"
+    assert sheet["Q1"].value == "报价自动化统计"
     assert "Wrote" in result.output
 
 

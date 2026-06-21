@@ -90,6 +90,21 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
     assert _row_containing(rows, "\u5de5\u7a0b\u7ba1\u7406\u8d39") is not None
     assert _row_containing(rows, "\u5de5\u7a0b\u603b\u9020\u4ef7") is not None
     assert sheet.auto_filter.ref == f"A3:O{sheet.max_row}"
+    assert sheet["Q1"].value == "\u62a5\u4ef7\u81ea\u52a8\u5316\u7edf\u8ba1"
+    assert [sheet.cell(row=2, column=column).value for column in range(17, 20)] == [
+        "\u6570\u91cf\u6765\u6e90",
+        "\u884c\u6570",
+        "\u5360\u6bd4",
+    ]
+    assert [sheet.cell(row=row, column=17).value for row in range(3, 6)] == [
+        "\u81ea\u52a8\u7b97\u91cf",
+        "\u81ea\u52a8\u6c47\u603b",
+        "\u6a21\u677f\u9ed8\u8ba4",
+    ]
+    assert [sheet.cell(row=row, column=18).value for row in range(3, 6)] == [14, 1, 1]
+    assert sheet["S3"].value == "=R3/SUM(R3:R5)"
+    assert sheet["S4"].value == "=R4/SUM(R3:R5)"
+    assert sheet["S5"].value == "=R5/SUM(R3:R5)"
 
 
 def test_export_residential_quote_auto_fills_whole_house_area_items(tmp_path: Path):

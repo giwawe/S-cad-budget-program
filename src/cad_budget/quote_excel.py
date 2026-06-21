@@ -206,6 +206,7 @@ def export_residential_quote(result: QuantityResult, template_path: Path, output
         subtotal_rows.append(_append_section(sheet, _section_label(section_index), section.name, section.items, None, included_rooms))
 
     _append_summary_rows(sheet, subtotal_rows)
+    _write_automation_summary(sheet)
     _configure_sheet(sheet)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
@@ -321,11 +322,44 @@ def _configure_sheet(sheet) -> None:
         "M": 18,
         "N": 14,
         "O": 18,
+        "Q": 16,
+        "R": 10,
+        "S": 12,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
     sheet.freeze_panes = "A5"
     sheet.auto_filter.ref = f"A3:O{sheet.max_row}"
+
+
+def _write_automation_summary(sheet) -> None:
+    labels = [
+        "\u81ea\u52a8\u7b97\u91cf",
+        "\u81ea\u52a8\u6c47\u603b",
+        "\u6a21\u677f\u9ed8\u8ba4",
+    ]
+    counts = {label: 0 for label in labels}
+    for row_index in range(5, sheet.max_row + 1):
+        source = sheet.cell(row=row_index, column=10).value
+        if source in counts:
+            counts[source] += 1
+
+    sheet["Q1"] = "\u62a5\u4ef7\u81ea\u52a8\u5316\u7edf\u8ba1"
+    sheet["Q1"].font = _BOLD_FONT
+    sheet["Q1"].fill = _SECTION_FILL
+    for column_index, header in enumerate(["\u6570\u91cf\u6765\u6e90", "\u884c\u6570", "\u5360\u6bd4"], start=17):
+        cell = sheet.cell(row=2, column=column_index, value=header)
+        cell.fill = _HEADER_FILL
+        cell.font = _WHITE_FONT
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for offset, label in enumerate(labels, start=3):
+        sheet.cell(row=offset, column=17, value=label)
+        sheet.cell(row=offset, column=18, value=counts[label])
+        percent_cell = sheet.cell(row=offset, column=19, value=f"=R{offset}/SUM(R3:R5)")
+        percent_cell.number_format = "0.0%"
+        for column_index in range(17, 20):
+            sheet.cell(row=offset, column=column_index).fill = _REVIEW_FILL
 
 
 def _build_item_index(template: QuoteTemplate) -> dict[str, QuoteTemplateItem]:

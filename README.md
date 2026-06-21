@@ -125,3 +125,5 @@ The first quote version reads only the `整装` worksheet from the template and 
 Quote generation is automation-first: `confirmed` and `manually_edited` room quantities are marked `自动生成`; `default_inferred` rows are still generated and marked `自动生成-默认推断`; `needs_review` rows are still generated and marked `自动生成-异常提示`; template-default items are marked `按模板生成`. These statuses are review hints and do not block quote generation.
 
 Several non-room quote lines are auto-filled from whole-house aggregates when their template item names match the built-in rules. Cleanup, material handling, tile protection, wiring, water-pipe routing, wall chasing, and similar area-based items use the summed included indoor floor area. `美缝` uses generated tile work area: floor tile area plus wet-area wall tile area. Items without a reliable CAD quantity source, such as doors, sanitary ware, curtains, custom cabinetry, and tile piece counts, continue to use template defaults.
+
+The quote workbook writes a small automation summary in columns `Q:S`, counting `自动算量`, `自动汇总`, and `模板默认` lines and showing their percentages. The main quote table remains in columns `A:O`.
