@@ -74,8 +74,8 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
     assert bath_waterproof[3] == 18.0
     assert bath_waterproof[12] == "\u5730\u9762\u9762\u79ef+\u5899\u9762\u51c0\u9762\u79ef"
 
-    manual_item = _row_containing(rows, "\u5783\u573e\u6e05\u8fd0\u8d39")
-    assert manual_item[3] == 99
+    manual_item = _row_containing(rows, "\u7a97\u5e18")
+    assert manual_item[3] == 1
     assert manual_item[7].startswith("=D")
     assert manual_item[9:15] == (
         "\u6a21\u677f\u9ed8\u8ba4",
@@ -90,6 +90,71 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
     assert _row_containing(rows, "\u5de5\u7a0b\u7ba1\u7406\u8d39") is not None
     assert _row_containing(rows, "\u5de5\u7a0b\u603b\u9020\u4ef7") is not None
     assert sheet.auto_filter.ref == f"A3:O{sheet.max_row}"
+
+
+def test_export_residential_quote_auto_fills_whole_house_area_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_area_summary_items=True)
+    result = QuantityResult(
+        project_name="Area Summary Demo",
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0),
+            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=15.0),
+            _quantity_row("shaft", "\u7535\u68af\u4e95", floor_area=4.0, net_wall_area=12.0, status=DataStatus.EXCLUDED),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    garbage = _row_containing(rows, "\u5783\u573e\u6e05\u8fd0\u8d39")
+    wiring = _row_containing(rows, "\u5f3a\u7535\u5e03\u7ebf")
+    maintenance = _row_containing(rows, "\u5730\u9762\u7816\u73b0\u573a\u7ef4\u62a4\u8d39")
+    assert garbage[3] == 29.0
+    assert wiring[3] == 29.0
+    assert maintenance[3] == 29.0
+    assert garbage[9:15] == (
+        "\u81ea\u52a8\u6c47\u603b",
+        "\u5168\u5c4b",
+        None,
+        "\u5ba4\u5185\u5730\u9762\u9762\u79ef\u6c47\u603b",
+        "\u81ea\u52a8\u751f\u6210",
+        None,
+    )
+
+
+def test_export_residential_quote_auto_fills_tile_area_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_area_summary_items=True)
+    result = QuantityResult(
+        project_name="Tile Area Demo",
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0),
+            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=15.0),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    tile_grout = _row_containing(rows, "\u7f8e\u7f1d")
+    assert tile_grout[3] == 62.0
+    assert tile_grout[9:15] == (
+        "\u81ea\u52a8\u6c47\u603b",
+        "\u5168\u5c4b",
+        None,
+        "\u5730\u7816\u9762\u79ef+\u5899\u7816\u9762\u79ef",
+        "\u81ea\u52a8\u751f\u6210",
+        None,
+    )
 
 
 def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(tmp_path: Path):
@@ -194,7 +259,12 @@ def test_export_residential_quote_uses_one_wall_tile_variant_for_wet_rooms(tmp_p
     assert tile_rows[0][3] == 18.0
 
 
-def _create_quote_template(path: Path, *, include_both_wall_tile_variants: bool = False) -> None:
+def _create_quote_template(
+    path: Path,
+    *,
+    include_both_wall_tile_variants: bool = False,
+    include_area_summary_items: bool = False,
+) -> None:
     workbook = Workbook()
     half = workbook.active
     half.title = "\u534a\u5305"
@@ -222,6 +292,11 @@ def _create_quote_template(path: Path, *, include_both_wall_tile_variants: bool 
     fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H14:H17)"])
     fitout.append(["\u4e09", "\u5176\u4ed6\u5de5\u7a0b"])
     fitout.append([1, "\u5783\u573e\u6e05\u8fd0\u8d39", "M2", 99, 0, 0, 10, None, "\u4eba\u5de5\u6e05\u8fd0"])
+    fitout.append([2, "\u7a97\u5e18", "\u5957", 1, 0, 0, 10, None, "\u7a97\u5e18"])
+    if include_area_summary_items:
+        fitout.append([3, "\u5730\u9762\u7816\u73b0\u573a\u7ef4\u62a4\u8d39", "M2", 99, 0, 0, 10, None, "\u5730\u7816\u7ef4\u62a4"])
+        fitout.append([4, "\u5f3a\u7535\u5e03\u7ebf", "M2", 99, 0, 0, 10, None, "\u5f3a\u7535"])
+        fitout.append([5, "\u7f8e\u7f1d", "M2", 99, 0, 0, 10, None, "\u7f8e\u7f1d"])
     fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H20:H20)"])
     fitout.append(["A", "\u76f4\u63a5\u8d39\u5408\u8ba1(\u4e00+\u2026...\u5341)", None, None, None, None, None, "=H12+H18+H21"])
     fitout.append(["B", "\u5de5\u7a0b\u7ba1\u7406\u8d39(D=A* 5%)", None, None, None, None, None, "=H22*0.05"])

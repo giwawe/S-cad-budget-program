@@ -137,6 +137,13 @@ class QuoteTemplate:
     sections: list[QuoteTemplateSection]
 
 
+@dataclass
+class QuoteAggregateQuantity:
+    quantity: float
+    basis: str
+    rooms: list[QuantityRow]
+
+
 def parse_quote_template(template_path: Path) -> QuoteTemplate:
     workbook = load_workbook(template_path, data_only=False)
     if FITOUT_SHEET_NAME not in workbook.sheetnames:
@@ -182,12 +189,9 @@ def export_residential_quote(result: QuantityResult, template_path: Path, output
     subtotal_rows: list[int] = []
     section_index = 0
     item_index = _build_item_index(template)
+    included_rooms = [room for room in result.rows if _should_generate_room_section(room)]
 
-    for room in result.rows:
-        if room.status == DataStatus.EXCLUDED:
-            continue
-        if not room.include_in_floor_quantity and not room.include_in_wall_paint_quantity:
-            continue
+    for room in included_rooms:
         section_index += 1
         item_names = _item_names_for_room(room, item_index)
         items = [item_index[name] for name in item_names if name in item_index]
@@ -199,7 +203,7 @@ def export_residential_quote(result: QuantityResult, template_path: Path, output
         if _is_space_template_section(section.name):
             continue
         section_index += 1
-        subtotal_rows.append(_append_section(sheet, _section_label(section_index), section.name, section.items, None))
+        subtotal_rows.append(_append_section(sheet, _section_label(section_index), section.name, section.items, None, included_rooms))
 
     _append_summary_rows(sheet, subtotal_rows)
     _configure_sheet(sheet)
@@ -232,6 +236,7 @@ def _append_section(
     section_name: str,
     items: list[QuoteTemplateItem],
     room: QuantityRow | None,
+    included_rooms: list[QuantityRow] | None = None,
 ) -> int:
     sheet.append([section_number, section_name])
     section_row = sheet.max_row
@@ -242,8 +247,14 @@ def _append_section(
     first_item_row = sheet.max_row + 1
     for item_number, item in enumerate(items, start=1):
         row_index = sheet.max_row + 1
-        quantity = _quantity_for_item(item.name, room) if room is not None else item.template_quantity
-        review_values = _review_values_for_item(item.name, room)
+        aggregate = _aggregate_quantity_for_item(item.name, included_rooms or []) if room is None else None
+        if room is not None:
+            quantity = _quantity_for_item(item.name, room)
+        elif aggregate is not None:
+            quantity = aggregate.quantity
+        else:
+            quantity = item.template_quantity
+        review_values = _review_values_for_item(item.name, room, aggregate)
         sheet.append(
             [
                 item_number,
@@ -362,7 +373,52 @@ def _quantity_for_item(item_name: str, room: QuantityRow) -> float:
     return 0
 
 
-def _review_values_for_item(item_name: str, room: QuantityRow | None) -> list[str | None]:
+def _aggregate_quantity_for_item(item_name: str, rooms: list[QuantityRow]) -> QuoteAggregateQuantity | None:
+    if not rooms:
+        return None
+    if item_name in {
+        "\u5783\u573e\u6e05\u8fd0\u8d39",
+        "\u6750\u6599\u642c\u8fd0\u8d39",
+        "\u5730\u9762\u7816\u73b0\u573a\u7ef4\u62a4\u8d39",
+        "\u5f3a\u7535\u5e03\u7ebf",
+        "\u5f31\u7535\u5e03\u7ebf",
+        "\u6c34\u8def\u5e03\u7ba1",
+        "\u6c34\u6ce5\u5899\u5f00\u69fd",
+        "\u8865\u7ebf\u3001\u7ba1\u69fd\u53ca\u96f6\u661f\u4fee\u8865",
+    }:
+        floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
+        return QuoteAggregateQuantity(
+            quantity=_round_quantity(sum(room.floor_area for room in floor_rooms)),
+            basis="\u5ba4\u5185\u5730\u9762\u9762\u79ef\u6c47\u603b",
+            rooms=floor_rooms,
+        )
+    if item_name == "\u7f8e\u7f1d":
+        floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
+        wall_tile_rooms = [room for room in rooms if _room_has_wall_tile(room)]
+        return QuoteAggregateQuantity(
+            quantity=_round_quantity(
+                sum(room.floor_area for room in floor_rooms) + sum(room.net_wall_area for room in wall_tile_rooms)
+            ),
+            basis="\u5730\u7816\u9762\u79ef+\u5899\u7816\u9762\u79ef",
+            rooms=list({room.room_id: room for room in [*floor_rooms, *wall_tile_rooms]}.values()),
+        )
+    return None
+
+
+def _review_values_for_item(
+    item_name: str,
+    room: QuantityRow | None,
+    aggregate: QuoteAggregateQuantity | None = None,
+) -> list[str | None]:
+    if aggregate is not None:
+        return [
+            "\u81ea\u52a8\u6c47\u603b",
+            "\u5168\u5c4b",
+            None,
+            aggregate.basis,
+            _review_status_for_rooms(aggregate.rooms),
+            _review_note_for_rooms(aggregate.rooms),
+        ]
     if room is None:
         return [
             "\u6a21\u677f\u9ed8\u8ba4",
@@ -380,6 +436,22 @@ def _review_values_for_item(item_name: str, room: QuantityRow | None) -> list[st
         _review_status_for_room(room),
         _review_note_for_room(room),
     ]
+
+
+def _review_status_for_rooms(rooms: list[QuantityRow]) -> str:
+    if any(room.status == DataStatus.NEEDS_REVIEW for room in rooms):
+        return "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
+    if any(room.status == DataStatus.DEFAULT_INFERRED for room in rooms):
+        return "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    return "\u81ea\u52a8\u751f\u6210"
+
+
+def _review_note_for_rooms(rooms: list[QuantityRow]) -> str | None:
+    notes: list[str] = []
+    for room in rooms:
+        if room.status in {DataStatus.DEFAULT_INFERRED, DataStatus.NEEDS_REVIEW}:
+            notes.extend(room.exception_notes)
+    return "\uff1b".join(notes) if notes else None
 
 
 def _review_status_for_room(room: QuantityRow) -> str:
@@ -421,6 +493,17 @@ def _measure_basis_for_item(item_name: str, room: QuantityRow) -> str:
     }:
         return "\u5899\u9762\u51c0\u9762\u79ef"
     return "\u81ea\u52a8\u7b97\u91cf"
+
+
+def _should_generate_room_section(room: QuantityRow) -> bool:
+    if room.status == DataStatus.EXCLUDED:
+        return False
+    return room.include_in_floor_quantity or room.include_in_wall_paint_quantity
+
+
+def _room_has_wall_tile(room: QuantityRow) -> bool:
+    name = room.room_name
+    return any(keyword in name for keyword in ["\u53a8\u623f", "\u536b", "\u6d17\u624b\u95f4", "\u536b\u751f\u95f4", "\u9732\u53f0", "\u9633\u53f0"])
 
 
 def _is_section_row(number: Any, sheet, row_index: int) -> bool:
