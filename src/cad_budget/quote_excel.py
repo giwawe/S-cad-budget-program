@@ -112,6 +112,10 @@ _REVIEW_FILL = PatternFill("solid", fgColor="EADCF8")
 _WHITE_FONT = Font(color="FFFFFF", bold=True)
 _BOLD_FONT = Font(bold=True)
 
+_KITCHEN_WATERPROOF_WALL_HEIGHT = 0.3
+_BATHROOM_WATERPROOF_WALL_HEIGHT = 1.8
+_WALL_TILE_HEIGHT = 2.5
+
 
 @dataclass
 class QuoteTemplateItem:
@@ -394,16 +398,19 @@ def _quantity_for_item(item_name: str, room: QuantityRow) -> float:
         return _round_quantity(room.floor_area)
     if item_name == "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406":
         if "\u53a8\u623f" in room.room_name:
-            return _round_quantity(room.floor_area)
-        return _round_quantity(room.floor_area + room.net_wall_area)
+            return _round_quantity(room.floor_area + room.wall_measure_perimeter * _KITCHEN_WATERPROOF_WALL_HEIGHT)
+        return _round_quantity(room.floor_area + room.wall_measure_perimeter * _BATHROOM_WATERPROOF_WALL_HEIGHT)
     if item_name in {
         "\u5899\u9762\u754c\u9762\u5242\u5904\u7406",
         "\u5899\u9762\u6279\u5d4c",
         "\u5899\u9762\u4e73\u80f6\u6f06",
+    }:
+        return _round_quantity(room.net_wall_area)
+    if item_name in {
         "\u5899\u9762\u8d34\u74f7\u7816(600x1200)",
         "\u5899\u9762\u8d34\u74f7\u7816(600X1200)",
     }:
-        return _round_quantity(room.net_wall_area)
+        return _wet_wall_tile_area(room)
     return 0
 
 
@@ -431,9 +438,9 @@ def _aggregate_quantity_for_item(item_name: str, rooms: list[QuantityRow]) -> Qu
         wall_tile_rooms = [room for room in rooms if _room_has_wall_tile(room)]
         return QuoteAggregateQuantity(
             quantity=_round_quantity(
-                sum(room.floor_area for room in floor_rooms) + sum(room.net_wall_area for room in wall_tile_rooms)
+                sum(room.floor_area for room in floor_rooms) + sum(_wet_wall_tile_area(room) for room in wall_tile_rooms)
             ),
-            basis="\u5730\u7816\u9762\u79ef+\u5899\u7816\u9762\u79ef",
+            basis="\u5730\u7816\u9762\u79ef+2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef",
             rooms=list({room.room_id: room for room in [*floor_rooms, *wall_tile_rooms]}.values()),
         )
     return None
@@ -508,8 +515,8 @@ def _review_note_for_room(room: QuantityRow) -> str | None:
 def _measure_basis_for_item(item_name: str, room: QuantityRow) -> str:
     if item_name == "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406":
         if "\u53a8\u623f" in room.room_name:
-            return "\u5730\u9762\u9762\u79ef"
-        return "\u5730\u9762\u9762\u79ef+\u5899\u9762\u51c0\u9762\u79ef"
+            return "\u5730\u9762\u9762\u79ef+0.3m\u4ee5\u4e0b\u5899\u9762\u9762\u79ef"
+        return "\u5730\u9762\u9762\u79ef+1.8m\u4ee5\u4e0b\u5899\u9762\u9762\u79ef"
     if item_name in {
         "\u8f7b\u94a2\u9f99\u9aa8\u5e73\u9876",
         "\u9876\u9762\u6279\u5d4c",
@@ -522,11 +529,18 @@ def _measure_basis_for_item(item_name: str, room: QuantityRow) -> str:
         "\u5899\u9762\u754c\u9762\u5242\u5904\u7406",
         "\u5899\u9762\u6279\u5d4c",
         "\u5899\u9762\u4e73\u80f6\u6f06",
+    }:
+        return "\u5899\u9762\u51c0\u9762\u79ef"
+    if item_name in {
         "\u5899\u9762\u8d34\u74f7\u7816(600x1200)",
         "\u5899\u9762\u8d34\u74f7\u7816(600X1200)",
     }:
-        return "\u5899\u9762\u51c0\u9762\u79ef"
+        return "2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef"
     return "\u81ea\u52a8\u7b97\u91cf"
+
+
+def _wet_wall_tile_area(room: QuantityRow) -> float:
+    return _round_quantity(max(0, room.wall_measure_perimeter * _WALL_TILE_HEIGHT - room.window_area))
 
 
 def _should_generate_room_section(room: QuantityRow) -> bool:

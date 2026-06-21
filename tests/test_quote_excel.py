@@ -31,8 +31,8 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
         project_name="Quote Demo",
         rows=[
             _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
-            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0),
-            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=15.0),
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0, wall_measure_perimeter=10.0, window_area=1.0),
+            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=15.0, wall_measure_perimeter=8.0, window_area=0.5),
         ],
         exceptions=[],
     )
@@ -71,8 +71,18 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
     assert kitchen_floor_tile[3] == 6.0
 
     bath_waterproof = _row_containing_after(rows, "\u4e3b\u536b\u5de5\u7a0b", "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406")
-    assert bath_waterproof[3] == 18.0
-    assert bath_waterproof[12] == "\u5730\u9762\u9762\u79ef+\u5899\u9762\u51c0\u9762\u79ef"
+    assert bath_waterproof[3] == 17.4
+    assert bath_waterproof[12] == "\u5730\u9762\u9762\u79ef+1.8m\u4ee5\u4e0b\u5899\u9762\u9762\u79ef"
+
+    kitchen_waterproof = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406")
+    assert kitchen_waterproof[3] == 9.0
+    assert kitchen_waterproof[12] == "\u5730\u9762\u9762\u79ef+0.3m\u4ee5\u4e0b\u5899\u9762\u9762\u79ef"
+
+    kitchen_wall_tile = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
+    bath_wall_tile = _row_containing_after(rows, "\u4e3b\u536b\u5de5\u7a0b", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
+    assert kitchen_wall_tile[3] == 24.0
+    assert bath_wall_tile[3] == 19.5
+    assert kitchen_wall_tile[12] == "2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef"
 
     manual_item = _row_containing(rows, "\u7a97\u5e18")
     assert manual_item[3] == 1
@@ -115,8 +125,8 @@ def test_export_residential_quote_auto_fills_whole_house_area_items(tmp_path: Pa
         project_name="Area Summary Demo",
         rows=[
             _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
-            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0),
-            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=15.0),
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0, wall_measure_perimeter=10.0, window_area=1.0),
+            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=15.0, wall_measure_perimeter=8.0, window_area=0.5),
             _quantity_row("shaft", "\u7535\u68af\u4e95", floor_area=4.0, net_wall_area=12.0, status=DataStatus.EXCLUDED),
         ],
         exceptions=[],
@@ -150,8 +160,8 @@ def test_export_residential_quote_auto_fills_tile_area_items(tmp_path: Path):
         project_name="Tile Area Demo",
         rows=[
             _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
-            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0),
-            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=15.0),
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0, wall_measure_perimeter=10.0, window_area=1.0),
+            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=15.0, wall_measure_perimeter=8.0, window_area=0.5),
         ],
         exceptions=[],
     )
@@ -161,12 +171,12 @@ def test_export_residential_quote_auto_fills_tile_area_items(tmp_path: Path):
     workbook = load_workbook(output_path, data_only=False)
     rows = list(workbook.active.iter_rows(values_only=True))
     tile_grout = _row_containing(rows, "\u7f8e\u7f1d")
-    assert tile_grout[3] == 62.0
+    assert tile_grout[3] == 72.5
     assert tile_grout[9:15] == (
         "\u81ea\u52a8\u6c47\u603b",
         "\u5168\u5c4b",
         None,
-        "\u5730\u7816\u9762\u79ef+\u5899\u7816\u9762\u79ef",
+        "\u5730\u7816\u9762\u79ef+2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef",
         "\u81ea\u52a8\u751f\u6210",
         None,
     )
@@ -260,7 +270,16 @@ def test_export_residential_quote_uses_one_wall_tile_variant_for_wet_rooms(tmp_p
     _create_quote_template(template_path, include_both_wall_tile_variants=True)
     result = QuantityResult(
         project_name="Wet Room Demo",
-        rows=[_quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0)],
+        rows=[
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                wall_measure_perimeter=10.0,
+                window_area=1.0,
+            )
+        ],
         exceptions=[],
     )
 
@@ -271,7 +290,7 @@ def test_export_residential_quote_uses_one_wall_tile_variant_for_wet_rooms(tmp_p
     kitchen_rows = _rows_between_section_and_subtotal(rows, "\u53a8\u623f\u5de5\u7a0b")
     tile_rows = [row for row in kitchen_rows if row[1] in {"\u5899\u9762\u8d34\u74f7\u7816(600x1200)", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)"}]
     assert len(tile_rows) == 1
-    assert tile_rows[0][3] == 18.0
+    assert tile_rows[0][3] == 24.0
 
 
 def _create_quote_template(
@@ -343,6 +362,8 @@ def _quantity_row(
     *,
     floor_area: float,
     net_wall_area: float,
+    wall_measure_perimeter: float = 0,
+    window_area: float = 0,
     status: DataStatus = DataStatus.CONFIRMED,
     exception_notes: list[str] | None = None,
 ) -> QuantityRow:
@@ -355,11 +376,11 @@ def _quantity_row(
         height_mode=HeightMode.PROJECT_DEFAULT,
         floor_area=floor_area,
         floor_perimeter=0,
-        wall_measure_perimeter=0,
+        wall_measure_perimeter=wall_measure_perimeter,
         open_boundary_length=0,
         gross_wall_area=net_wall_area,
         window_count=0,
-        window_area=0,
+        window_area=window_area,
         door_opening_count=0,
         door_opening_area=0,
         net_wall_area=net_wall_area,
