@@ -37,6 +37,7 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u536b\u751f\u95f4\u95e8" in rules.bathroom_count_aggregate_items
     assert "\u7a97\u53f0\u77f3" in rules.window_count_aggregate_items
     assert "\u94dd\u5408\u91d1\u5c01\u95e8\u7a97" in rules.window_area_aggregate_items
+    assert rules.fixed_quantity_aggregate_items["\u5168\u5c4b\u4fdd\u6d01"] == 1
 
 
 def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkeypatch):
@@ -141,6 +142,33 @@ def test_load_quote_rules_reports_non_numeric_height(tmp_path: Path):
         load_quote_rules(rules_path)
     except ValueError as exc:
         assert "kitchen_waterproof_wall_height must be a number" in str(exc)
+    else:
+        raise AssertionError("Expected invalid quote rules to raise ValueError")
+
+
+def test_load_quote_rules_reports_non_numeric_fixed_quantity(tmp_path: Path):
+    rules_path = tmp_path / "rules.json"
+    rules_path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": 0.3,
+                    "bathroom_waterproof_wall_height": 1.8,
+                    "wall_tile_height": 2.5,
+                },
+                "floor_area_aggregate_items": [],
+                "tile_area_aggregate_items": [],
+                "fixed_quantity_aggregate_items": {"\u5168\u5c4b\u4fdd\u6d01": "bad"},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        load_quote_rules(rules_path)
+    except ValueError as exc:
+        assert "fixed_quantity_aggregate_items.\u5168\u5c4b\u4fdd\u6d01 must be a number" in str(exc)
     else:
         raise AssertionError("Expected invalid quote rules to raise ValueError")
 
@@ -437,6 +465,54 @@ def test_export_residential_quote_auto_fills_count_and_opening_aggregate_items(t
     assert interior_door[12] == "\u95e8\u6d1e\u6570\u91cf\u6c47\u603b"
 
 
+def test_export_residential_quote_auto_fills_fixed_quantity_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    rules_path = tmp_path / "rules.json"
+    _create_quote_template(template_path, include_fixed_summary_items=True)
+    rules_path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": 0.3,
+                    "bathroom_waterproof_wall_height": 1.8,
+                    "wall_tile_height": 2.5,
+                },
+                "floor_area_aggregate_items": [],
+                "tile_area_aggregate_items": [],
+                "fixed_quantity_aggregate_items": {
+                    "\u5168\u5c4b\u4fdd\u6d01": 1,
+                    "\u5168\u5c4b\u63d2\u5ea7\u5f00\u5173": 2,
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    result = QuantityResult(
+        project_name="Fixed Summary Demo",
+        rows=[_quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0)],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path, rules_path=rules_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    cleaning = _item_row_named(rows, "\u5168\u5c4b\u4fdd\u6d01")
+    switches = _item_row_named(rows, "\u5168\u5c4b\u63d2\u5ea7\u5f00\u5173")
+    assert cleaning[3] == 1
+    assert switches[3] == 2
+    assert cleaning[9:15] == (
+        "\u81ea\u52a8\u6c47\u603b",
+        "\u5168\u5c4b",
+        None,
+        "\u56fa\u5b9a\u6570\u91cf\u6c47\u603b",
+        "\u81ea\u52a8\u751f\u6210",
+        None,
+    )
+
+
 def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
@@ -554,6 +630,7 @@ def _create_quote_template(
     include_both_wall_tile_variants: bool = False,
     include_area_summary_items: bool = False,
     include_count_summary_items: bool = False,
+    include_fixed_summary_items: bool = False,
 ) -> None:
     workbook = Workbook()
     half = workbook.active
@@ -600,6 +677,14 @@ def _create_quote_template(
         fitout.append([1, "\u7a97\u53f0\u77f3", "\u5957", 99, 0, 0, 10, None, "\u7a97\u53f0\u77f3"])
         fitout.append([2, "\u623f\u95f4\u6210\u54c1\u4fdd\u62a4", "\u95f4", 99, 0, 0, 10, None, "\u6210\u54c1\u4fdd\u62a4"])
         fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H27:H28)"])
+    if include_fixed_summary_items:
+        fitout.append(["\u56db", "\u96c6\u6210\u540a\u9876\u3001\u536b\u6d74\u3001\u5168\u5c4b\u5f00\u5173\u706f\u9970"])
+        fitout.append([1, "\u5168\u5c4b\u63d2\u5ea7\u5f00\u5173", "\u5957", 99, 0, 0, 10, None, "\u5f00\u5173"])
+        fitout.append([2, "\u5168\u5c4b\u706f\u9970", "\u5957", 99, 0, 0, 10, None, "\u706f\u9970"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H22:H23)"])
+        fitout.append(["\u4e94", "\u5176\u4ed6\uff08\u7a97\u5e18\u3001\u7f8e\u7f1d\u3001\u7a97\u53f0\u77f3\u7b49\uff09"])
+        fitout.append([1, "\u5168\u5c4b\u4fdd\u6d01", "\u5957", 99, 0, 0, 10, None, "\u4fdd\u6d01"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H25:H25)"])
     fitout.append(["A", "\u76f4\u63a5\u8d39\u5408\u8ba1(\u4e00+\u2026...\u5341)", None, None, None, None, None, "=H12+H18+H21"])
     fitout.append(["B", "\u5de5\u7a0b\u7ba1\u7406\u8d39(D=A* 5%)", None, None, None, None, None, "=H22*0.05"])
     fitout.append(["C", "\u7a0e\u91d1E=(A+B)* 3%", None, None, None, None, None, 0])

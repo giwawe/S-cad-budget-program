@@ -34,5 +34,10 @@
     "铝合金封门窗"
   ],
   "door_count_aggregate_items": [],
-  "door_area_aggregate_items": []
+  "door_area_aggregate_items": [],
+  "fixed_quantity_aggregate_items": {
+    "全屋插座开关": 1,
+    "全屋灯饰": 1,
+    "全屋保洁": 1
+  }
 }

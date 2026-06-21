@@ -161,6 +161,7 @@ class ResidentialQuoteRules:
     window_area_aggregate_items: set[str]
     door_count_aggregate_items: set[str]
     door_area_aggregate_items: set[str]
+    fixed_quantity_aggregate_items: dict[str, float]
     source_label: str
 
 
@@ -209,6 +210,7 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         window_area_aggregate_items=_optional_item_set(data, "window_area_aggregate_items"),
         door_count_aggregate_items=_optional_item_set(data, "door_count_aggregate_items"),
         door_area_aggregate_items=_optional_item_set(data, "door_area_aggregate_items"),
+        fixed_quantity_aggregate_items=_optional_quantity_map(data, "fixed_quantity_aggregate_items"),
         source_label=source_label,
     )
 
@@ -222,6 +224,19 @@ def _required_item_set(value: Any, key: str) -> set[str]:
 def _optional_item_set(data: dict[str, Any], key: str) -> set[str]:
     value = data.get(key, [])
     return _required_item_set(value, key)
+
+
+def _optional_quantity_map(data: dict[str, Any], key: str) -> dict[str, float]:
+    value = data.get(key, {})
+    if not isinstance(value, dict):
+        raise ValueError(f"{key} must be an object")
+    result: dict[str, float] = {}
+    for item_name, quantity in value.items():
+        try:
+            result[str(item_name)] = float(quantity)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{key}.{item_name} must be a number") from exc
+    return result
 
 
 def _required_float(data: dict[str, Any], key: str) -> float:
@@ -518,6 +533,12 @@ def _aggregate_quantity_for_item(
     rooms: list[QuantityRow],
     rules: ResidentialQuoteRules,
 ) -> QuoteAggregateQuantity | None:
+    if item_name in rules.fixed_quantity_aggregate_items:
+        return QuoteAggregateQuantity(
+            quantity=_round_quantity(rules.fixed_quantity_aggregate_items[item_name]),
+            basis="\u56fa\u5b9a\u6570\u91cf\u6c47\u603b",
+            rooms=[],
+        )
     if not rooms:
         return None
     if item_name in rules.room_count_aggregate_items:
