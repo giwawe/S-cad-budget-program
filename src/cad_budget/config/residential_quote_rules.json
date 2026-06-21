@@ -16,5 +16,23 @@
   ],
   "tile_area_aggregate_items": [
     "美缝"
-  ]
+  ],
+  "room_count_aggregate_items": [],
+  "wet_room_count_aggregate_items": [],
+  "kitchen_count_aggregate_items": [],
+  "bathroom_count_aggregate_items": [
+    "浴室柜",
+    "马桶",
+    "花洒",
+    "卫浴五件套",
+    "卫生间门"
+  ],
+  "window_count_aggregate_items": [
+    "窗台石"
+  ],
+  "window_area_aggregate_items": [
+    "铝合金封门窗"
+  ],
+  "door_count_aggregate_items": [],
+  "door_area_aggregate_items": []
 }

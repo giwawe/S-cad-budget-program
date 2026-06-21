@@ -153,6 +153,14 @@ class ResidentialQuoteRules:
     wall_tile_height: float
     floor_area_aggregate_items: set[str]
     tile_area_aggregate_items: set[str]
+    room_count_aggregate_items: set[str]
+    wet_room_count_aggregate_items: set[str]
+    kitchen_count_aggregate_items: set[str]
+    bathroom_count_aggregate_items: set[str]
+    window_count_aggregate_items: set[str]
+    window_area_aggregate_items: set[str]
+    door_count_aggregate_items: set[str]
+    door_area_aggregate_items: set[str]
     source_label: str
 
 
@@ -187,18 +195,33 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
     wet_room_heights = data["wet_room_heights"]
     floor_area_items = data["floor_area_aggregate_items"]
     tile_area_items = data["tile_area_aggregate_items"]
-    if not isinstance(floor_area_items, list):
-        raise ValueError("floor_area_aggregate_items must be a list")
-    if not isinstance(tile_area_items, list):
-        raise ValueError("tile_area_aggregate_items must be a list")
     return ResidentialQuoteRules(
         kitchen_waterproof_wall_height=_required_float(wet_room_heights, "kitchen_waterproof_wall_height"),
         bathroom_waterproof_wall_height=_required_float(wet_room_heights, "bathroom_waterproof_wall_height"),
         wall_tile_height=_required_float(wet_room_heights, "wall_tile_height"),
-        floor_area_aggregate_items={str(item) for item in floor_area_items},
-        tile_area_aggregate_items={str(item) for item in tile_area_items},
+        floor_area_aggregate_items=_required_item_set(floor_area_items, "floor_area_aggregate_items"),
+        tile_area_aggregate_items=_required_item_set(tile_area_items, "tile_area_aggregate_items"),
+        room_count_aggregate_items=_optional_item_set(data, "room_count_aggregate_items"),
+        wet_room_count_aggregate_items=_optional_item_set(data, "wet_room_count_aggregate_items"),
+        kitchen_count_aggregate_items=_optional_item_set(data, "kitchen_count_aggregate_items"),
+        bathroom_count_aggregate_items=_optional_item_set(data, "bathroom_count_aggregate_items"),
+        window_count_aggregate_items=_optional_item_set(data, "window_count_aggregate_items"),
+        window_area_aggregate_items=_optional_item_set(data, "window_area_aggregate_items"),
+        door_count_aggregate_items=_optional_item_set(data, "door_count_aggregate_items"),
+        door_area_aggregate_items=_optional_item_set(data, "door_area_aggregate_items"),
         source_label=source_label,
     )
+
+
+def _required_item_set(value: Any, key: str) -> set[str]:
+    if not isinstance(value, list):
+        raise ValueError(f"{key} must be a list")
+    return {str(item) for item in value}
+
+
+def _optional_item_set(data: dict[str, Any], key: str) -> set[str]:
+    value = data.get(key, [])
+    return _required_item_set(value, key)
 
 
 def _required_float(data: dict[str, Any], key: str) -> float:
@@ -497,6 +520,61 @@ def _aggregate_quantity_for_item(
 ) -> QuoteAggregateQuantity | None:
     if not rooms:
         return None
+    if item_name in rules.room_count_aggregate_items:
+        return QuoteAggregateQuantity(
+            quantity=len(rooms),
+            basis="\u6709\u6548\u7a7a\u95f4\u6570\u91cf\u6c47\u603b",
+            rooms=rooms,
+        )
+    if item_name in rules.wet_room_count_aggregate_items:
+        wet_rooms = [room for room in rooms if _is_wet_room(room)]
+        return QuoteAggregateQuantity(
+            quantity=len(wet_rooms),
+            basis="\u6e7f\u533a\u7a7a\u95f4\u6570\u91cf\u6c47\u603b",
+            rooms=wet_rooms,
+        )
+    if item_name in rules.kitchen_count_aggregate_items:
+        kitchen_rooms = [room for room in rooms if _is_kitchen(room)]
+        return QuoteAggregateQuantity(
+            quantity=len(kitchen_rooms),
+            basis="\u53a8\u623f\u6570\u91cf\u6c47\u603b",
+            rooms=kitchen_rooms,
+        )
+    if item_name in rules.bathroom_count_aggregate_items:
+        bathroom_rooms = [room for room in rooms if _is_bathroom(room)]
+        return QuoteAggregateQuantity(
+            quantity=len(bathroom_rooms),
+            basis="\u536b\u751f\u95f4\u6570\u91cf\u6c47\u603b",
+            rooms=bathroom_rooms,
+        )
+    if item_name in rules.window_count_aggregate_items:
+        window_rooms = [room for room in rooms if room.window_count > 0]
+        return QuoteAggregateQuantity(
+            quantity=sum(room.window_count for room in window_rooms),
+            basis="\u7a97\u6570\u91cf\u6c47\u603b",
+            rooms=window_rooms,
+        )
+    if item_name in rules.window_area_aggregate_items:
+        window_rooms = [room for room in rooms if room.window_area > 0]
+        return QuoteAggregateQuantity(
+            quantity=_round_quantity(sum(room.window_area for room in window_rooms)),
+            basis="\u7a97\u9762\u79ef\u6c47\u603b",
+            rooms=window_rooms,
+        )
+    if item_name in rules.door_count_aggregate_items:
+        door_rooms = [room for room in rooms if room.door_opening_count > 0]
+        return QuoteAggregateQuantity(
+            quantity=sum(room.door_opening_count for room in door_rooms),
+            basis="\u95e8\u6d1e\u6570\u91cf\u6c47\u603b",
+            rooms=door_rooms,
+        )
+    if item_name in rules.door_area_aggregate_items:
+        door_rooms = [room for room in rooms if room.door_opening_area > 0]
+        return QuoteAggregateQuantity(
+            quantity=_round_quantity(sum(room.door_opening_area for room in door_rooms)),
+            basis="\u95e8\u6d1e\u9762\u79ef\u6c47\u603b",
+            rooms=door_rooms,
+        )
     if item_name in rules.floor_area_aggregate_items:
         floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
         return QuoteAggregateQuantity(
@@ -622,7 +700,19 @@ def _should_generate_room_section(room: QuantityRow) -> bool:
 
 def _room_has_wall_tile(room: QuantityRow) -> bool:
     name = room.room_name
-    return any(keyword in name for keyword in ["\u53a8\u623f", "\u536b", "\u6d17\u624b\u95f4", "\u536b\u751f\u95f4", "\u9732\u53f0", "\u9633\u53f0"])
+    return _is_wet_room(room) or any(keyword in name for keyword in ["\u9732\u53f0", "\u9633\u53f0"])
+
+
+def _is_wet_room(room: QuantityRow) -> bool:
+    return _is_kitchen(room) or _is_bathroom(room)
+
+
+def _is_kitchen(room: QuantityRow) -> bool:
+    return "\u53a8\u623f" in room.room_name
+
+
+def _is_bathroom(room: QuantityRow) -> bool:
+    return any(keyword in room.room_name for keyword in ["\u536b", "\u6d17\u624b\u95f4", "\u536b\u751f\u95f4"])
 
 
 def _is_section_row(number: Any, sheet, row_index: int) -> bool:

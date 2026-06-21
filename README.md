@@ -124,11 +124,11 @@ The first quote version reads only the `整装` worksheet from the template and 
 
 Quote generation is automation-first: `confirmed` and `manually_edited` room quantities are marked `自动生成`; `default_inferred` rows are still generated and marked `自动生成-默认推断`; `needs_review` rows are still generated and marked `自动生成-异常提示`; template-default items are marked `按模板生成`. These statuses are review hints and do not block quote generation.
 
-Several non-room quote lines are auto-filled from whole-house aggregates when their template item names match the built-in rules. Cleanup, material handling, tile protection, wiring, water-pipe routing, wall chasing, and similar area-based items use the summed included indoor floor area. `美缝` uses generated tile work area: floor tile area plus wet-area wall tile area. Items without a reliable CAD quantity source, such as doors, sanitary ware, curtains, custom cabinetry, and tile piece counts, continue to use template defaults.
+Several non-room quote lines are auto-filled from whole-house aggregates when their template item names match the built-in rules. Cleanup, material handling, tile protection, wiring, water-pipe routing, wall chasing, and similar area-based items use the summed included indoor floor area. `美缝` uses generated tile work area: floor tile area plus wet-area wall tile area. Rule files can also opt template items into room-count, wet-room-count, kitchen-count, bathroom-count, window-count, window-area, door-count, and door-area aggregates. Items without a reliable CAD quantity source, such as custom cabinetry and tile piece counts, continue to use template defaults.
 
 Wet-room quote quantities use dedicated height rules instead of full wall net area: kitchen waterproofing is floor area plus wall length below 0.3m; bathroom waterproofing is floor area plus wall length below 1.8m; wall tile area is wall length below 2.5m minus known window area.
 
-Default residential quote rules live in `src/cad_budget/config/residential_quote_rules.json`. The CLI automatically uses this packaged rule file. To customize wet-room heights or whole-house aggregate item names, export an editable copy first:
+Default residential quote rules live in `src/cad_budget/config/residential_quote_rules.json`. The CLI automatically uses this packaged rule file. To customize wet-room heights or whole-house aggregate item names, export an editable copy first. Older rule files with only the original area aggregate fields remain valid; omitted optional aggregate lists default to empty.
 
 ```powershell
 cad-budget init-rules --output my-rules.json

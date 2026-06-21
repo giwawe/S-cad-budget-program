@@ -33,6 +33,10 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert rules.wall_tile_height == 2.5
     assert "\u5783\u573e\u6e05\u8fd0\u8d39" in rules.floor_area_aggregate_items
     assert "\u7f8e\u7f1d" in rules.tile_area_aggregate_items
+    assert "\u6d74\u5ba4\u67dc" in rules.bathroom_count_aggregate_items
+    assert "\u536b\u751f\u95f4\u95e8" in rules.bathroom_count_aggregate_items
+    assert "\u7a97\u53f0\u77f3" in rules.window_count_aggregate_items
+    assert "\u94dd\u5408\u91d1\u5c01\u95e8\u7a97" in rules.window_area_aggregate_items
 
 
 def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkeypatch):
@@ -334,6 +338,105 @@ def test_export_residential_quote_auto_fills_tile_area_items(tmp_path: Path):
     )
 
 
+def test_export_residential_quote_auto_fills_count_and_opening_aggregate_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    rules_path = tmp_path / "rules.json"
+    _create_quote_template(template_path, include_count_summary_items=True)
+    rules_path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": 0.3,
+                    "bathroom_waterproof_wall_height": 1.8,
+                    "wall_tile_height": 2.5,
+                },
+                "floor_area_aggregate_items": [],
+                "tile_area_aggregate_items": [],
+                "room_count_aggregate_items": ["\u623f\u95f4\u6210\u54c1\u4fdd\u62a4"],
+                "bathroom_count_aggregate_items": ["\u6d74\u5ba4\u67dc"],
+                "window_count_aggregate_items": ["\u7a97\u53f0\u77f3"],
+                "window_area_aggregate_items": ["\u94dd\u5408\u91d1\u5c01\u95e8\u7a97"],
+                "door_count_aggregate_items": ["\u5ba4\u5185\u95e8"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    result = QuantityResult(
+        project_name="Count Summary Demo",
+        rows=[
+            _quantity_row(
+                "living",
+                "\u5ba2\u5385",
+                floor_area=20.0,
+                net_wall_area=50.0,
+                window_count=2,
+                window_area=5.5,
+                door_opening_count=1,
+            ),
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                wall_measure_perimeter=10.0,
+                window_count=1,
+                window_area=1.0,
+                door_opening_count=1,
+            ),
+            _quantity_row(
+                "bath",
+                "\u4e3b\u536b",
+                floor_area=3.0,
+                net_wall_area=15.0,
+                wall_measure_perimeter=8.0,
+                window_count=1,
+                window_area=0.5,
+                door_opening_count=1,
+            ),
+            _quantity_row(
+                "shaft",
+                "\u7535\u68af\u4e95",
+                floor_area=4.0,
+                net_wall_area=12.0,
+                window_count=3,
+                window_area=9.0,
+                door_opening_count=2,
+                status=DataStatus.EXCLUDED,
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path, rules_path=rules_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    room_protection = _row_containing(rows, "\u623f\u95f4\u6210\u54c1\u4fdd\u62a4")
+    vanity = _row_containing(rows, "\u6d74\u5ba4\u67dc")
+    windowsill = _item_row_named(rows, "\u7a97\u53f0\u77f3")
+    sealed_windows = _row_containing(rows, "\u94dd\u5408\u91d1\u5c01\u95e8\u7a97")
+    interior_door = _item_row_named(rows, "\u5ba4\u5185\u95e8")
+    assert room_protection[3] == 3
+    assert vanity[3] == 1
+    assert windowsill[3] == 4
+    assert sealed_windows[3] == 7.0
+    assert interior_door[3] == 3
+    assert room_protection[9:15] == (
+        "\u81ea\u52a8\u6c47\u603b",
+        "\u5168\u5c4b",
+        None,
+        "\u6709\u6548\u7a7a\u95f4\u6570\u91cf\u6c47\u603b",
+        "\u81ea\u52a8\u751f\u6210",
+        None,
+    )
+    assert vanity[12] == "\u536b\u751f\u95f4\u6570\u91cf\u6c47\u603b"
+    assert windowsill[12] == "\u7a97\u6570\u91cf\u6c47\u603b"
+    assert sealed_windows[12] == "\u7a97\u9762\u79ef\u6c47\u603b"
+    assert interior_door[12] == "\u95e8\u6d1e\u6570\u91cf\u6c47\u603b"
+
+
 def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
@@ -450,6 +553,7 @@ def _create_quote_template(
     *,
     include_both_wall_tile_variants: bool = False,
     include_area_summary_items: bool = False,
+    include_count_summary_items: bool = False,
 ) -> None:
     workbook = Workbook()
     half = workbook.active
@@ -484,6 +588,18 @@ def _create_quote_template(
         fitout.append([4, "\u5f3a\u7535\u5e03\u7ebf", "M2", 99, 0, 0, 10, None, "\u5f3a\u7535"])
         fitout.append([5, "\u7f8e\u7f1d", "M2", 99, 0, 0, 10, None, "\u7f8e\u7f1d"])
     fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H20:H20)"])
+    if include_count_summary_items:
+        fitout.append(["\u56db", "\u5ba4\u5185\u95e8"])
+        fitout.append([1, "\u5ba4\u5185\u95e8", "\u6a18", 99, 0, 0, 10, None, "\u95e8"])
+        fitout.append([2, "\u94dd\u5408\u91d1\u5c01\u95e8\u7a97", "M2", 99, 0, 0, 10, None, "\u5c01\u7a97"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H22:H23)"])
+        fitout.append(["\u4e94", "\u536b\u6d74"])
+        fitout.append([1, "\u6d74\u5ba4\u67dc", "\u5957", 99, 0, 0, 10, None, "\u6d74\u5ba4\u67dc"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H25:H25)"])
+        fitout.append(["\u516d", "\u5176\u4ed6\uff08\u7a97\u5e18\u3001\u7f8e\u7f1d\u3001\u7a97\u53f0\u77f3\u7b49\uff09"])
+        fitout.append([1, "\u7a97\u53f0\u77f3", "\u5957", 99, 0, 0, 10, None, "\u7a97\u53f0\u77f3"])
+        fitout.append([2, "\u623f\u95f4\u6210\u54c1\u4fdd\u62a4", "\u95f4", 99, 0, 0, 10, None, "\u6210\u54c1\u4fdd\u62a4"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H27:H28)"])
     fitout.append(["A", "\u76f4\u63a5\u8d39\u5408\u8ba1(\u4e00+\u2026...\u5341)", None, None, None, None, None, "=H12+H18+H21"])
     fitout.append(["B", "\u5de5\u7a0b\u7ba1\u7406\u8d39(D=A* 5%)", None, None, None, None, None, "=H22*0.05"])
     fitout.append(["C", "\u7a0e\u91d1E=(A+B)* 3%", None, None, None, None, None, 0])
@@ -533,7 +649,10 @@ def _quantity_row(
     floor_area: float,
     net_wall_area: float,
     wall_measure_perimeter: float = 0,
+    window_count: int = 0,
     window_area: float = 0,
+    door_opening_count: int = 0,
+    door_opening_area: float = 0,
     status: DataStatus = DataStatus.CONFIRMED,
     exception_notes: list[str] | None = None,
 ) -> QuantityRow:
@@ -549,10 +668,10 @@ def _quantity_row(
         wall_measure_perimeter=wall_measure_perimeter,
         open_boundary_length=0,
         gross_wall_area=net_wall_area,
-        window_count=0,
+        window_count=window_count,
         window_area=window_area,
-        door_opening_count=0,
-        door_opening_area=0,
+        door_opening_count=door_opening_count,
+        door_opening_area=door_opening_area,
         net_wall_area=net_wall_area,
         is_outdoor=False,
         include_in_floor_quantity=True,
@@ -565,6 +684,13 @@ def _quantity_row(
 def _row_containing(rows, text: str):
     for row in rows:
         if any(text in cell for cell in row if isinstance(cell, str)):
+            return row
+    return None
+
+
+def _item_row_named(rows, item_name: str):
+    for row in rows:
+        if isinstance(row[0], int) and row[1] == item_name:
             return row
     return None
 
