@@ -395,6 +395,61 @@ def test_door_with_width_only_reports_count_and_zero_area():
     assert row.door_opening_area == 0.0
 
 
+def test_window_details_include_wall_segment_length_for_curtain_takeoff():
+    project = ProjectInput(
+        project_name="Curtain wall length",
+        rooms=[RoomBoundary(id="living", points=rect(0, 0, 4, 3), name="客厅")],
+        windows=[
+            WindowMarker(id="w1", point=Point(x=1, y=0), width=1.2, height=1.5),
+            WindowMarker(id="w2", point=Point(x=3, y=0), width=0.8),
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    details = result.rows[0].window_details
+    assert [detail.id for detail in details] == ["w1", "w2"]
+    assert details[0].area == 1.8
+    assert details[0].height == 1.5
+    assert details[0].height_defaulted is False
+    assert details[0].wall_segment_key == "living:0"
+    assert details[0].wall_segment_length == 4.0
+    assert details[1].area == 1.2
+    assert details[1].height == 1.5
+    assert details[1].height_defaulted is True
+    assert details[1].wall_segment_key == "living:0"
+    assert details[1].wall_segment_length == 4.0
+
+
+def test_door_details_use_default_effective_height_without_changing_existing_area():
+    project = ProjectInput(
+        project_name="Door details",
+        rooms=[RoomBoundary(id="kitchen", points=rect(0, 0, 4, 3), name="厨房")],
+        doors=[
+            DoorMarker(id="wide", point=Point(x=2, y=0), width=1.6),
+            DoorMarker(id="normal", point=Point(x=4, y=1), width=0.9, height=2.0),
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    row = result.rows[0]
+    assert row.door_opening_count == 2
+    assert row.door_opening_area == 1.8
+    wide, normal = row.door_details
+    assert wide.id == "wide"
+    assert wide.room_id == "kitchen"
+    assert wide.width == 1.6
+    assert wide.height is None
+    assert wide.effective_height == 2.1
+    assert wide.height_defaulted is True
+    assert wide.area == 3.36
+    assert normal.id == "normal"
+    assert normal.effective_height == 2.0
+    assert normal.height_defaulted is False
+    assert normal.area == 1.8
+
+
 def test_void_space_uses_custom_height_and_keeps_single_floor_area():
     project = ProjectInput(
         project_name="Villa Void",

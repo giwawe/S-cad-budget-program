@@ -3,7 +3,7 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
-from cad_budget.models import DataStatus, HeightMode, QuantityRow, QuantityResult, SpaceType
+from cad_budget.models import DataStatus, DoorQuantityDetail, HeightMode, QuantityRow, QuantityResult, SpaceType, WindowQuantityDetail
 from cad_budget import quote_excel
 from cad_budget.quote_excel import export_residential_quote, load_default_quote_rules, load_quote_rules, parse_quote_template
 
@@ -38,6 +38,15 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u7a97\u53f0\u77f3" in rules.window_count_aggregate_items
     assert "\u94dd\u5408\u91d1\u5c01\u95e8\u7a97" in rules.window_area_aggregate_items
     assert rules.fixed_quantity_aggregate_items["\u5168\u5c4b\u4fdd\u6d01"] == 1
+    assert rules.tile_piece_loss_rate == 0.05
+    assert rules.wide_door_width_threshold == 1.4
+    assert rules.default_door_height == 2.1
+    assert "\u7a97\u5e18" in rules.curtain_wall_length_items
+    assert "\u5730\u9762\u74f7\u7816" in rules.floor_tile_piece_items
+    assert "\u5899\u9762\u74f7\u7816" in rules.wall_tile_piece_items
+    assert "\u5ba4\u5185\u95e8" in rules.interior_door_count_items
+    assert "\u53a8\u623f\u63a8\u62c9\u95e8" in rules.sliding_door_area_items
+    assert "\u6dcb\u6d74\u9694\u65ad" in rules.bathroom_count_aggregate_items
 
 
 def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkeypatch):
@@ -169,6 +178,61 @@ def test_load_quote_rules_reports_non_numeric_fixed_quantity(tmp_path: Path):
         load_quote_rules(rules_path)
     except ValueError as exc:
         assert "fixed_quantity_aggregate_items.\u5168\u5c4b\u4fdd\u6d01 must be a number" in str(exc)
+    else:
+        raise AssertionError("Expected invalid quote rules to raise ValueError")
+
+
+def test_load_quote_rules_reports_non_numeric_advanced_number(tmp_path: Path):
+    rules_path = tmp_path / "rules.json"
+    rules_path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": 0.3,
+                    "bathroom_waterproof_wall_height": 1.8,
+                    "wall_tile_height": 2.5,
+                },
+                "floor_area_aggregate_items": [],
+                "tile_area_aggregate_items": [],
+                "tile_piece_loss_rate": "bad",
+                "wide_door_width_threshold": "wide",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        load_quote_rules(rules_path)
+    except ValueError as exc:
+        assert "tile_piece_loss_rate must be a number" in str(exc)
+    else:
+        raise AssertionError("Expected invalid quote rules to raise ValueError")
+
+
+def test_load_quote_rules_reports_non_numeric_door_threshold(tmp_path: Path):
+    rules_path = tmp_path / "rules.json"
+    rules_path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": 0.3,
+                    "bathroom_waterproof_wall_height": 1.8,
+                    "wall_tile_height": 2.5,
+                },
+                "floor_area_aggregate_items": [],
+                "tile_area_aggregate_items": [],
+                "wide_door_width_threshold": "wide",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        load_quote_rules(rules_path)
+    except ValueError as exc:
+        assert "wide_door_width_threshold must be a number" in str(exc)
     else:
         raise AssertionError("Expected invalid quote rules to raise ValueError")
 
@@ -513,6 +577,302 @@ def test_export_residential_quote_auto_fills_fixed_quantity_items(tmp_path: Path
     )
 
 
+def test_export_residential_quote_auto_fills_curtains_by_unique_window_wall_length(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_advanced_summary_items=True)
+    result = QuantityResult(
+        project_name="Curtain Demo",
+        rows=[
+            _quantity_row(
+                "living",
+                "\u5ba2\u5385",
+                floor_area=20.0,
+                net_wall_area=50.0,
+                window_details=[
+                    WindowQuantityDetail(
+                        id="w1",
+                        width=1.2,
+                        height=1.5,
+                        area=1.8,
+                        height_defaulted=False,
+                        wall_segment_key="living:0",
+                        wall_segment_length=4.0,
+                    ),
+                    WindowQuantityDetail(
+                        id="w2",
+                        width=0.8,
+                        height=1.5,
+                        area=1.2,
+                        height_defaulted=True,
+                        wall_segment_key="living:0",
+                        wall_segment_length=4.0,
+                    ),
+                    WindowQuantityDetail(
+                        id="w3",
+                        width=1.0,
+                        height=1.5,
+                        area=1.5,
+                        height_defaulted=False,
+                        wall_segment_key="living:1",
+                        wall_segment_length=3.0,
+                    ),
+                ],
+            )
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    curtains = _item_row_named(rows, "\u7a97\u5e18")
+    assert curtains[3] == 7.0
+    assert curtains[9:15] == (
+        "\u81ea\u52a8\u6c47\u603b",
+        "\u5168\u5c4b",
+        None,
+        "\u7a97\u6240\u5728\u5899\u9762\u957f\u5ea6\u6c47\u603b",
+        "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
+        "\u7a97\u5e18\u6309\u540c\u623f\u95f4\u540c\u5899\u6bb5\u53bb\u91cd\uff0cL\u5f62\u7a97\u9700\u4eba\u5de5\u786e\u8ba4",
+    )
+
+
+def test_export_residential_quote_auto_fills_tile_piece_counts_from_area_and_spec(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_advanced_summary_items=True)
+    result = QuantityResult(
+        project_name="Tile Piece Demo",
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0, wall_measure_perimeter=10.0, window_area=1.0),
+            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=15.0, wall_measure_perimeter=8.0, window_area=0.5),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    floor_tiles = _item_row_named(rows, "\u5730\u9762\u74f7\u7816")
+    wall_tiles = _item_row_named(rows, "\u5899\u9762\u74f7\u7816")
+    assert floor_tiles[3] == 28
+    assert floor_tiles[12] == "\u5730\u7816\u9762\u79ef\u6309750X1500\u89c4\u683c+5%\u635f\u8017\u6298\u7b97\u7247\u6570"
+    assert wall_tiles[3] == 64
+    assert wall_tiles[12] == "\u5899\u7816\u9762\u79ef\u6309600x1200\u89c4\u683c+5%\u635f\u8017\u6298\u7b97\u7247\u6570"
+
+
+def test_export_residential_quote_parses_tile_spec_with_star_separator(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_advanced_summary_items=True)
+    workbook = load_workbook(template_path)
+    sheet = workbook["\u6574\u88c5"]
+    for row in range(1, sheet.max_row + 1):
+        if sheet.cell(row=row, column=2).value == "\u5730\u9762\u74f7\u7816":
+            sheet.cell(row=row, column=9).value = "750*1500\u74f7\u7816"
+        if sheet.cell(row=row, column=2).value == "\u5899\u9762\u74f7\u7816":
+            sheet.cell(row=row, column=9).value = "600*1200\u74f7\u7816"
+    workbook.save(template_path)
+    result = QuantityResult(
+        project_name="Star Tile Spec Demo",
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0, wall_measure_perimeter=10.0, window_area=1.0),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    floor_tiles = _item_row_named(rows, "\u5730\u9762\u74f7\u7816")
+    wall_tiles = _item_row_named(rows, "\u5899\u9762\u74f7\u7816")
+    assert floor_tiles[3] == 25
+    assert floor_tiles[12] == "\u5730\u7816\u9762\u79ef\u6309750*1500\u89c4\u683c+5%\u635f\u8017\u6298\u7b97\u7247\u6570"
+    assert wall_tiles[3] == 35
+    assert wall_tiles[12] == "\u5899\u7816\u9762\u79ef\u6309600*1200\u89c4\u683c+5%\u635f\u8017\u6298\u7b97\u7247\u6570"
+
+
+def test_export_residential_quote_reports_unparseable_tile_spec(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_advanced_summary_items=True)
+    workbook = load_workbook(template_path)
+    sheet = workbook["\u6574\u88c5"]
+    for row in range(1, sheet.max_row + 1):
+        if sheet.cell(row=row, column=2).value == "\u5730\u9762\u74f7\u7816":
+            sheet.cell(row=row, column=9).value = "\u5730\u7816"
+            break
+    workbook.save(template_path)
+    result = QuantityResult(
+        project_name="Bad Tile Spec Demo",
+        rows=[_quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0)],
+        exceptions=[],
+    )
+
+    try:
+        export_residential_quote(result, template_path, output_path)
+    except ValueError as exc:
+        assert "Cannot parse tile specification" in str(exc)
+        assert "\u5730\u9762\u74f7\u7816 \u5730\u7816" in str(exc)
+    else:
+        raise AssertionError("Expected invalid tile specification to raise ValueError")
+
+
+def test_export_residential_quote_auto_fills_doors_and_shower_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_advanced_summary_items=True)
+    result = QuantityResult(
+        project_name="Door Demo",
+        rows=[
+            _quantity_row(
+                "living",
+                "\u5ba2\u5385",
+                floor_area=20.0,
+                net_wall_area=50.0,
+                door_details=[
+                    DoorQuantityDetail(id="d1", room_id="living", width=0.9, height=2.1, effective_height=2.1, area=1.89),
+                ],
+            ),
+            _quantity_row(
+                "bedroom",
+                "\u6b21\u5367",
+                floor_area=10.0,
+                net_wall_area=30.0,
+                door_details=[
+                    DoorQuantityDetail(id="d1", room_id="bedroom", width=0.9, height=2.1, effective_height=2.1, area=1.89),
+                ],
+            ),
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                wall_measure_perimeter=10.0,
+                door_details=[
+                    DoorQuantityDetail(
+                        id="slide",
+                        room_id="kitchen",
+                        width=1.6,
+                        height=None,
+                        effective_height=2.1,
+                        height_defaulted=True,
+                        area=3.36,
+                    )
+                ],
+            ),
+            _quantity_row(
+                "study",
+                "\u4e66\u623f",
+                floor_area=8.0,
+                net_wall_area=24.0,
+                door_details=[
+                    DoorQuantityDetail(
+                        id="slide",
+                        room_id="study",
+                        width=1.6,
+                        height=None,
+                        effective_height=2.1,
+                        height_defaulted=True,
+                        area=3.36,
+                    )
+                ],
+            ),
+            _quantity_row(
+                "bath",
+                "\u4e3b\u536b",
+                floor_area=3.0,
+                net_wall_area=15.0,
+                wall_measure_perimeter=8.0,
+                door_details=[
+                    DoorQuantityDetail(id="bath-door", room_id="bath", width=0.8, height=2.1, effective_height=2.1, area=1.68),
+                ],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    interior_door = _item_row_named(rows, "\u5ba4\u5185\u95e8")
+    sliding_door = _item_row_named(rows, "\u53a8\u623f\u63a8\u62c9\u95e8")
+    shower_partition = _item_row_named(rows, "\u6dcb\u6d74\u9694\u65ad")
+    glass_shower = _item_row_named(rows, "\u73bb\u7483\u6dcb\u6d74\u623f")
+    assert interior_door[3] == 1
+    assert interior_door[12] == "\u666e\u901a\u5ba4\u5185\u95e8\u6d1e\u6570\u91cf\u6c47\u603b"
+    assert sliding_door[3] == 3.36
+    assert sliding_door[12] == "\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u9762\u79ef\u6c47\u603b"
+    assert "\u9ed8\u8ba4\u95e8\u9ad82.1m" in sliding_door[14]
+    assert shower_partition[3] == 1
+    assert shower_partition[12] == "\u536b\u751f\u95f4\u6570\u91cf\u6c47\u603b"
+    assert glass_shower[9] == "\u6a21\u677f\u9ed8\u8ba4"
+
+
+def test_export_residential_quote_uses_custom_default_door_height_for_sliding_doors(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    rules_path = tmp_path / "rules.json"
+    _create_quote_template(template_path, include_advanced_summary_items=True)
+    rules_path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": 0.3,
+                    "bathroom_waterproof_wall_height": 1.8,
+                    "wall_tile_height": 2.5,
+                },
+                "floor_area_aggregate_items": [],
+                "tile_area_aggregate_items": [],
+                "sliding_door_area_items": ["\u53a8\u623f\u63a8\u62c9\u95e8"],
+                "wide_door_width_threshold": 1.4,
+                "default_door_height": 2.4,
+                "sliding_door_room_keywords": ["\u53a8\u623f"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    result = QuantityResult(
+        project_name="Custom Door Height Demo",
+        rows=[
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                door_details=[
+                    DoorQuantityDetail(
+                        id="slide",
+                        room_id="kitchen",
+                        width=1.6,
+                        height=None,
+                        effective_height=2.1,
+                        height_defaulted=True,
+                        area=3.36,
+                    )
+                ],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path, rules_path=rules_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    sliding_door = _item_row_named(rows, "\u53a8\u623f\u63a8\u62c9\u95e8")
+    assert sliding_door[3] == 3.84
+    assert "\u9ed8\u8ba4\u95e8\u9ad82.4m" in sliding_door[14]
+
+
 def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
@@ -631,6 +991,7 @@ def _create_quote_template(
     include_area_summary_items: bool = False,
     include_count_summary_items: bool = False,
     include_fixed_summary_items: bool = False,
+    include_advanced_summary_items: bool = False,
 ) -> None:
     workbook = Workbook()
     half = workbook.active
@@ -685,6 +1046,22 @@ def _create_quote_template(
         fitout.append(["\u4e94", "\u5176\u4ed6\uff08\u7a97\u5e18\u3001\u7f8e\u7f1d\u3001\u7a97\u53f0\u77f3\u7b49\uff09"])
         fitout.append([1, "\u5168\u5c4b\u4fdd\u6d01", "\u5957", 99, 0, 0, 10, None, "\u4fdd\u6d01"])
         fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H25:H25)"])
+    if include_advanced_summary_items:
+        fitout.append(["\u56db", "\u4e3b\u6750\u9879\u76ee"])
+        fitout.append([1, "\u5730\u9762\u74f7\u7816", "\u7247", 99, 0, 0, 10, None, "\u5730\u7816(750X1500)"])
+        fitout.append([2, "\u5899\u9762\u74f7\u7816", "\u7247", 99, 0, 0, 10, None, "\u5899\u7816(600x1200)"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H22:H23)"])
+        fitout.append(["\u4e94", "\u5ba4\u5185\u95e8"])
+        fitout.append([1, "\u5ba4\u5185\u95e8", "\u6a18", 99, 0, 0, 10, None, "\u95e8"])
+        fitout.append([2, "\u53a8\u623f\u63a8\u62c9\u95e8", "M2", 99, 0, 0, 10, None, "\u63a8\u62c9\u95e8"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H25:H26)"])
+        fitout.append(["\u516d", "\u96c6\u6210\u540a\u9876\u3001\u536b\u6d74\u3001\u5168\u5c4b\u5f00\u5173\u706f\u9970"])
+        fitout.append([1, "\u6dcb\u6d74\u9694\u65ad", "\u5957", 99, 0, 0, 10, None, "\u6dcb\u6d74\u9694\u65ad"])
+        fitout.append([2, "\u73bb\u7483\u6dcb\u6d74\u623f", "\u5957", 99, 0, 0, 10, None, "\u73bb\u7483\u6dcb\u6d74\u623f"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H28:H29)"])
+        fitout.append(["\u4e03", "\u5176\u4ed6\uff08\u7a97\u5e18\u3001\u7f8e\u7f1d\u3001\u7a97\u53f0\u77f3\u7b49\uff09"])
+        fitout.append([1, "\u7a97\u5e18", "\u7c73", 99, 0, 0, 10, None, "\u7a97\u5e18"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H31:H31)"])
     fitout.append(["A", "\u76f4\u63a5\u8d39\u5408\u8ba1(\u4e00+\u2026...\u5341)", None, None, None, None, None, "=H12+H18+H21"])
     fitout.append(["B", "\u5de5\u7a0b\u7ba1\u7406\u8d39(D=A* 5%)", None, None, None, None, None, "=H22*0.05"])
     fitout.append(["C", "\u7a0e\u91d1E=(A+B)* 3%", None, None, None, None, None, 0])
@@ -736,8 +1113,10 @@ def _quantity_row(
     wall_measure_perimeter: float = 0,
     window_count: int = 0,
     window_area: float = 0,
+    window_details: list[WindowQuantityDetail] | None = None,
     door_opening_count: int = 0,
     door_opening_area: float = 0,
+    door_details: list[DoorQuantityDetail] | None = None,
     status: DataStatus = DataStatus.CONFIRMED,
     exception_notes: list[str] | None = None,
 ) -> QuantityRow:
@@ -755,8 +1134,10 @@ def _quantity_row(
         gross_wall_area=net_wall_area,
         window_count=window_count,
         window_area=window_area,
+        window_details=window_details or [],
         door_opening_count=door_opening_count,
         door_opening_area=door_opening_area,
+        door_details=door_details or [],
         net_wall_area=net_wall_area,
         is_outdoor=False,
         include_in_floor_quantity=True,

@@ -1,7 +1,9 @@
 from dataclasses import dataclass, field
 import json
+import math
 from importlib import resources
 from pathlib import Path
+import re
 from typing import Any
 
 from openpyxl import Workbook, load_workbook
@@ -144,6 +146,8 @@ class QuoteAggregateQuantity:
     quantity: float
     basis: str
     rooms: list[QuantityRow]
+    review_status: str | None = None
+    review_note: str | None = None
 
 
 @dataclass
@@ -162,6 +166,15 @@ class ResidentialQuoteRules:
     door_count_aggregate_items: set[str]
     door_area_aggregate_items: set[str]
     fixed_quantity_aggregate_items: dict[str, float]
+    curtain_wall_length_items: set[str]
+    floor_tile_piece_items: set[str]
+    wall_tile_piece_items: set[str]
+    interior_door_count_items: set[str]
+    sliding_door_area_items: set[str]
+    tile_piece_loss_rate: float
+    wide_door_width_threshold: float
+    default_door_height: float
+    sliding_door_room_keywords: set[str]
     source_label: str
 
 
@@ -211,6 +224,15 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         door_count_aggregate_items=_optional_item_set(data, "door_count_aggregate_items"),
         door_area_aggregate_items=_optional_item_set(data, "door_area_aggregate_items"),
         fixed_quantity_aggregate_items=_optional_quantity_map(data, "fixed_quantity_aggregate_items"),
+        curtain_wall_length_items=_optional_item_set(data, "curtain_wall_length_items"),
+        floor_tile_piece_items=_optional_item_set(data, "floor_tile_piece_items"),
+        wall_tile_piece_items=_optional_item_set(data, "wall_tile_piece_items"),
+        interior_door_count_items=_optional_item_set(data, "interior_door_count_items"),
+        sliding_door_area_items=_optional_item_set(data, "sliding_door_area_items"),
+        tile_piece_loss_rate=_optional_float(data, "tile_piece_loss_rate", 0.05),
+        wide_door_width_threshold=_optional_float(data, "wide_door_width_threshold", 1.4),
+        default_door_height=_optional_float(data, "default_door_height", 2.1),
+        sliding_door_room_keywords=_optional_item_set(data, "sliding_door_room_keywords"),
         source_label=source_label,
     )
 
@@ -244,6 +266,15 @@ def _required_float(data: dict[str, Any], key: str) -> float:
         return float(data[key])
     except KeyError:
         raise
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{key} must be a number") from exc
+
+
+def _optional_float(data: dict[str, Any], key: str, default: float) -> float:
+    if key not in data:
+        return default
+    try:
+        return float(data[key])
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{key} must be a number") from exc
 
@@ -361,14 +392,14 @@ def _append_section(
     first_item_row = sheet.max_row + 1
     for item_number, item in enumerate(items, start=1):
         row_index = sheet.max_row + 1
-        aggregate = _aggregate_quantity_for_item(item.name, included_rooms or [], rules) if room is None else None
+        aggregate = _aggregate_quantity_for_item(item, included_rooms or [], rules) if room is None else None
         if room is not None:
             quantity = _quantity_for_item(item.name, room, rules)
         elif aggregate is not None:
             quantity = aggregate.quantity
         else:
             quantity = item.template_quantity
-        review_values = _review_values_for_item(item.name, room, aggregate)
+        review_values = _review_values_for_item(item.name, room, aggregate, rules)
         sheet.append(
             [
                 item_number,
@@ -529,10 +560,11 @@ def _quantity_for_item(item_name: str, room: QuantityRow, rules: ResidentialQuot
 
 
 def _aggregate_quantity_for_item(
-    item_name: str,
+    item: QuoteTemplateItem,
     rooms: list[QuantityRow],
     rules: ResidentialQuoteRules,
 ) -> QuoteAggregateQuantity | None:
+    item_name = item.name
     if item_name in rules.fixed_quantity_aggregate_items:
         return QuoteAggregateQuantity(
             quantity=_round_quantity(rules.fixed_quantity_aggregate_items[item_name]),
@@ -541,6 +573,58 @@ def _aggregate_quantity_for_item(
         )
     if not rooms:
         return None
+    if item_name in rules.curtain_wall_length_items:
+        curtain_quantity = _curtain_wall_length(rooms)
+        curtain_rooms = [room for room in rooms if room.window_details]
+        if curtain_quantity <= 0 or not curtain_rooms:
+            return None
+        return QuoteAggregateQuantity(
+            quantity=curtain_quantity,
+            basis="\u7a97\u6240\u5728\u5899\u9762\u957f\u5ea6\u6c47\u603b",
+            rooms=curtain_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
+            review_note="\u7a97\u5e18\u6309\u540c\u623f\u95f4\u540c\u5899\u6bb5\u53bb\u91cd\uff0cL\u5f62\u7a97\u9700\u4eba\u5de5\u786e\u8ba4",
+        )
+    if item_name in rules.floor_tile_piece_items:
+        tile_area_rooms = [room for room in rooms if room.include_in_floor_quantity]
+        spec = _tile_spec_from_text(item.name, item.description)
+        return QuoteAggregateQuantity(
+            quantity=_tile_piece_count(sum(room.floor_area for room in tile_area_rooms), spec, rules.tile_piece_loss_rate),
+            basis=_tile_piece_basis("\u5730\u7816\u9762\u79ef", spec, rules.tile_piece_loss_rate),
+            rooms=tile_area_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210",
+        )
+    if item_name in rules.wall_tile_piece_items:
+        wall_tile_rooms = [room for room in rooms if _room_has_wall_tile(room)]
+        spec = _tile_spec_from_text(item.name, item.description)
+        return QuoteAggregateQuantity(
+            quantity=_tile_piece_count(sum(_wet_wall_tile_area(room, rules) for room in wall_tile_rooms), spec, rules.tile_piece_loss_rate),
+            basis=_tile_piece_basis("\u5899\u7816\u9762\u79ef", spec, rules.tile_piece_loss_rate),
+            rooms=wall_tile_rooms,
+            review_status=_wall_tile_review_status(wall_tile_rooms),
+            review_note=_window_default_note_for_rooms(wall_tile_rooms),
+        )
+    if item_name in rules.interior_door_count_items:
+        door_count, door_rooms = _ordinary_interior_door_count(rooms, rules)
+        if door_count <= 0:
+            return None
+        return QuoteAggregateQuantity(
+            quantity=door_count,
+            basis="\u666e\u901a\u5ba4\u5185\u95e8\u6d1e\u6570\u91cf\u6c47\u603b",
+            rooms=door_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210",
+        )
+    if item_name in rules.sliding_door_area_items:
+        door_area, door_rooms = _sliding_door_area(rooms, rules)
+        if door_area <= 0:
+            return None
+        return QuoteAggregateQuantity(
+            quantity=door_area,
+            basis="\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u9762\u79ef\u6c47\u603b",
+            rooms=door_rooms,
+            review_status=_door_area_review_status(door_rooms),
+            review_note=_door_default_note_for_rooms(door_rooms, rules),
+        )
     if item_name in rules.room_count_aggregate_items:
         return QuoteAggregateQuantity(
             quantity=len(rooms),
@@ -567,6 +651,7 @@ def _aggregate_quantity_for_item(
             quantity=len(bathroom_rooms),
             basis="\u536b\u751f\u95f4\u6570\u91cf\u6c47\u603b",
             rooms=bathroom_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.window_count_aggregate_items:
         window_rooms = [room for room in rooms if room.window_count > 0]
@@ -620,6 +705,7 @@ def _review_values_for_item(
     item_name: str,
     room: QuantityRow | None,
     aggregate: QuoteAggregateQuantity | None = None,
+    rules: ResidentialQuoteRules | None = None,
 ) -> list[str | None]:
     if aggregate is not None:
         return [
@@ -627,8 +713,10 @@ def _review_values_for_item(
             "\u5168\u5c4b",
             None,
             aggregate.basis,
-            _review_status_for_rooms(aggregate.rooms),
-            _review_note_for_rooms(aggregate.rooms),
+            aggregate.review_status or _review_status_for_rooms(aggregate.rooms),
+            aggregate.review_note
+            if aggregate.review_note is not None or aggregate.review_status is not None
+            else _review_note_for_rooms(aggregate.rooms, rules),
         ]
     if room is None:
         return [
@@ -652,17 +740,60 @@ def _review_values_for_item(
 def _review_status_for_rooms(rooms: list[QuantityRow]) -> str:
     if any(room.status == DataStatus.NEEDS_REVIEW for room in rooms):
         return "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
-    if any(room.status == DataStatus.DEFAULT_INFERRED for room in rooms):
+    if any(
+        room.status == DataStatus.DEFAULT_INFERRED
+        or any(window.height_defaulted for window in room.window_details)
+        or any(door.height_defaulted for door in room.door_details)
+        for room in rooms
+    ):
         return "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
     return "\u81ea\u52a8\u751f\u6210"
 
 
-def _review_note_for_rooms(rooms: list[QuantityRow]) -> str | None:
+def _review_note_for_rooms(rooms: list[QuantityRow], rules: ResidentialQuoteRules | None = None) -> str | None:
     notes: list[str] = []
     for room in rooms:
         if room.status in {DataStatus.DEFAULT_INFERRED, DataStatus.NEEDS_REVIEW}:
             notes.extend(room.exception_notes)
+        if any(window.height_defaulted for window in room.window_details):
+            notes.append("\u7a97\u5e18\u6309\u540c\u623f\u95f4\u540c\u5899\u6bb5\u53bb\u91cd\uff0cL\u5f62\u7a97\u9700\u4eba\u5de5\u786e\u8ba4")
+        if any(door.height_defaulted for door in room.door_details):
+            default_height = rules.default_door_height if rules is not None else 2.1
+            notes.append(f"\u95e8\u6d1e\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u9ed8\u8ba4\u95e8\u9ad8{default_height:g}m")
     return "\uff1b".join(notes) if notes else None
+
+
+def _wall_tile_review_status(rooms: list[QuantityRow]) -> str:
+    if any(room.status == DataStatus.NEEDS_REVIEW for room in rooms):
+        return "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
+    if any(any(window.height_defaulted for window in room.window_details) for room in rooms):
+        return "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    return "\u81ea\u52a8\u751f\u6210"
+
+
+def _window_default_note_for_rooms(rooms: list[QuantityRow]) -> str | None:
+    notes: list[str] = []
+    for room in rooms:
+        notes.extend(note for note in room.exception_notes if "window_height_defaulted" in note)
+    if notes:
+        return "\uff1b".join(notes)
+    if any(any(window.height_defaulted for window in room.window_details) for room in rooms):
+        return "\u5899\u7816\u9762\u79ef\u6263\u7a97\u4f7f\u7528\u9ed8\u8ba4\u7a97\u9ad8\uff0c\u9700\u590d\u6838\u7a97\u9ad8"
+    return None
+
+
+def _door_area_review_status(rooms: list[QuantityRow]) -> str:
+    if any(room.status == DataStatus.NEEDS_REVIEW for room in rooms):
+        return "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
+    if any(any(door.height_defaulted for door in room.door_details) for room in rooms):
+        return "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    return "\u81ea\u52a8\u751f\u6210"
+
+
+def _door_default_note_for_rooms(rooms: list[QuantityRow], rules: ResidentialQuoteRules) -> str | None:
+    if not any(any(door.height_defaulted for door in room.door_details) for room in rooms):
+        return None
+    return f"\u95e8\u6d1e\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u9ed8\u8ba4\u95e8\u9ad8{rules.default_door_height:g}m"
 
 
 def _review_status_for_room(room: QuantityRow) -> str:
@@ -711,6 +842,83 @@ def _measure_basis_for_item(item_name: str, room: QuantityRow) -> str:
 
 def _wet_wall_tile_area(room: QuantityRow, rules: ResidentialQuoteRules) -> float:
     return _round_quantity(max(0, room.wall_measure_perimeter * rules.wall_tile_height - room.window_area))
+
+
+def _curtain_wall_length(rooms: list[QuantityRow]) -> float:
+    segment_lengths: dict[str, float] = {}
+    fallback_total = 0.0
+    for room in rooms:
+        for detail in room.window_details:
+            if detail.wall_segment_key and detail.wall_segment_length is not None:
+                segment_lengths[f"{room.room_id}:{detail.wall_segment_key}"] = detail.wall_segment_length
+            else:
+                fallback_total += detail.width
+    return _round_quantity(sum(segment_lengths.values()) + fallback_total)
+
+
+def _tile_spec_from_text(*values: str | None) -> tuple[str, float, float]:
+    text = " ".join(value or "" for value in values)
+    match = re.search(r"(\d+(?:\.\d+)?)\s*([xX*×])\s*(\d+(?:\.\d+)?)", text)
+    if match is None:
+        raise ValueError(f"Cannot parse tile specification from quote item '{text.strip()}'")
+    width = float(match.group(1))
+    height = float(match.group(3))
+    spec_label = f"{match.group(1)}{match.group(2)}{match.group(3)}"
+    if width > 20:
+        width /= 1000
+    if height > 20:
+        height /= 1000
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Tile specification must be positive in quote item '{text.strip()}'")
+    return spec_label, width, height
+
+
+def _tile_piece_count(area: float, spec: tuple[str, float, float], loss_rate: float) -> int:
+    piece_area = spec[1] * spec[2]
+    if piece_area <= 0:
+        return 0
+    return int(math.ceil(area * (1 + loss_rate) / piece_area - 1e-9))
+
+
+def _tile_piece_basis(area_label: str, spec: tuple[str, float, float], loss_rate: float) -> str:
+    loss_label = f"{loss_rate * 100:g}%"
+    return f"{area_label}\u6309{spec[0]}\u89c4\u683c+{loss_label}\u635f\u8017\u6298\u7b97\u7247\u6570"
+
+
+def _ordinary_interior_door_count(rooms: list[QuantityRow], rules: ResidentialQuoteRules) -> tuple[int, list[QuantityRow]]:
+    seen_door_ids: set[str] = set()
+    source_rooms: dict[str, QuantityRow] = {}
+    for room in rooms:
+        if _is_bathroom(room):
+            continue
+        for door in room.door_details:
+            if door.width is None or door.width >= rules.wide_door_width_threshold or door.id in seen_door_ids:
+                continue
+            seen_door_ids.add(door.id)
+            source_rooms[room.room_id] = room
+    return len(seen_door_ids), list(source_rooms.values())
+
+
+def _sliding_door_area(rooms: list[QuantityRow], rules: ResidentialQuoteRules) -> tuple[float, list[QuantityRow]]:
+    seen_door_ids: set[str] = set()
+    source_rooms: dict[str, QuantityRow] = {}
+    area = 0.0
+    for room in rooms:
+        if not any(keyword in room.room_name for keyword in rules.sliding_door_room_keywords):
+            continue
+        for door in room.door_details:
+            if door.width is None or door.width < rules.wide_door_width_threshold or door.id in seen_door_ids:
+                continue
+            seen_door_ids.add(door.id)
+            source_rooms[room.room_id] = room
+            area += _door_quote_area(door, rules)
+    return _round_quantity(area), list(source_rooms.values())
+
+
+def _door_quote_area(door, rules: ResidentialQuoteRules) -> float:
+    if door.width is not None and door.height_defaulted:
+        return door.width * rules.default_door_height
+    return door.area
 
 
 def _should_generate_room_section(room: QuantityRow) -> bool:

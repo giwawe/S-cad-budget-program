@@ -165,6 +165,26 @@ class QuantityException(BaseModel):
     severity: str = "warning"
 
 
+class WindowQuantityDetail(BaseModel):
+    id: str
+    width: float
+    height: float
+    area: float
+    height_defaulted: bool
+    wall_segment_key: str | None = None
+    wall_segment_length: float | None = None
+
+
+class DoorQuantityDetail(BaseModel):
+    id: str
+    room_id: str
+    width: float | None = None
+    height: float | None = None
+    effective_height: float | None = None
+    height_defaulted: bool = False
+    area: float = 0.0
+
+
 class QuantityRow(BaseModel):
     room_id: str
     floor: str | None
@@ -179,8 +199,10 @@ class QuantityRow(BaseModel):
     gross_wall_area: float
     window_count: int
     window_area: float
+    window_details: list[WindowQuantityDetail] = Field(default_factory=list)
     door_opening_count: int
     door_opening_area: float
+    door_details: list[DoorQuantityDetail] = Field(default_factory=list)
     net_wall_area: float
     is_outdoor: bool
     include_in_floor_quantity: bool

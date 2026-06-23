@@ -12,6 +12,7 @@ from cad_budget.geometry import closed_polygon_area, closed_polygon_perimeter, p
 from cad_budget.models import VoidMarker
 from cad_budget.models import (
     DataStatus,
+    DoorQuantityDetail,
     ExteriorQuantityRow,
     HeightMode,
     LayerName,
@@ -21,12 +22,14 @@ from cad_budget.models import (
     QuantityRow,
     RoomBoundary,
     SpaceType,
+    WindowQuantityDetail,
 )
 
 
 _MARKER_ASSIGNMENT_TOLERANCE_METERS = 0.3
 _WALL_BOUNDARY_TOLERANCE_METERS = 0.1
 _WALL_PARALLEL_CROSS_TOLERANCE = 0.1
+_DEFAULT_DOOR_DETAIL_HEIGHT_METERS = 2.1
 
 
 def _floor_compatible(room_floor: str | None, marker_floor: str | None) -> bool:
@@ -343,6 +346,26 @@ def _room_polygon(room: RoomBoundary) -> Polygon:
     return Polygon((point.x, point.y) for point in room.points)
 
 
+def _nearest_room_segment_detail(point, room: RoomBoundary) -> tuple[str | None, float | None]:
+    marker_point = ShapelyPoint(point.x, point.y)
+    best_index: int | None = None
+    best_length: float | None = None
+    best_distance: float | None = None
+    for index, (start, end) in enumerate(zip(room.points, room.points[1:])):
+        segment = LineString([(start.x, start.y), (end.x, end.y)])
+        length = float(segment.length)
+        if length == 0:
+            continue
+        distance = float(segment.distance(marker_point))
+        if best_distance is None or distance < best_distance:
+            best_index = index
+            best_length = length
+            best_distance = distance
+    if best_index is None or best_length is None:
+        return None, None
+    return f"{room.id}:{best_index}", round(best_length, 6)
+
+
 def _opening_overlap(opening_points: list[tuple[float, float]], boundary: LineString) -> float:
     line = LineString(opening_points)
     if line.is_empty:
@@ -603,14 +626,30 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
         room_windows = window_assignments.get(room.id, [])
         window_count = len(room_windows)
         window_area = 0.0
+        window_details: list[WindowQuantityDetail] = []
         has_defaulted_window_height = False
         for window in room_windows:
             if window.height is None:
                 has_defaulted_window_height = True
                 height_value = project.default_window_height
+                height_defaulted = True
             else:
                 height_value = window.height
-            window_area += window.width * height_value
+                height_defaulted = False
+            detail_area = window.width * height_value
+            window_area += detail_area
+            wall_segment_key, wall_segment_length = _nearest_room_segment_detail(window.point, room)
+            window_details.append(
+                WindowQuantityDetail(
+                    id=window.id,
+                    width=round(window.width, 6),
+                    height=round(height_value, 6),
+                    area=round(detail_area, 6),
+                    height_defaulted=height_defaulted,
+                    wall_segment_key=wall_segment_key,
+                    wall_segment_length=wall_segment_length,
+                )
+            )
 
             if window.height is None:
                 room_exceptions.append(
@@ -642,9 +681,24 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
         room_doors = door_assignments.get(room.id, [])
         door_opening_count = len(room_doors)
         door_opening_area = 0.0
+        door_details: list[DoorQuantityDetail] = []
         for door in room_doors:
             if door.width is not None and door.height is not None:
                 door_opening_area += door.width * door.height
+            effective_height = door.height if door.height is not None else _DEFAULT_DOOR_DETAIL_HEIGHT_METERS
+            height_defaulted = door.height is None and door.width is not None
+            detail_area = door.width * effective_height if door.width is not None else 0.0
+            door_details.append(
+                DoorQuantityDetail(
+                    id=door.id,
+                    room_id=room.id,
+                    width=round(door.width, 6) if door.width is not None else None,
+                    height=round(door.height, 6) if door.height is not None else None,
+                    effective_height=round(effective_height, 6) if door.width is not None else None,
+                    height_defaulted=height_defaulted,
+                    area=round(detail_area, 6),
+                )
+            )
 
         if room.space_type is SpaceType.STAIR:
             exception = QuantityException(
@@ -670,8 +724,10 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
             gross_wall_area = 0.0
             window_count = 0
             window_area = 0.0
+            window_details = []
             door_opening_count = 0
             door_opening_area = 0.0
+            door_details = []
             net_wall_area = 0.0
 
             include_in_floor_quantity = False
@@ -695,8 +751,10 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
                 gross_wall_area=gross_wall_area,
                 window_count=window_count,
                 window_area=round(window_area, 6),
+                window_details=window_details,
                 door_opening_count=door_opening_count,
                 door_opening_area=round(door_opening_area, 6),
+                door_details=door_details,
                 net_wall_area=net_wall_area,
                 is_outdoor=room.is_outdoor,
                 include_in_floor_quantity=include_in_floor_quantity,

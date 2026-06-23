@@ -25,7 +25,8 @@
     "马桶",
     "花洒",
     "卫浴五件套",
-    "卫生间门"
+    "卫生间门",
+    "淋浴隔断"
   ],
   "window_count_aggregate_items": [
     "窗台石"
@@ -39,5 +40,27 @@
     "全屋插座开关": 1,
     "全屋灯饰": 1,
     "全屋保洁": 1
-  }
+  },
+  "curtain_wall_length_items": [
+    "窗帘"
+  ],
+  "floor_tile_piece_items": [
+    "地面瓷砖"
+  ],
+  "wall_tile_piece_items": [
+    "墙面瓷砖"
+  ],
+  "interior_door_count_items": [
+    "室内门"
+  ],
+  "sliding_door_area_items": [
+    "厨房推拉门"
+  ],
+  "tile_piece_loss_rate": 0.05,
+  "wide_door_width_threshold": 1.4,
+  "default_door_height": 2.1,
+  "sliding_door_room_keywords": [
+    "厨房",
+    "书房"
+  ]
 }
