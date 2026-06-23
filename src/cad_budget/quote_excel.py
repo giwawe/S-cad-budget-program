@@ -630,6 +630,7 @@ def _aggregate_quantity_for_item(
             quantity=len(rooms),
             basis="\u6709\u6548\u7a7a\u95f4\u6570\u91cf\u6c47\u603b",
             rooms=rooms,
+            review_status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.wet_room_count_aggregate_items:
         wet_rooms = [room for room in rooms if _is_wet_room(room)]
@@ -637,6 +638,7 @@ def _aggregate_quantity_for_item(
             quantity=len(wet_rooms),
             basis="\u6e7f\u533a\u7a7a\u95f4\u6570\u91cf\u6c47\u603b",
             rooms=wet_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.kitchen_count_aggregate_items:
         kitchen_rooms = [room for room in rooms if _is_kitchen(room)]
@@ -644,6 +646,7 @@ def _aggregate_quantity_for_item(
             quantity=len(kitchen_rooms),
             basis="\u53a8\u623f\u6570\u91cf\u6c47\u603b",
             rooms=kitchen_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.bathroom_count_aggregate_items:
         bathroom_rooms = [room for room in rooms if _is_bathroom(room)]
@@ -659,6 +662,7 @@ def _aggregate_quantity_for_item(
             quantity=sum(room.window_count for room in window_rooms),
             basis="\u7a97\u6570\u91cf\u6c47\u603b",
             rooms=window_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.window_area_aggregate_items:
         window_rooms = [room for room in rooms if room.window_area > 0]
@@ -666,6 +670,8 @@ def _aggregate_quantity_for_item(
             quantity=_round_quantity(sum(room.window_area for room in window_rooms)),
             basis="\u7a97\u9762\u79ef\u6c47\u603b",
             rooms=window_rooms,
+            review_status=_window_area_review_status(window_rooms),
+            review_note=_window_area_default_note_for_rooms(window_rooms),
         )
     if item_name in rules.door_count_aggregate_items:
         door_rooms = [room for room in rooms if room.door_opening_count > 0]
@@ -673,6 +679,7 @@ def _aggregate_quantity_for_item(
             quantity=sum(room.door_opening_count for room in door_rooms),
             basis="\u95e8\u6d1e\u6570\u91cf\u6c47\u603b",
             rooms=door_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.door_area_aggregate_items:
         door_rooms = [room for room in rooms if room.door_opening_area > 0]
@@ -680,6 +687,7 @@ def _aggregate_quantity_for_item(
             quantity=_round_quantity(sum(room.door_opening_area for room in door_rooms)),
             basis="\u95e8\u6d1e\u9762\u79ef\u6c47\u603b",
             rooms=door_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.floor_area_aggregate_items:
         floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
@@ -687,6 +695,7 @@ def _aggregate_quantity_for_item(
             quantity=_round_quantity(sum(room.floor_area for room in floor_rooms)),
             basis="\u5ba4\u5185\u5730\u9762\u9762\u79ef\u6c47\u603b",
             rooms=floor_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.tile_area_aggregate_items:
         floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
@@ -697,6 +706,8 @@ def _aggregate_quantity_for_item(
             ),
             basis="\u5730\u7816\u9762\u79ef+2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef",
             rooms=list({room.room_id: room for room in [*floor_rooms, *wall_tile_rooms]}.values()),
+            review_status=_wall_tile_review_status(wall_tile_rooms),
+            review_note=_window_default_note_for_rooms(wall_tile_rooms),
         )
     return None
 
@@ -780,6 +791,28 @@ def _window_default_note_for_rooms(rooms: list[QuantityRow]) -> str | None:
     if any(any(window.height_defaulted for window in room.window_details) for room in rooms):
         return "\u5899\u7816\u9762\u79ef\u6263\u7a97\u4f7f\u7528\u9ed8\u8ba4\u7a97\u9ad8\uff0c\u9700\u590d\u6838\u7a97\u9ad8"
     return None
+
+
+def _window_area_review_status(rooms: list[QuantityRow]) -> str:
+    if any(room.status == DataStatus.NEEDS_REVIEW for room in rooms):
+        return "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
+    if _has_defaulted_window_height(rooms):
+        return "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    return "\u81ea\u52a8\u751f\u6210"
+
+
+def _window_area_default_note_for_rooms(rooms: list[QuantityRow]) -> str | None:
+    if not _has_defaulted_window_height(rooms):
+        return None
+    return "\u7a97\u9762\u79ef\u4f7f\u7528\u9ed8\u8ba4\u7a97\u9ad8\uff0c\u9700\u590d\u6838\u7a97\u9ad8"
+
+
+def _has_defaulted_window_height(rooms: list[QuantityRow]) -> bool:
+    return any(
+        any(window.height_defaulted for window in room.window_details)
+        or any("window_height_defaulted" in note for note in room.exception_notes)
+        for room in rooms
+    )
 
 
 def _door_area_review_status(rooms: list[QuantityRow]) -> str:

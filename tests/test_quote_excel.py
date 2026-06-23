@@ -430,6 +430,103 @@ def test_export_residential_quote_auto_fills_tile_area_items(tmp_path: Path):
     )
 
 
+def test_export_residential_quote_keeps_aggregate_review_notes_item_specific(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    rules_path = tmp_path / "rules.json"
+    _create_quote_template(template_path, include_area_summary_items=True, include_count_summary_items=True)
+    rules_path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": 0.3,
+                    "bathroom_waterproof_wall_height": 1.8,
+                    "wall_tile_height": 2.5,
+                },
+                "floor_area_aggregate_items": ["\u5783\u573e\u6e05\u8fd0\u8d39"],
+                "tile_area_aggregate_items": ["\u7f8e\u7f1d"],
+                "window_count_aggregate_items": ["\u7a97\u53f0\u77f3"],
+                "window_area_aggregate_items": ["\u94dd\u5408\u91d1\u5c01\u95e8\u7a97"],
+                "door_count_aggregate_items": ["\u5ba4\u5185\u95e8"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    result = QuantityResult(
+        project_name="Aggregate Review Demo",
+        rows=[
+            _quantity_row(
+                "living",
+                "\u5ba2\u5385",
+                floor_area=20.0,
+                net_wall_area=50.0,
+                window_count=1,
+                window_area=2.0,
+                window_details=[
+                    WindowQuantityDetail(
+                        id="w1",
+                        width=1.0,
+                        height=2.0,
+                        area=2.0,
+                        height_defaulted=True,
+                        wall_segment_key="living:0",
+                        wall_segment_length=4.0,
+                    )
+                ],
+                door_opening_count=1,
+                door_details=[
+                    DoorQuantityDetail(
+                        id="d1",
+                        room_id="living",
+                        width=0.9,
+                        height=None,
+                        effective_height=2.1,
+                        height_defaulted=True,
+                        area=1.89,
+                    )
+                ],
+            ),
+            _quantity_row(
+                "bath",
+                "\u4e3b\u536b",
+                floor_area=3.0,
+                net_wall_area=15.0,
+                wall_measure_perimeter=8.0,
+                window_count=1,
+                window_area=0.5,
+                window_details=[
+                    WindowQuantityDetail(
+                        id="w2",
+                        width=0.5,
+                        height=1.0,
+                        area=0.5,
+                        height_defaulted=True,
+                        wall_segment_key="bath:0",
+                        wall_segment_length=2.0,
+                    )
+                ],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path, rules_path=rules_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    garbage = _item_row_named(rows, "\u5783\u573e\u6e05\u8fd0\u8d39")
+    tile_grout = _item_row_named(rows, "\u7f8e\u7f1d")
+    windowsill = _item_row_named(rows, "\u7a97\u53f0\u77f3")
+    sealed_windows = _item_row_named(rows, "\u94dd\u5408\u91d1\u5c01\u95e8\u7a97")
+    door_count = _item_row_named(rows, "\u5ba4\u5185\u95e8")
+    assert garbage[13:15] == ("\u81ea\u52a8\u751f\u6210", None)
+    assert tile_grout[13:15] == ("\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad", "\u5899\u7816\u9762\u79ef\u6263\u7a97\u4f7f\u7528\u9ed8\u8ba4\u7a97\u9ad8\uff0c\u9700\u590d\u6838\u7a97\u9ad8")
+    assert windowsill[13:15] == ("\u81ea\u52a8\u751f\u6210", None)
+    assert sealed_windows[13:15] == ("\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad", "\u7a97\u9762\u79ef\u4f7f\u7528\u9ed8\u8ba4\u7a97\u9ad8\uff0c\u9700\u590d\u6838\u7a97\u9ad8")
+    assert door_count[13:15] == ("\u81ea\u52a8\u751f\u6210", None)
+
+
 def test_export_residential_quote_auto_fills_count_and_opening_aggregate_items(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
