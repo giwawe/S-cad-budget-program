@@ -342,6 +342,37 @@ def test_imports_quote_custom_and_cabinet_lines(tmp_path: Path):
     assert result.project.cabinet_items[0].kind is FixtureKind.CABINET
 
 
+def test_imports_fixture_xdata_attributes(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.appids.add("CAD_BUDGET")
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_TEXT", "QUOTE_CUSTOM", "QUOTE_CABINET"]:
+        doc.layers.add(layer)
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("主卧", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
+    custom = modelspace.add_line((500, 500), (2500, 500), dxfattribs={"layer": "QUOTE_CUSTOM"})
+    custom.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=2400"), (1000, "TYPE=衣柜"), (1000, "ROOM=主卧")])
+    cabinet = modelspace.add_line((500, 900), (3500, 900), dxfattribs={"layer": "QUOTE_CABINET"})
+    cabinet.set_xdata("CAD_BUDGET", [(1000, "TYPE=地柜"), (1000, "ROOM=厨房")])
+    dxf_path = _save_doc(tmp_path / "fixture-xdata.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path, confirmed_unit=CadUnit.MILLIMETER))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    custom_item = result.project.custom_items[0]
+    assert custom_item.height == 2.4
+    assert custom_item.fixture_type == "衣柜"
+    assert custom_item.attributes["ROOM"] == "主卧"
+    cabinet_item = result.project.cabinet_items[0]
+    assert cabinet_item.fixture_type == "地柜"
+    assert cabinet_item.attributes["ROOM"] == "厨房"
+
+
 def test_imports_closed_custom_outline_using_longest_rectangle_edge(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4

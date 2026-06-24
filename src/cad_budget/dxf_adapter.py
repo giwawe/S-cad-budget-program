@@ -49,6 +49,10 @@ _WINDOW_WIDTH_ATTRIBUTE_KEYS = ("width", "窗宽", "宽")
 _WINDOW_HEIGHT_ATTRIBUTE_KEYS = ("height", "窗高", "高")
 _DOOR_WIDTH_ATTRIBUTE_KEYS = ("width", "门宽", "宽")
 _DOOR_HEIGHT_ATTRIBUTE_KEYS = ("height", "门高", "高")
+_FIXTURE_HEIGHT_ATTRIBUTE_KEYS = ("height", "HEIGHT", "高")
+_FIXTURE_TYPE_ATTRIBUTE_KEYS = ("type", "TYPE", "类型")
+_FIXTURE_ROOM_ATTRIBUTE_KEYS = ("room", "ROOM", "空间")
+_FIXTURE_XDATA_APPIDS = ("CAD_BUDGET",)
 
 
 _QUOTE_LAYER_NAMES = {layer.value for layer in LayerName}
@@ -168,7 +172,22 @@ def _fixture_marker_from_points(
         length = _polyline_length(points)
     if length <= 0:
         return None
-    return FixtureMarker(id=_entity_id(entity), layer=layer, kind=kind, points=points, length=length)
+    attrs = _fixture_attributes(entity)
+    fixture_type = _fixture_text_attribute(attrs, _FIXTURE_TYPE_ATTRIBUTE_KEYS)
+    room = _fixture_text_attribute(attrs, _FIXTURE_ROOM_ATTRIBUTE_KEYS)
+    marker_attrs = dict(attrs)
+    if room is not None:
+        marker_attrs["ROOM"] = room
+    return FixtureMarker(
+        id=_entity_id(entity),
+        layer=layer,
+        kind=kind,
+        points=points,
+        length=length,
+        height=_fixture_height_from_attributes(attrs),
+        fixture_type=fixture_type,
+        attributes=marker_attrs,
+    )
 
 
 def _valid_room_polygon(points: list[Point]) -> bool:
@@ -249,6 +268,27 @@ def _insert_attributes(entity) -> dict[str, str]:
     }
 
 
+def _xdata_key_value_attributes(entity, appids: tuple[str, ...]) -> dict[str, str]:
+    attributes: dict[str, str] = {}
+    for appid in appids:
+        if not entity.has_xdata(appid):
+            continue
+        for tag in entity.get_xdata(appid):
+            value = getattr(tag, "value", None)
+            if not isinstance(value, str) or "=" not in value:
+                continue
+            key, text = value.split("=", 1)
+            key = key.strip()
+            text = text.strip()
+            if key:
+                attributes[key] = text
+    return attributes
+
+
+def _fixture_attributes(entity) -> dict[str, str]:
+    return _xdata_key_value_attributes(entity, _FIXTURE_XDATA_APPIDS)
+
+
 def _parse_window_dimension(value: str) -> float | None:
     cleaned = value.strip().lower().replace(" ", "")
     if not cleaned:
@@ -279,6 +319,23 @@ def _window_dimension_from_attributes(attrs: dict[str, str], keys: tuple[str, ..
         value = attrs.get(key)
         if value is not None:
             return _parse_window_dimension(value)
+    return None
+
+
+def _fixture_text_attribute(attrs: dict[str, str], keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        value = attrs.get(key)
+        if value:
+            return value
+    return None
+
+
+def _fixture_height_from_attributes(attrs: dict[str, str]) -> float | None:
+    for key in _FIXTURE_HEIGHT_ATTRIBUTE_KEYS:
+        value = attrs.get(key)
+        if value is None:
+            continue
+        return _parse_window_dimension(value)
     return None
 
 
