@@ -77,8 +77,9 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u62c6\u6539\u53ca\u62c6\u5899" in rules.demo_wall_area_items
     assert rules.new_wall_area_items_by_thickness["\u780c120\u539a\u7816\u5899"] == 0.12
     assert rules.new_wall_area_items_by_thickness["\u780c240\u539a\u7816\u5899"] == 0.24
-    assert "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881" in rules.lintel_count_items
-    assert "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54" in rules.lintel_hole_count_items
+    assert "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881" not in rules.lintel_count_items
+    assert "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54" in rules.floor_area_percent_count_items
+    assert rules.floor_area_percent_count_items["\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54"] == 0.1
 
 
 def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkeypatch):
@@ -1402,7 +1403,10 @@ def test_export_residential_quote_auto_fills_construction_marker_items(tmp_path:
     _create_quote_template(template_path, include_construction_items=True)
     result = QuantityResult(
         project_name="Construction Quote",
-        rows=[],
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=80.0, net_wall_area=20.0),
+            _quantity_row("bedroom", "\u5367\u5ba4", floor_area=36.0, net_wall_area=18.0),
+        ],
         construction_details=[
             ConstructionQuantityDetail(
                 id="demo-1",
@@ -1451,8 +1455,12 @@ def test_export_residential_quote_auto_fills_construction_marker_items(tmp_path:
     assert demo[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
     assert wall_120[3] == 6.0
     assert wall_240[3] == 4.5
-    assert lintel[3] == 1
-    assert hole[3] == 2
+    assert lintel[3] == 15
+    assert lintel[9] == "\u6a21\u677f\u9ed8\u8ba4"
+    assert hole[3] == 12
+    assert hole[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert hole[12] == "\u623f\u5b50\u9762\u79ef\u768410%\u53d6\u6574"
+    assert hole[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
 
 
 def test_export_residential_quote_keeps_construction_items_template_default_without_markers(tmp_path: Path):
@@ -1465,9 +1473,12 @@ def test_export_residential_quote_keeps_construction_items_template_default_with
 
     rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
     demo = _item_row_named(rows, "\u62c6\u6539\u53ca\u62c6\u5899")
+    hole = _item_row_named(rows, "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54")
     assert demo[3] == 93
     assert demo[9] == "\u6a21\u677f\u9ed8\u8ba4"
     assert demo[13] == "\u6309\u6a21\u677f\u751f\u6210"
+    assert hole[3] == 108
+    assert hole[9] == "\u6a21\u677f\u9ed8\u8ba4"
 
 
 def test_export_residential_quote_requires_exact_new_wall_thickness_match(tmp_path: Path):

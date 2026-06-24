@@ -186,6 +186,7 @@ class ResidentialQuoteRules:
     new_wall_area_items_by_thickness: dict[str, float]
     lintel_count_items: set[str]
     lintel_hole_count_items: set[str]
+    floor_area_percent_count_items: dict[str, float]
     custom_projected_area_items: set[str]
     cabinet_length_items: set[str]
     tile_piece_loss_rate: float
@@ -257,6 +258,7 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         new_wall_area_items_by_thickness=_optional_quantity_map(data, "new_wall_area_items_by_thickness"),
         lintel_count_items=_optional_item_set(data, "lintel_count_items"),
         lintel_hole_count_items=_optional_item_set(data, "lintel_hole_count_items"),
+        floor_area_percent_count_items=_optional_quantity_map(data, "floor_area_percent_count_items"),
         custom_projected_area_items=_optional_item_set(data, "custom_projected_area_items"),
         cabinet_length_items=_optional_item_set(data, "cabinet_length_items"),
         tile_piece_loss_rate=_optional_float(data, "tile_piece_loss_rate", 0.05),
@@ -659,6 +661,8 @@ def _aggregate_quantity_for_item(
         )
     if not rooms:
         return None
+    if item_name in rules.floor_area_percent_count_items:
+        return _floor_area_percent_count_aggregate(rooms, rules.floor_area_percent_count_items[item_name])
     if item_name in rules.custom_projected_area_items:
         return _custom_projected_area_aggregate(rooms, rules)
     if item_name in rules.cabinet_length_items:
@@ -891,6 +895,21 @@ def _construction_count_aggregate(
         basis=basis,
         rooms=[],
         review_status="\u81ea\u52a8\u751f\u6210",
+    )
+
+
+def _floor_area_percent_count_aggregate(rooms: list[QuantityRow], percent: float) -> QuoteAggregateQuantity | None:
+    floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
+    floor_area = sum(room.floor_area for room in floor_rooms)
+    quantity = int(math.floor(floor_area * percent + 0.5))
+    if not floor_rooms or quantity <= 0:
+        return None
+    return QuoteAggregateQuantity(
+        quantity=quantity,
+        basis=f"\u623f\u5b50\u9762\u79ef\u7684{percent * 100:g}%\u53d6\u6574",
+        rooms=floor_rooms,
+        review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
+        review_note="\u6309\u8ba1\u5165\u5ba4\u5185\u5730\u9762\u9762\u79ef\u4f5c\u4e3a\u5efa\u7b51\u9762\u79ef\u4ee3\u7406\u503c\uff0c\u9700\u8bbe\u8ba1\u5e08\u590d\u6838",
     )
 
 

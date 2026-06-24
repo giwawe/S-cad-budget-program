@@ -27,12 +27,11 @@
     "砌120厚砖墙": 0.12,
     "砌240厚砖墙": 0.24
   },
-  "lintel_count_items": [
-    "砖墙门窗洞过梁"
-  ],
-  "lintel_hole_count_items": [
-    "打混凝土过梁孔"
-  ],
+  "lintel_count_items": [],
+  "lintel_hole_count_items": [],
+  "floor_area_percent_count_items": {
+    "打混凝土过梁孔": 0.1
+  },
   "room_count_aggregate_items": [],
   "wet_room_count_aggregate_items": [],
   "kitchen_count_aggregate_items": [],
