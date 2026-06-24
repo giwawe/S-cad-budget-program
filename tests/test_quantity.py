@@ -1343,3 +1343,50 @@ def test_construction_markers_calculate_demo_new_wall_lintel_and_hole_quantities
     assert details["new-240"].thickness == 0.24
     assert details["lintel-1"].count == 1
     assert details["hole-1"].count == 1
+
+
+def test_pipe_markers_calculate_vertical_lengths_from_height_or_default():
+    project = ProjectInput(
+        project_name="Pipe Markers",
+        default_height=2.8,
+        pipe_insulations=[
+            ConstructionMarker(
+                id="pipe-insulation-1",
+                layer=LayerName.QUOTE_PIPE_INSULATION,
+                kind=ConstructionKind.PIPE_INSULATION,
+                points=[Point(x=0, y=0)],
+                height=2.4,
+            ),
+            ConstructionMarker(
+                id="pipe-insulation-line",
+                layer=LayerName.QUOTE_PIPE_INSULATION,
+                kind=ConstructionKind.PIPE_INSULATION,
+                points=[Point(x=0, y=1), Point(x=0, y=4)],
+            ),
+        ],
+        pipe_wraps=[
+            ConstructionMarker(
+                id="pipe-wrap-1",
+                layer=LayerName.QUOTE_PIPE_WRAP,
+                kind=ConstructionKind.PIPE_WRAP,
+                points=[Point(x=1, y=0)],
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    details = {detail.id: detail for detail in result.construction_details}
+    assert details["pipe-insulation-1"].kind is ConstructionKind.PIPE_INSULATION
+    assert details["pipe-insulation-1"].length == 2.4
+    assert details["pipe-insulation-1"].effective_height == 2.4
+    assert details["pipe-insulation-1"].height_defaulted is False
+    assert details["pipe-insulation-1"].count == 1
+    assert details["pipe-insulation-line"].length == 3.0
+    assert details["pipe-insulation-line"].effective_height is None
+    assert details["pipe-insulation-line"].height_defaulted is False
+    assert details["pipe-wrap-1"].kind is ConstructionKind.PIPE_WRAP
+    assert details["pipe-wrap-1"].length == 2.8
+    assert details["pipe-wrap-1"].effective_height == 2.8
+    assert details["pipe-wrap-1"].height_defaulted is True
+    assert details["pipe-wrap-1"].count == 1

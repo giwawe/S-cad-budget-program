@@ -501,6 +501,8 @@ def _assign_imported_marker_floors(
     new_walls: list[ConstructionMarker],
     lintels: list[ConstructionMarker],
     lintel_holes: list[ConstructionMarker],
+    pipe_insulations: list[ConstructionMarker],
+    pipe_wraps: list[ConstructionMarker],
 ) -> None:
     for marker in [*windows, *doors, *heights]:
         if marker.floor is not None:
@@ -522,6 +524,8 @@ def _assign_imported_marker_floors(
         *new_walls,
         *lintels,
         *lintel_holes,
+        *pipe_insulations,
+        *pipe_wraps,
     ]:
         if marker.floor is not None:
             continue
@@ -592,6 +596,8 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     new_walls: list[ConstructionMarker] = []
     lintels: list[ConstructionMarker] = []
     lintel_holes: list[ConstructionMarker] = []
+    pipe_insulations: list[ConstructionMarker] = []
+    pipe_wraps: list[ConstructionMarker] = []
 
     for entity in _iter_modelspace(doc):
         layer = _layer(entity)
@@ -864,6 +870,39 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
             )
             if marker is not None:
                 lintel_holes.append(marker)
+        elif layer in {LayerName.QUOTE_PIPE_INSULATION.value, LayerName.QUOTE_PIPE_WRAP.value} and entity.dxftype() in {
+            "POINT",
+            "INSERT",
+            "LINE",
+            "LWPOLYLINE",
+        }:
+            if entity.dxftype() == "POINT":
+                point = entity.dxf.location
+                points = [_point(point.x, point.y, options.confirmed_unit)]
+            elif entity.dxftype() == "INSERT":
+                points = [_insert_point(entity, options.confirmed_unit)]
+            elif entity.dxftype() == "LINE":
+                points = _line_points(entity, options.confirmed_unit)
+            else:
+                points = _lwpolyline_points(entity, options.confirmed_unit)
+            if layer == LayerName.QUOTE_PIPE_INSULATION.value:
+                marker = _construction_marker_from_points(
+                    entity,
+                    points,
+                    LayerName.QUOTE_PIPE_INSULATION,
+                    ConstructionKind.PIPE_INSULATION,
+                )
+                if marker is not None:
+                    pipe_insulations.append(marker)
+            else:
+                marker = _construction_marker_from_points(
+                    entity,
+                    points,
+                    LayerName.QUOTE_PIPE_WRAP,
+                    ConstructionKind.PIPE_WRAP,
+                )
+                if marker is not None:
+                    pipe_wraps.append(marker)
         elif layer == LayerName.QUOTE_OPENING.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
@@ -933,6 +972,8 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         new_walls,
         lintels,
         lintel_holes,
+        pipe_insulations,
+        pipe_wraps,
     )
     project = ProjectInput(
         project_name=options.project_name,
@@ -956,5 +997,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         new_walls=new_walls,
         lintels=lintels,
         lintel_holes=lintel_holes,
+        pipe_insulations=pipe_insulations,
+        pipe_wraps=pipe_wraps,
     )
     return CadImportResult(project=project, issues=issues, source_path=options.source_path, dxf_path=options.source_path)

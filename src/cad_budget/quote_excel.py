@@ -186,6 +186,8 @@ class ResidentialQuoteRules:
     new_wall_area_items_by_thickness: dict[str, float]
     lintel_count_items: set[str]
     lintel_hole_count_items: set[str]
+    pipe_insulation_length_items: set[str]
+    pipe_wrap_length_items: set[str]
     building_area_percent_count_items: dict[str, float]
     custom_projected_area_items: set[str]
     cabinet_length_items: set[str]
@@ -258,6 +260,8 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         new_wall_area_items_by_thickness=_optional_quantity_map(data, "new_wall_area_items_by_thickness"),
         lintel_count_items=_optional_item_set(data, "lintel_count_items"),
         lintel_hole_count_items=_optional_item_set(data, "lintel_hole_count_items"),
+        pipe_insulation_length_items=_optional_item_set(data, "pipe_insulation_length_items"),
+        pipe_wrap_length_items=_optional_item_set(data, "pipe_wrap_length_items"),
         building_area_percent_count_items=_building_area_percent_count_items(data),
         custom_projected_area_items=_optional_item_set(data, "custom_projected_area_items"),
         cabinet_length_items=_optional_item_set(data, "cabinet_length_items"),
@@ -675,6 +679,20 @@ def _aggregate_quantity_for_item(
             ConstructionKind.LINTEL_HOLE,
             "\u6df7\u51dd\u571f\u8fc7\u6881\u5b54\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
         )
+    if item_name in rules.pipe_insulation_length_items:
+        return _construction_length_aggregate(
+            construction_details or [],
+            ConstructionKind.PIPE_INSULATION,
+            "\u6392\u6c61\u7ba1\u9694\u97f3\u68c9\u7acb\u7ba1\u957f\u5ea6\u6c47\u603b",
+            "\u7ba1\u9053\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838",
+        )
+    if item_name in rules.pipe_wrap_length_items:
+        return _construction_length_aggregate(
+            construction_details or [],
+            ConstructionKind.PIPE_WRAP,
+            "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053\u7acb\u7ba1\u957f\u5ea6\u6c47\u603b",
+            "\u7ba1\u9053\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838",
+        )
     if item_name in rules.building_area_percent_count_items:
         return _building_area_percent_count_aggregate(building_area, rules.building_area_percent_count_items[item_name])
     if not rooms:
@@ -911,6 +929,25 @@ def _construction_count_aggregate(
         basis=basis,
         rooms=[],
         review_status="\u81ea\u52a8\u751f\u6210",
+    )
+
+
+def _construction_length_aggregate(
+    construction_details: list[ConstructionQuantityDetail],
+    kind: ConstructionKind,
+    basis: str,
+    default_height_note: str,
+) -> QuoteAggregateQuantity | None:
+    details = [detail for detail in construction_details if detail.kind is kind]
+    quantity = _round_quantity(sum(detail.length for detail in details))
+    if not details or quantity <= 0:
+        return None
+    return QuoteAggregateQuantity(
+        quantity=quantity,
+        basis=basis,
+        rooms=[],
+        review_status=_construction_review_status(details),
+        review_note=default_height_note if any(detail.height_defaulted for detail in details) else None,
     )
 
 

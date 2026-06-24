@@ -29,6 +29,12 @@
   },
   "lintel_count_items": [],
   "lintel_hole_count_items": [],
+  "pipe_insulation_length_items": [
+    "厨房、卫生间排污管包隔音棉"
+  ],
+  "pipe_wrap_length_items": [
+    "包上/下水管道(单管)"
+  ],
   "building_area_percent_count_items": {
     "打混凝土过梁孔": 0.1
   },

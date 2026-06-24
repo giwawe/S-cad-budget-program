@@ -732,6 +732,40 @@ def test_import_dxf_reads_construction_marker_layers_and_xdata(tmp_path: Path):
     assert result.project.lintel_holes[0].kind is ConstructionKind.LINTEL_HOLE
 
 
+def test_import_dxf_reads_pipe_marker_layers_and_heights(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.appids.new("CAD_BUDGET")
+    doc.blocks.new("pipe_block")
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_TEXT", "QUOTE_PIPE_INSULATION", "QUOTE_PIPE_WRAP"]:
+        doc.layers.add(layer)
+
+    modelspace.add_lwpolyline(
+        [(-1000, -1000), (4000, -1000), (4000, 4000), (-1000, 4000), (-1000, -1000)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("Room", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
+    insulation = modelspace.add_point((0, 0), dxfattribs={"layer": "QUOTE_PIPE_INSULATION"})
+    insulation.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=2400")])
+    pipe_wrap = modelspace.add_blockref("pipe_block", (1000, 0), dxfattribs={"layer": "QUOTE_PIPE_WRAP"})
+    pipe_wrap.add_attrib("HEIGHT", "2.1")
+    dxf_path = _save_doc(tmp_path / "pipe_markers.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.pipe_insulations[0].kind is ConstructionKind.PIPE_INSULATION
+    assert result.project.pipe_insulations[0].height == 2.4
+    assert result.project.pipe_wraps[0].kind is ConstructionKind.PIPE_WRAP
+    assert result.project.pipe_wraps[0].height == 2.1
+    quantity = calculate_quantities(result.project)
+    details = {detail.id: detail for detail in quantity.construction_details}
+    assert details[result.project.pipe_insulations[0].id].length == 2.4
+    assert details[result.project.pipe_wraps[0].id].length == 2.1
+
+
 def test_import_dxf_assigns_room_floor_from_quote_floor_text(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4

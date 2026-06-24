@@ -78,6 +78,8 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert rules.new_wall_area_items_by_thickness["\u780c120\u539a\u7816\u5899"] == 0.12
     assert rules.new_wall_area_items_by_thickness["\u780c240\u539a\u7816\u5899"] == 0.24
     assert "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881" not in rules.lintel_count_items
+    assert "\u53a8\u623f\u3001\u536b\u751f\u95f4\u6392\u6c61\u7ba1\u5305\u9694\u97f3\u68c9" in rules.pipe_insulation_length_items
+    assert "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053(\u5355\u7ba1)" in rules.pipe_wrap_length_items
     assert "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54" in rules.building_area_percent_count_items
     assert rules.building_area_percent_count_items["\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54"] == 0.1
 
@@ -1488,6 +1490,50 @@ def test_export_residential_quote_auto_fills_construction_marker_items(tmp_path:
     assert hole[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
 
 
+def test_export_residential_quote_auto_fills_pipe_marker_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_pipe_items=True)
+    result = QuantityResult(
+        project_name="Pipe Quote",
+        rows=[],
+        construction_details=[
+            ConstructionQuantityDetail(
+                id="pipe-insulation-1",
+                kind=ConstructionKind.PIPE_INSULATION,
+                length=2.4,
+                height=2.4,
+                effective_height=2.4,
+                count=1,
+            ),
+            ConstructionQuantityDetail(
+                id="pipe-wrap-1",
+                kind=ConstructionKind.PIPE_WRAP,
+                length=2.8,
+                effective_height=2.8,
+                height_defaulted=True,
+                count=1,
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    insulation = _item_row_named(rows, "\u53a8\u623f\u3001\u536b\u751f\u95f4\u6392\u6c61\u7ba1\u5305\u9694\u97f3\u68c9")
+    pipe_wrap = _item_row_named(rows, "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053(\u5355\u7ba1)")
+    assert insulation[3] == 2.4
+    assert insulation[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert insulation[12] == "\u6392\u6c61\u7ba1\u9694\u97f3\u68c9\u7acb\u7ba1\u957f\u5ea6\u6c47\u603b"
+    assert insulation[13] == "\u81ea\u52a8\u751f\u6210"
+    assert pipe_wrap[3] == 2.8
+    assert pipe_wrap[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert pipe_wrap[12] == "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053\u7acb\u7ba1\u957f\u5ea6\u6c47\u603b"
+    assert pipe_wrap[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert pipe_wrap[14] == "\u7ba1\u9053\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838"
+
+
 def test_export_residential_quote_keeps_percent_count_default_without_building_area(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
@@ -1742,6 +1788,7 @@ def _create_quote_template(
     include_balcony_sliding_items: bool = False,
     include_exterior_summary_items: bool = False,
     include_construction_items: bool = False,
+    include_pipe_items: bool = False,
 ) -> None:
     workbook = Workbook()
     half = workbook.active
@@ -1833,6 +1880,11 @@ def _create_quote_template(
         fitout.append([4, "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881", "\u652f", 15, 0, 0, 10, None, "\u8fc7\u6881"])
         fitout.append([5, "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54", "\u4e2a", 108, 0, 0, 10, None, "\u8fc7\u6881\u5b54"])
         fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H37:H41)"])
+    if include_pipe_items:
+        fitout.append(["\u5341", "\u7ba1\u9053\u53ca\u5305\u7ba1\u5de5\u7a0b"])
+        fitout.append([1, "\u53a8\u623f\u3001\u536b\u751f\u95f4\u6392\u6c61\u7ba1\u5305\u9694\u97f3\u68c9", "M", 50, 0, 0, 10, None, "\u9694\u97f3\u68c9"])
+        fitout.append([2, "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053(\u5355\u7ba1)", "M", 36, 0, 0, 10, None, "\u5305\u7ba1"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H43:H44)"])
     fitout.append(["A", "\u76f4\u63a5\u8d39\u5408\u8ba1(\u4e00+\u2026...\u5341)", None, None, None, None, None, "=H12+H18+H21"])
     fitout.append(["B", "\u5de5\u7a0b\u7ba1\u7406\u8d39(D=A* 5%)", None, None, None, None, None, "=H22*0.05"])
     fitout.append(["C", "\u7a0e\u91d1E=(A+B)* 3%", None, None, None, None, None, 0])

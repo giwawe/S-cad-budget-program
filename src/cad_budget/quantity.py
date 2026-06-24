@@ -875,12 +875,43 @@ def _construction_detail_for_count_marker(marker: ConstructionMarker) -> Constru
     )
 
 
+def _construction_detail_for_vertical_marker(
+    project: ProjectInput,
+    marker: ConstructionMarker,
+) -> ConstructionQuantityDetail:
+    marker_length = _polyline_marker_length(marker)
+    if marker.height is not None:
+        length = marker.height
+        effective_height = marker.height
+        height_defaulted = False
+    elif marker_length > 0:
+        length = marker_length
+        effective_height = None
+        height_defaulted = False
+    else:
+        effective_height, height_defaulted = _construction_effective_height(project, marker)
+        length = effective_height if effective_height is not None else 0.0
+    return ConstructionQuantityDetail(
+        id=marker.id,
+        kind=marker.kind,
+        floor=marker.floor,
+        length=round(length, 6),
+        height=round(marker.height, 6) if marker.height is not None else None,
+        effective_height=round(effective_height, 6) if effective_height is not None else None,
+        height_defaulted=height_defaulted,
+        thickness=round(marker.thickness, 6) if marker.thickness is not None else None,
+        count=1,
+    )
+
+
 def _calculate_construction_details(project: ProjectInput) -> list[ConstructionQuantityDetail]:
     details: list[ConstructionQuantityDetail] = []
     details.extend(_construction_detail_for_linear_marker(project, marker) for marker in project.demo_walls)
     details.extend(_construction_detail_for_linear_marker(project, marker) for marker in project.new_walls)
     details.extend(_construction_detail_for_count_marker(marker) for marker in project.lintels)
     details.extend(_construction_detail_for_count_marker(marker) for marker in project.lintel_holes)
+    details.extend(_construction_detail_for_vertical_marker(project, marker) for marker in project.pipe_insulations)
+    details.extend(_construction_detail_for_vertical_marker(project, marker) for marker in project.pipe_wraps)
     return details
 
 
