@@ -444,6 +444,8 @@ def test_cli_init_rules_writes_default_rules_json(tmp_path: Path):
     assert output.exists()
     data = json.loads(output.read_text(encoding="utf-8"))
     assert data["wet_room_heights"]["wall_tile_height"] == 2.5
+    assert data["building_area_percent_count_items"]
+    assert "floor_area_percent_count_items" not in data
     assert "垃圾清运费" in data["floor_area_aggregate_items"]
     rules = load_quote_rules(output)
     assert rules.wall_tile_height == 2.5

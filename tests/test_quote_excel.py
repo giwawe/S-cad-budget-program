@@ -78,8 +78,8 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert rules.new_wall_area_items_by_thickness["\u780c120\u539a\u7816\u5899"] == 0.12
     assert rules.new_wall_area_items_by_thickness["\u780c240\u539a\u7816\u5899"] == 0.24
     assert "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881" not in rules.lintel_count_items
-    assert "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54" in rules.floor_area_percent_count_items
-    assert rules.floor_area_percent_count_items["\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54"] == 0.1
+    assert "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54" in rules.building_area_percent_count_items
+    assert rules.building_area_percent_count_items["\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54"] == 0.1
 
 
 def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkeypatch):
@@ -140,6 +140,30 @@ def test_load_quote_rules_reads_external_rule_file(tmp_path: Path):
     assert rules.default_custom_height == 2.6
     assert rules.low_custom_height_threshold == 1.0
     assert rules.source_label == str(rules_path)
+
+
+def test_load_quote_rules_accepts_legacy_floor_area_percent_count_items(tmp_path: Path):
+    rules_path = tmp_path / "legacy-rules.json"
+    rules_path.write_text(
+        json.dumps(
+            {
+                "wet_room_heights": {
+                    "kitchen_waterproof_wall_height": 0.3,
+                    "bathroom_waterproof_wall_height": 1.8,
+                    "wall_tile_height": 2.5,
+                },
+                "floor_area_aggregate_items": [],
+                "tile_area_aggregate_items": [],
+                "floor_area_percent_count_items": {"\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54": 0.1},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    rules = load_quote_rules(rules_path)
+
+    assert rules.building_area_percent_count_items == {"\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54": 0.1}
 
 
 def test_load_quote_rules_reports_invalid_external_rule_file(tmp_path: Path):

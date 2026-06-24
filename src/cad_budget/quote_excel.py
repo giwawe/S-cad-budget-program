@@ -186,7 +186,7 @@ class ResidentialQuoteRules:
     new_wall_area_items_by_thickness: dict[str, float]
     lintel_count_items: set[str]
     lintel_hole_count_items: set[str]
-    floor_area_percent_count_items: dict[str, float]
+    building_area_percent_count_items: dict[str, float]
     custom_projected_area_items: set[str]
     cabinet_length_items: set[str]
     tile_piece_loss_rate: float
@@ -258,7 +258,7 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         new_wall_area_items_by_thickness=_optional_quantity_map(data, "new_wall_area_items_by_thickness"),
         lintel_count_items=_optional_item_set(data, "lintel_count_items"),
         lintel_hole_count_items=_optional_item_set(data, "lintel_hole_count_items"),
-        floor_area_percent_count_items=_optional_quantity_map(data, "floor_area_percent_count_items"),
+        building_area_percent_count_items=_building_area_percent_count_items(data),
         custom_projected_area_items=_optional_item_set(data, "custom_projected_area_items"),
         cabinet_length_items=_optional_item_set(data, "cabinet_length_items"),
         tile_piece_loss_rate=_optional_float(data, "tile_piece_loss_rate", 0.05),
@@ -302,6 +302,12 @@ def _optional_quantity_map(data: dict[str, Any], key: str) -> dict[str, float]:
         except (TypeError, ValueError) as exc:
             raise ValueError(f"{key}.{item_name} must be a number") from exc
     return result
+
+
+def _building_area_percent_count_items(data: dict[str, Any]) -> dict[str, float]:
+    legacy_items = _optional_quantity_map(data, "floor_area_percent_count_items")
+    current_items = _optional_quantity_map(data, "building_area_percent_count_items")
+    return {**legacy_items, **current_items}
 
 
 def _required_float(data: dict[str, Any], key: str) -> float:
@@ -669,8 +675,8 @@ def _aggregate_quantity_for_item(
             ConstructionKind.LINTEL_HOLE,
             "\u6df7\u51dd\u571f\u8fc7\u6881\u5b54\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
         )
-    if item_name in rules.floor_area_percent_count_items:
-        return _floor_area_percent_count_aggregate(building_area, rules.floor_area_percent_count_items[item_name])
+    if item_name in rules.building_area_percent_count_items:
+        return _building_area_percent_count_aggregate(building_area, rules.building_area_percent_count_items[item_name])
     if not rooms:
         return None
     if item_name in rules.custom_projected_area_items:
@@ -908,7 +914,7 @@ def _construction_count_aggregate(
     )
 
 
-def _floor_area_percent_count_aggregate(building_area: float | None, percent: float) -> QuoteAggregateQuantity | None:
+def _building_area_percent_count_aggregate(building_area: float | None, percent: float) -> QuoteAggregateQuantity | None:
     if building_area is None or building_area <= 0:
         return None
     quantity = int(math.floor(building_area * percent + 0.5))
