@@ -49,11 +49,13 @@ def test_export_quantity_result_creates_workbook(tmp_path: Path):
     assert sheet["B4"].value == "书房"
     assert [cell.value for cell in sheet[3][: len(HEADERS)]] == HEADERS
     assert sheet.freeze_panes == "A4"
-    assert sheet.auto_filter.ref == f"A3:T{sheet.max_row}"
+    assert sheet.auto_filter.ref == f"A3:U{sheet.max_row}"
     assert sheet.column_dimensions["B"].width >= 12
     assert sheet["T3"].value == "空间ID"
     assert sheet["T4"].value == "room"
     assert sheet.column_dimensions["T"].hidden is True
+    assert sheet["U3"].value == "报价明细JSON"
+    assert sheet.column_dimensions["U"].hidden is True
 
 
 def test_export_quantity_result_uses_formulas_and_editable_styles(tmp_path: Path):

@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 from typing import Any
 
 from openpyxl import load_workbook
@@ -6,11 +7,14 @@ from openpyxl import load_workbook
 from cad_budget.export_excel import EXTERIOR_HEADERS, HEADERS
 from cad_budget.models import (
     DataStatus,
+    DoorQuantityDetail,
     ExteriorQuantityRow,
+    FixtureQuantityDetail,
     HeightMode,
     QuantityRow,
     QuantityResult,
     SpaceType,
+    WindowQuantityDetail,
 )
 
 
@@ -32,6 +36,7 @@ _INCLUDE_WALL_PAINT = HEADERS[16]
 _STATUS = HEADERS[17]
 _EXCEPTION_NOTES = HEADERS[18]
 _ROOM_ID = "\u7a7a\u95f4ID"
+_DETAILS_JSON = "\u62a5\u4ef7\u660e\u7ec6JSON"
 
 _EXTERIOR_FLOOR = EXTERIOR_HEADERS[0]
 _EXTERIOR_WALL_ID = EXTERIOR_HEADERS[1]
@@ -87,6 +92,7 @@ def _read_quantity_row(sheet, row_index: int) -> QuantityRow | None:
 
     exception_text = _as_text(values.get(_EXCEPTION_NOTES))
     exception_notes = _split_exception_notes(exception_text)
+    details = _quote_details_from_json(values.get(_DETAILS_JSON))
 
     return QuantityRow(
         room_id=room_id or f"excel-row-{row_index}",
@@ -110,6 +116,10 @@ def _read_quantity_row(sheet, row_index: int) -> QuantityRow | None:
         include_in_wall_paint_quantity=_as_bool(values.get(_INCLUDE_WALL_PAINT)),
         status=DataStatus(_as_text(values.get(_STATUS)) or DataStatus.MANUALLY_EDITED.value),
         exception_notes=exception_notes,
+        window_details=details["window_details"],
+        door_details=details["door_details"],
+        custom_details=details["custom_details"],
+        cabinet_details=details["cabinet_details"],
     )
 
 
@@ -183,3 +193,31 @@ def _split_exception_notes(text: str | None) -> list[str]:
         return []
     normalized = text.replace(";", "\uff1b")
     return [part.strip() for part in normalized.split("\uff1b") if part.strip()]
+
+
+def _quote_details_from_json(value: Any) -> dict[str, list]:
+    text = _as_text(value)
+    if not text:
+        return {
+            "window_details": [],
+            "door_details": [],
+            "custom_details": [],
+            "cabinet_details": [],
+        }
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError("Quote detail metadata must be a JSON object.")
+    return {
+        "window_details": [
+            WindowQuantityDetail.model_validate(item) for item in data.get("window_details", [])
+        ],
+        "door_details": [
+            DoorQuantityDetail.model_validate(item) for item in data.get("door_details", [])
+        ],
+        "custom_details": [
+            FixtureQuantityDetail.model_validate(item) for item in data.get("custom_details", [])
+        ],
+        "cabinet_details": [
+            FixtureQuantityDetail.model_validate(item) for item in data.get("cabinet_details", [])
+        ],
+    }

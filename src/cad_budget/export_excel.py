@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -28,7 +29,7 @@ HEADERS = [
     "识别状态",
     "异常说明",
 ]
-_HIDDEN_HEADERS = ["空间ID"]
+_HIDDEN_HEADERS = ["空间ID", "报价明细JSON"]
 
 EXTERIOR_HEADERS = [
     "楼层",
@@ -123,6 +124,7 @@ def export_quantity_result(result: QuantityResult, output_path: Path) -> None:
                 row.status.value,
                 "；".join(row.exception_notes),
                 row.room_id,
+                _quote_details_json(row),
             ]
         )
 
@@ -167,6 +169,18 @@ def _configure_sheet(sheet) -> None:
         sheet.column_dimensions[column].width = width
     for index in range(hidden_start, max_column + 1):
         sheet.column_dimensions[get_column_letter(index)].hidden = True
+
+
+def _quote_details_json(row) -> str:
+    details = {
+        "window_details": [detail.model_dump(mode="json") for detail in row.window_details],
+        "door_details": [detail.model_dump(mode="json") for detail in row.door_details],
+        "custom_details": [detail.model_dump(mode="json") for detail in row.custom_details],
+        "cabinet_details": [detail.model_dump(mode="json") for detail in row.cabinet_details],
+    }
+    if not any(details.values()):
+        return ""
+    return json.dumps(details, ensure_ascii=False, separators=(",", ":"))
 
 
 def _create_exterior_sheet(workbook: Workbook, result: QuantityResult) -> None:

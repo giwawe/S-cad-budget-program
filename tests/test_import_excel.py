@@ -4,7 +4,18 @@ from openpyxl import load_workbook
 
 from cad_budget.export_excel import export_quantity_result
 from cad_budget.import_excel import import_quantity_result
-from cad_budget.models import DataStatus, HeightMode, QuantityRow, QuantityResult, SpaceType
+from cad_budget.models import (
+    DataStatus,
+    DoorQuantityDetail,
+    FixtureKind,
+    FixturePricingMode,
+    FixtureQuantityDetail,
+    HeightMode,
+    QuantityRow,
+    QuantityResult,
+    SpaceType,
+    WindowQuantityDetail,
+)
 
 
 def test_import_quantity_result_reads_edited_room_rows(tmp_path: Path):
@@ -63,6 +74,95 @@ def test_import_quantity_result_reads_edited_room_rows(tmp_path: Path):
     assert row.net_wall_area == 27.5
     assert row.status is DataStatus.MANUALLY_EDITED
     assert row.exception_notes == ["manual_review"]
+
+
+def test_import_quantity_result_preserves_hidden_quote_details(tmp_path: Path):
+    source = QuantityResult(
+        project_name="Detail Round Trip",
+        rows=[
+            QuantityRow(
+                room_id="room-1",
+                floor=None,
+                room_name="Bedroom",
+                space_type=SpaceType.NORMAL,
+                height=2.8,
+                height_mode=HeightMode.PROJECT_DEFAULT,
+                floor_area=9.0,
+                floor_perimeter=12.0,
+                wall_measure_perimeter=11.5,
+                open_boundary_length=0.0,
+                gross_wall_area=32.2,
+                window_count=1,
+                window_area=1.8,
+                window_details=[
+                    WindowQuantityDetail(
+                        id="w1",
+                        room_id="room-1",
+                        width=1.2,
+                        height=1.5,
+                        area=1.8,
+                        height_defaulted=False,
+                        wall_segment_key="north",
+                        wall_segment_length=3.0,
+                    )
+                ],
+                door_opening_count=1,
+                door_opening_area=0.0,
+                door_details=[
+                    DoorQuantityDetail(
+                        id="d1",
+                        room_id="room-1",
+                        width=0.9,
+                        height=None,
+                        effective_height=2.1,
+                        height_defaulted=True,
+                        area=1.89,
+                    )
+                ],
+                net_wall_area=30.4,
+                custom_details=[
+                    FixtureQuantityDetail(
+                        id="custom-1",
+                        room_id="room-1",
+                        room_name="Bedroom",
+                        kind=FixtureKind.CUSTOM,
+                        length=2.0,
+                        effective_height=2.6,
+                        height_defaulted=True,
+                        projected_area=5.2,
+                        pricing_mode=FixturePricingMode.PROJECTED_AREA,
+                    )
+                ],
+                cabinet_details=[
+                    FixtureQuantityDetail(
+                        id="cabinet-1",
+                        room_id="room-1",
+                        room_name="Bedroom",
+                        kind=FixtureKind.CABINET,
+                        length=3.0,
+                        pricing_mode=FixturePricingMode.LENGTH,
+                    )
+                ],
+                is_outdoor=False,
+                include_in_floor_quantity=True,
+                include_in_wall_paint_quantity=True,
+                status=DataStatus.CONFIRMED,
+            )
+        ],
+        exceptions=[],
+    )
+    workbook_path = tmp_path / "details.xlsx"
+    export_quantity_result(source, workbook_path)
+
+    result = import_quantity_result(workbook_path)
+
+    row = result.rows[0]
+    assert row.window_details[0].wall_segment_length == 3.0
+    assert row.door_details[0].effective_height == 2.1
+    assert row.door_details[0].height_defaulted is True
+    assert row.custom_details[0].projected_area == 5.2
+    assert row.custom_details[0].pricing_mode is FixturePricingMode.PROJECTED_AREA
+    assert row.cabinet_details[0].length == 3.0
 
 
 def test_import_quantity_result_reads_exterior_sheet(tmp_path: Path):
