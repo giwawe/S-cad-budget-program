@@ -6,6 +6,7 @@ import pytest
 
 from cad_budget.cad_adapter_models import CadImportOptions, CadUnit
 from cad_budget.dxf_adapter import import_dxf
+from cad_budget.models import FixtureKind
 
 
 def _save_doc(path: Path, doc: ezdxf.EzDxf) -> Path:
@@ -312,6 +313,58 @@ def test_import_dxf_reads_line_wall_geometry(tmp_path: Path):
     assert result.project is not None
     assert len(result.project.walls) == 1
     assert result.project.walls[0].points[1].x == 4
+
+
+def test_imports_quote_custom_and_cabinet_lines(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_TEXT", "QUOTE_CUSTOM", "QUOTE_CABINET"]:
+        doc.layers.add(layer)
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("涓诲崸", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
+    modelspace.add_line((500, 500), (2500, 500), dxfattribs={"layer": "QUOTE_CUSTOM"})
+    modelspace.add_line((500, 900), (3500, 900), dxfattribs={"layer": "QUOTE_CABINET"})
+    dxf_path = _save_doc(tmp_path / "fixtures.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path, confirmed_unit=CadUnit.MILLIMETER))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.custom_items) == 1
+    assert result.project.custom_items[0].length == 2.0
+    assert result.project.custom_items[0].kind is FixtureKind.CUSTOM
+    assert len(result.project.cabinet_items) == 1
+    assert result.project.cabinet_items[0].length == 3.0
+    assert result.project.cabinet_items[0].kind is FixtureKind.CABINET
+
+
+def test_imports_closed_custom_outline_using_longest_rectangle_edge(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_TEXT", "QUOTE_CUSTOM"]:
+        doc.layers.add(layer)
+    modelspace.add_lwpolyline(
+        [(0, 0), (5000, 0), (5000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("瀹㈠巺", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
+    modelspace.add_lwpolyline(
+        [(500, 500), (2500, 500), (2500, 1100), (500, 1100), (500, 500)],
+        dxfattribs={"layer": "QUOTE_CUSTOM", "closed": True},
+    )
+    dxf_path = _save_doc(tmp_path / "custom-outline.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path, confirmed_unit=CadUnit.MILLIMETER))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.custom_items) == 1
+    assert result.project.custom_items[0].length == 2.0
 
 
 def test_import_dxf_reads_insert_door_width_from_block_scale(tmp_path: Path):

@@ -16,6 +16,8 @@ from cad_budget.cad_adapter_models import (
 )
 from cad_budget.models import (
     DoorMarker,
+    FixtureKind,
+    FixtureMarker,
     HeightMarker,
     LayerName,
     Point,
@@ -152,6 +154,21 @@ def _outline_polygon(points: list[Point]) -> Polygon | None:
     if polygon.is_empty or polygon.area <= 0:
         return None
     return polygon
+
+
+def _fixture_marker_from_points(
+    entity, points: list[Point], layer: LayerName, kind: FixtureKind
+) -> FixtureMarker | None:
+    if len(points) < 2:
+        return None
+    if len(points) >= 4 and points[0] == points[-1]:
+        polygon = _outline_polygon(points)
+        length = _outline_width(polygon) if polygon is not None else 0.0
+    else:
+        length = _polyline_length(points)
+    if length <= 0:
+        return None
+    return FixtureMarker(id=_entity_id(entity), layer=layer, kind=kind, points=points, length=length)
 
 
 def _valid_room_polygon(points: list[Point]) -> bool:
@@ -352,6 +369,8 @@ def _assign_imported_marker_floors(
     voids: list[VoidMarker],
     exterior_walls: list[PolylineMarker],
     exterior_openings: list[PolylineMarker],
+    custom_items: list[FixtureMarker],
+    cabinet_items: list[FixtureMarker],
 ) -> None:
     for marker in [*windows, *doors, *heights]:
         if marker.floor is not None:
@@ -360,7 +379,7 @@ def _assign_imported_marker_floors(
         if len(floors) == 1:
             marker.floor = next(iter(floors))
 
-    for marker in [*walls, *openings, *voids, *exterior_walls, *exterior_openings]:
+    for marker in [*walls, *openings, *voids, *exterior_walls, *exterior_openings, *custom_items, *cabinet_items]:
         if marker.floor is not None:
             continue
         floors = _matching_room_floors_for_polyline(marker.points, rooms)
@@ -423,6 +442,8 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     voids: list[VoidMarker] = []
     exterior_walls: list[PolylineMarker] = []
     exterior_openings: list[PolylineMarker] = []
+    custom_items: list[FixtureMarker] = []
+    cabinet_items: list[FixtureMarker] = []
 
     for entity in _iter_modelspace(doc):
         layer = _layer(entity)
@@ -629,6 +650,24 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                     points=_line_points(entity, options.confirmed_unit),
                 )
             )
+        elif layer == LayerName.QUOTE_CUSTOM.value and entity.dxftype() in {"LINE", "LWPOLYLINE"}:
+            points = (
+                _line_points(entity, options.confirmed_unit)
+                if entity.dxftype() == "LINE"
+                else _lwpolyline_points(entity, options.confirmed_unit)
+            )
+            marker = _fixture_marker_from_points(entity, points, LayerName.QUOTE_CUSTOM, FixtureKind.CUSTOM)
+            if marker is not None:
+                custom_items.append(marker)
+        elif layer == LayerName.QUOTE_CABINET.value and entity.dxftype() in {"LINE", "LWPOLYLINE"}:
+            points = (
+                _line_points(entity, options.confirmed_unit)
+                if entity.dxftype() == "LINE"
+                else _lwpolyline_points(entity, options.confirmed_unit)
+            )
+            marker = _fixture_marker_from_points(entity, points, LayerName.QUOTE_CABINET, FixtureKind.CABINET)
+            if marker is not None:
+                cabinet_items.append(marker)
         elif layer == LayerName.QUOTE_OPENING.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
@@ -678,6 +717,8 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         voids,
         exterior_walls,
         exterior_openings,
+        custom_items,
+        cabinet_items,
     )
     project = ProjectInput(
         project_name=options.project_name,
@@ -694,5 +735,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         voids=voids,
         exterior_walls=exterior_walls,
         exterior_openings=exterior_openings,
+        custom_items=custom_items,
+        cabinet_items=cabinet_items,
     )
     return CadImportResult(project=project, issues=issues, source_path=options.source_path, dxf_path=options.source_path)
