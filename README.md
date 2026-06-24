@@ -143,3 +143,5 @@ cad-budget quote result.json --template "D:\Desktop\清单式报价表（商品�
 The generated quote workbook records the rule source in the automation summary area. Invalid rule JSON, missing required fields, non-numeric rule numbers, and unparseable tile specifications fail with clear CLI errors.
 
 The quote workbook writes a small automation summary in columns `Q:S`, counting `自动算量`, `自动汇总`, and `模板默认` lines and showing their percentages. The main quote table remains in columns `A:O`.
+
+Remaining template-default items from the real commodity-apartment sample are tracked in `docs/residential-quote-remaining-defaults-audit-zh.md`, grouped by whether they need new CAD marker layers or should stay manual.
