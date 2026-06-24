@@ -39,6 +39,7 @@
 默认规则：
 
 - 缺少高度时，报价高度默认 `2.6m`。
+- 高度小于 `1.0m` 的全屋定制柜按长度报价，不按投影面积报价。
 - 缺少类型不阻止报价；明细中保留空类型，复核备注提示类型待确认。
 
 ### `QUOTE_CABINET`
@@ -87,28 +88,38 @@
 
 明细字段需要保留 `room_id` / `room_name` / `length` / `height` / `height_defaulted` / `fixture_type`，供报价复核列和后续专项报价使用。
 
+`custom_details` 还需要保留本条明细的计价口径：
+
+- `pricing_mode="projected_area"`：高度大于等于 `1.0m`，按 `length * effective_height` 计入投影面积。
+- `pricing_mode="length"`：高度小于 `1.0m`，按 `length` 计入长度。
+
 ## 算量与报价规则
 
 ### 全屋定制
 
 模板项：`全屋定制`
 
-数量：
+数量分为两部分：
 
 ```text
-sum(QUOTE_CUSTOM.length * effective_height)
+projected_area = sum(length * effective_height for height >= 1.0m)
+length_quantity = sum(length for height < 1.0m)
 ```
 
 其中：
 
 - `effective_height = HEIGHT`，如果标识提供高度。
 - `effective_height = 2.6m`，如果缺少高度。
+- 缺少高度时使用 `2.6m`，因此进入投影面积口径。
+
+本阶段模板只有一个 `全屋定制` 行时，报价数量使用 `projected_area`，并在复核备注中写入高度小于 `1.0m` 的长度合计，提示预算员后续拆分或手工调整。后续如果模板新增低柜长度项目，可把 `length_quantity` 单独汇总到对应模板项。
 
 复核状态：
 
 - 全部有高度：`自动生成`
 - 存在默认高度：`自动生成-默认推断`
 - 备注：`全屋定制缺少高度时默认2.6m，需复核`
+- 存在高度小于 `1.0m` 的低柜：追加 `高度小于1m的全屋定制按长度报价，需拆分确认`
 - 存在缺失类型：追加 `全屋定制类型缺失，需确认柜体类型`
 
 ### 橱柜
@@ -151,9 +162,10 @@ sum(QUOTE_CABINET.length)
 - DXF 导入 `QUOTE_CUSTOM` / `QUOTE_CABINET` 的 `LINE` 和 `LWPOLYLINE`。
 - 属性解析：高度、类型、空间。
 - 全屋定制缺高按 `2.6m` 默认推断。
+- 全屋定制高度小于 `1.0m` 时进入长度计价口径，不计入投影面积。
 - 橱柜地柜/吊柜重叠时按两条标识分别计长，不能因几何重叠去重。
 - 报价中没有标识时保持模板默认。
-- 报价中有标识时 `全屋定制` 按投影面积，`橱柜` 按长度。
+- 报价中有标识时 `全屋定制` 按高度分流为投影面积和低柜长度口径，`橱柜` 按长度。
 - 缺类型时复核备注明确提示。
 - 更新 `docs/cad-lightweight-drawing-standard-zh.md`。
 
