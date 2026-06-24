@@ -5,6 +5,8 @@ from openpyxl import load_workbook
 from cad_budget.export_excel import export_quantity_result
 from cad_budget.import_excel import import_quantity_result
 from cad_budget.models import (
+    ConstructionKind,
+    ConstructionQuantityDetail,
     DataStatus,
     DoorQuantityDetail,
     FixtureKind,
@@ -198,3 +200,44 @@ def test_import_quantity_result_reads_exterior_sheet(tmp_path: Path):
     assert exterior.exterior_wall_id == "ext-1"
     assert exterior.gross_area == 18.0
     assert exterior.net_area == 14.4
+
+
+def test_import_quantity_result_preserves_construction_sheet(tmp_path: Path):
+    source = QuantityResult(
+        project_name="Construction Round Trip",
+        rows=[],
+        construction_details=[
+            ConstructionQuantityDetail(
+                id="new-120",
+                kind=ConstructionKind.NEW_WALL,
+                floor="1F",
+                length=2.0,
+                height=3.0,
+                effective_height=3.0,
+                thickness=0.12,
+                area=6.0,
+                count=1,
+            ),
+            ConstructionQuantityDetail(
+                id="hole-1",
+                kind=ConstructionKind.LINTEL_HOLE,
+                count=1,
+            ),
+        ],
+        exceptions=[],
+    )
+    workbook_path = tmp_path / "construction.xlsx"
+    export_quantity_result(source, workbook_path)
+
+    result = import_quantity_result(workbook_path)
+
+    assert len(result.construction_details) == 2
+    new_wall = result.construction_details[0]
+    assert new_wall.id == "new-120"
+    assert new_wall.kind is ConstructionKind.NEW_WALL
+    assert new_wall.length == 2.0
+    assert new_wall.thickness == 0.12
+    assert new_wall.area == 6.0
+    hole = result.construction_details[1]
+    assert hole.kind is ConstructionKind.LINTEL_HOLE
+    assert hole.count == 1

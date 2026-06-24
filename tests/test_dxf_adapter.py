@@ -6,7 +6,7 @@ import pytest
 
 from cad_budget.cad_adapter_models import CadImportOptions, CadUnit
 from cad_budget.dxf_adapter import import_dxf
-from cad_budget.models import FixtureKind
+from cad_budget.models import ConstructionKind, FixtureKind
 from cad_budget.quantity import calculate_quantities
 
 
@@ -682,6 +682,41 @@ def test_import_dxf_reads_exterior_wall_quote_include_xdata(tmp_path: Path):
     assert result.project.exterior_walls[0].attributes["include_in_quote"] is False
     quantity = calculate_quantities(result.project)
     assert quantity.exterior_rows[0].include_in_quote is False
+
+
+def test_import_dxf_reads_construction_marker_layers_and_xdata(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.appids.new("CAD_BUDGET")
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_TEXT", "QUOTE_DEMO_WALL", "QUOTE_NEW_WALL", "QUOTE_LINTEL", "QUOTE_LINTEL_HOLE"]:
+        doc.layers.add(layer)
+
+    modelspace.add_lwpolyline(
+        [(-1000, -1000), (4000, -1000), (4000, 4000), (-1000, 4000), (-1000, -1000)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("Room", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
+    demo = modelspace.add_lwpolyline([(0, 0), (3000, 0)], dxfattribs={"layer": "QUOTE_DEMO_WALL"})
+    demo.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=2600")])
+    new_wall = modelspace.add_lwpolyline([(0, 1000), (2000, 1000)], dxfattribs={"layer": "QUOTE_NEW_WALL"})
+    new_wall.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=2800"), (1000, "THICKNESS=120")])
+    modelspace.add_lwpolyline([(0, 2000), (1000, 2000)], dxfattribs={"layer": "QUOTE_LINTEL"})
+    modelspace.add_point((0, 3000), dxfattribs={"layer": "QUOTE_LINTEL_HOLE"})
+    dxf_path = _save_doc(tmp_path / "construction_markers.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert result.project.demo_walls[0].kind is ConstructionKind.DEMO_WALL
+    assert result.project.demo_walls[0].height == 2.6
+    assert result.project.demo_walls[0].length == 3.0
+    assert result.project.new_walls[0].kind is ConstructionKind.NEW_WALL
+    assert result.project.new_walls[0].height == 2.8
+    assert result.project.new_walls[0].thickness == 0.12
+    assert result.project.lintels[0].kind is ConstructionKind.LINTEL
+    assert result.project.lintel_holes[0].kind is ConstructionKind.LINTEL_HOLE
 
 
 def test_import_dxf_assigns_room_floor_from_quote_floor_text(tmp_path: Path):

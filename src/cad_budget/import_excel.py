@@ -4,8 +4,10 @@ from typing import Any
 
 from openpyxl import load_workbook
 
-from cad_budget.export_excel import EXTERIOR_HEADERS, HEADERS
+from cad_budget.export_excel import CONSTRUCTION_HEADERS, EXTERIOR_HEADERS, HEADERS
 from cad_budget.models import (
+    ConstructionKind,
+    ConstructionQuantityDetail,
     DataStatus,
     DoorQuantityDetail,
     ExteriorQuantityRow,
@@ -44,6 +46,17 @@ _EXTERIOR_HEIGHT = EXTERIOR_HEADERS[2]
 _EXTERIOR_MEASURE_LENGTH = EXTERIOR_HEADERS[3]
 _EXTERIOR_OPENING_LENGTH = EXTERIOR_HEADERS[4]
 
+_CONSTRUCTION_FLOOR = CONSTRUCTION_HEADERS[0]
+_CONSTRUCTION_ID = CONSTRUCTION_HEADERS[1]
+_CONSTRUCTION_KIND = CONSTRUCTION_HEADERS[2]
+_CONSTRUCTION_LENGTH = CONSTRUCTION_HEADERS[3]
+_CONSTRUCTION_HEIGHT = CONSTRUCTION_HEADERS[4]
+_CONSTRUCTION_EFFECTIVE_HEIGHT = CONSTRUCTION_HEADERS[5]
+_CONSTRUCTION_HEIGHT_DEFAULTED = CONSTRUCTION_HEADERS[6]
+_CONSTRUCTION_THICKNESS = CONSTRUCTION_HEADERS[7]
+_CONSTRUCTION_AREA = CONSTRUCTION_HEADERS[8]
+_CONSTRUCTION_COUNT = CONSTRUCTION_HEADERS[9]
+
 
 def import_quantity_result(workbook_path: Path) -> QuantityResult:
     workbook = load_workbook(workbook_path, data_only=False)
@@ -64,7 +77,25 @@ def import_quantity_result(workbook_path: Path) -> QuantityResult:
             if row is not None
         ]
 
-    return QuantityResult(project_name=project_name, rows=rows, exterior_rows=exterior_rows, exceptions=[])
+    construction_details: list[ConstructionQuantityDetail] = []
+    construction_sheet = _find_sheet_with_headers(workbook, CONSTRUCTION_HEADERS, required=False)
+    if construction_sheet is not None:
+        construction_details = [
+            detail
+            for detail in (
+                _read_construction_detail(construction_sheet, row_index)
+                for row_index in range(4, construction_sheet.max_row + 1)
+            )
+            if detail is not None
+        ]
+
+    return QuantityResult(
+        project_name=project_name,
+        rows=rows,
+        exterior_rows=exterior_rows,
+        construction_details=construction_details,
+        exceptions=[],
+    )
 
 
 def _find_sheet_with_headers(workbook, headers: list[str], *, required: bool = True):
@@ -145,6 +176,26 @@ def _read_exterior_row(sheet, row_index: int) -> ExteriorQuantityRow | None:
     )
 
 
+def _read_construction_detail(sheet, row_index: int) -> ConstructionQuantityDetail | None:
+    values = _row_values_by_header(sheet, row_index)
+    marker_id = _as_text(values.get(_CONSTRUCTION_ID))
+    kind_text = _as_text(values.get(_CONSTRUCTION_KIND))
+    if not marker_id or not kind_text:
+        return None
+    return ConstructionQuantityDetail(
+        id=marker_id,
+        kind=ConstructionKind(kind_text),
+        floor=_as_text(values.get(_CONSTRUCTION_FLOOR)),
+        length=_as_float(values.get(_CONSTRUCTION_LENGTH)),
+        height=_as_optional_float(values.get(_CONSTRUCTION_HEIGHT)),
+        effective_height=_as_optional_float(values.get(_CONSTRUCTION_EFFECTIVE_HEIGHT)),
+        height_defaulted=_as_bool(values.get(_CONSTRUCTION_HEIGHT_DEFAULTED)),
+        thickness=_as_optional_float(values.get(_CONSTRUCTION_THICKNESS)),
+        area=_as_float(values.get(_CONSTRUCTION_AREA)),
+        count=_as_int(values.get(_CONSTRUCTION_COUNT)),
+    )
+
+
 def _row_values_by_header(sheet, row_index: int) -> dict[str, Any]:
     values: dict[str, Any] = {}
     for column_index in range(1, sheet.max_column + 1):
@@ -164,6 +215,12 @@ def _as_text(value: Any) -> str | None:
 def _as_float(value: Any) -> float:
     if value is None or value == "":
         return 0.0
+    return float(value)
+
+
+def _as_optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
     return float(value)
 
 

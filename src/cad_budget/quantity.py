@@ -11,6 +11,9 @@ from shapely.geometry import Polygon
 from cad_budget.geometry import closed_polygon_area, closed_polygon_perimeter, point_inside_polygon
 from cad_budget.models import VoidMarker
 from cad_budget.models import (
+    ConstructionKind,
+    ConstructionMarker,
+    ConstructionQuantityDetail,
     DataStatus,
     DoorQuantityDetail,
     ExteriorQuantityRow,
@@ -48,6 +51,26 @@ def _quote_include_flag(value: Any) -> bool:
         if cleaned in {"true", "1", "yes", "y", "on"}:
             return True
     return True
+
+
+def _polyline_marker_length(marker: ConstructionMarker) -> float:
+    if marker.length > 0:
+        return marker.length
+    return round(
+        sum(
+            hypot(following.x - current.x, following.y - current.y)
+            for current, following in zip(marker.points, marker.points[1:])
+        ),
+        6,
+    )
+
+
+def _construction_effective_height(project: ProjectInput, marker: ConstructionMarker) -> tuple[float | None, bool]:
+    if marker.height is not None:
+        return marker.height, False
+    if marker.floor and marker.floor in project.floor_heights:
+        return project.floor_heights[marker.floor], True
+    return project.default_height, True
 
 
 def _floor_compatible(room_floor: str | None, marker_floor: str | None) -> bool:
@@ -781,6 +804,48 @@ def _calculate_exterior_rows(project: ProjectInput) -> list[ExteriorQuantityRow]
     return rows
 
 
+def _construction_detail_for_linear_marker(
+    project: ProjectInput,
+    marker: ConstructionMarker,
+) -> ConstructionQuantityDetail:
+    length = _polyline_marker_length(marker)
+    effective_height, height_defaulted = _construction_effective_height(project, marker)
+    area = length * effective_height if effective_height is not None else 0.0
+    return ConstructionQuantityDetail(
+        id=marker.id,
+        kind=marker.kind,
+        floor=marker.floor,
+        length=round(length, 6),
+        height=round(marker.height, 6) if marker.height is not None else None,
+        effective_height=round(effective_height, 6) if effective_height is not None else None,
+        height_defaulted=height_defaulted,
+        thickness=round(marker.thickness, 6) if marker.thickness is not None else None,
+        area=round(area, 6),
+        count=1,
+    )
+
+
+def _construction_detail_for_count_marker(marker: ConstructionMarker) -> ConstructionQuantityDetail:
+    return ConstructionQuantityDetail(
+        id=marker.id,
+        kind=marker.kind,
+        floor=marker.floor,
+        length=round(_polyline_marker_length(marker), 6),
+        height=round(marker.height, 6) if marker.height is not None else None,
+        thickness=round(marker.thickness, 6) if marker.thickness is not None else None,
+        count=1,
+    )
+
+
+def _calculate_construction_details(project: ProjectInput) -> list[ConstructionQuantityDetail]:
+    details: list[ConstructionQuantityDetail] = []
+    details.extend(_construction_detail_for_linear_marker(project, marker) for marker in project.demo_walls)
+    details.extend(_construction_detail_for_linear_marker(project, marker) for marker in project.new_walls)
+    details.extend(_construction_detail_for_count_marker(marker) for marker in project.lintels)
+    details.extend(_construction_detail_for_count_marker(marker) for marker in project.lintel_holes)
+    return details
+
+
 def _determine_status(exceptions: list[QuantityException], default_inferred: bool) -> DataStatus:
     for exc in exceptions:
         if exc.code in {
@@ -812,6 +877,7 @@ def _determine_status(exceptions: list[QuantityException], default_inferred: boo
 def calculate_quantities(project: ProjectInput) -> QuantityResult:
     rows: list[QuantityRow] = []
     exterior_rows = _calculate_exterior_rows(project)
+    construction_details = _calculate_construction_details(project)
     exceptions: list[QuantityException] = []
 
     room_name_assignments, name_exceptions = _resolve_room_names(project, project.rooms)
@@ -1052,5 +1118,6 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
         project_name=project.project_name,
         rows=rows,
         exterior_rows=exterior_rows,
+        construction_details=construction_details,
         exceptions=exceptions,
     )

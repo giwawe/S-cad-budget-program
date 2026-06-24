@@ -4,6 +4,8 @@ from pathlib import Path
 from openpyxl import Workbook, load_workbook
 
 from cad_budget.models import (
+    ConstructionKind,
+    ConstructionQuantityDetail,
     DataStatus,
     DoorQuantityDetail,
     ExteriorQuantityRow,
@@ -72,6 +74,11 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u6a71\u67dc" in rules.cabinet_length_items
     assert rules.default_custom_height == 2.6
     assert rules.low_custom_height_threshold == 1.0
+    assert "\u62c6\u6539\u53ca\u62c6\u5899" in rules.demo_wall_area_items
+    assert rules.new_wall_area_items_by_thickness["\u780c120\u539a\u7816\u5899"] == 0.12
+    assert rules.new_wall_area_items_by_thickness["\u780c240\u539a\u7816\u5899"] == 0.24
+    assert "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881" in rules.lintel_count_items
+    assert "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54" in rules.lintel_hole_count_items
 
 
 def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkeypatch):
@@ -1389,6 +1396,118 @@ def test_export_residential_quote_keeps_exterior_and_balcony_defaults_without_ma
     assert _item_row_named(rows, "\u9633\u53f0\u63a8\u62c9\u95e8\u53cc\u5305\u5957")[3] == 55
 
 
+def test_export_residential_quote_auto_fills_construction_marker_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_construction_items=True)
+    result = QuantityResult(
+        project_name="Construction Quote",
+        rows=[],
+        construction_details=[
+            ConstructionQuantityDetail(
+                id="demo-1",
+                kind=ConstructionKind.DEMO_WALL,
+                length=3.0,
+                effective_height=2.8,
+                height_defaulted=True,
+                area=8.4,
+            ),
+            ConstructionQuantityDetail(
+                id="new-120",
+                kind=ConstructionKind.NEW_WALL,
+                length=2.0,
+                height=3.0,
+                effective_height=3.0,
+                thickness=0.12,
+                area=6.0,
+            ),
+            ConstructionQuantityDetail(
+                id="new-240",
+                kind=ConstructionKind.NEW_WALL,
+                length=1.5,
+                height=3.0,
+                effective_height=3.0,
+                thickness=0.24,
+                area=4.5,
+            ),
+            ConstructionQuantityDetail(id="lintel-1", kind=ConstructionKind.LINTEL, count=1),
+            ConstructionQuantityDetail(id="hole-1", kind=ConstructionKind.LINTEL_HOLE, count=1),
+            ConstructionQuantityDetail(id="hole-2", kind=ConstructionKind.LINTEL_HOLE, count=1),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    demo = _item_row_named(rows, "\u62c6\u6539\u53ca\u62c6\u5899")
+    wall_120 = _item_row_named(rows, "\u780c120\u539a\u7816\u5899")
+    wall_240 = _item_row_named(rows, "\u780c240\u539a\u7816\u5899")
+    lintel = _item_row_named(rows, "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881")
+    hole = _item_row_named(rows, "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54")
+    assert demo[3] == 8.4
+    assert demo[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert demo[12] == "\u62c6\u6539\u5899\u9762\u79ef\u6c47\u603b"
+    assert demo[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert wall_120[3] == 6.0
+    assert wall_240[3] == 4.5
+    assert lintel[3] == 1
+    assert hole[3] == 2
+
+
+def test_export_residential_quote_keeps_construction_items_template_default_without_markers(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_construction_items=True)
+    result = QuantityResult(project_name="No Construction", rows=[], exceptions=[])
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    demo = _item_row_named(rows, "\u62c6\u6539\u53ca\u62c6\u5899")
+    assert demo[3] == 93
+    assert demo[9] == "\u6a21\u677f\u9ed8\u8ba4"
+    assert demo[13] == "\u6309\u6a21\u677f\u751f\u6210"
+
+
+def test_export_residential_quote_requires_exact_new_wall_thickness_match(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_construction_items=True)
+    result = QuantityResult(
+        project_name="Construction Thickness",
+        rows=[],
+        construction_details=[
+            ConstructionQuantityDetail(
+                id="new-missing-thickness",
+                kind=ConstructionKind.NEW_WALL,
+                length=2.0,
+                effective_height=3.0,
+                area=6.0,
+            ),
+            ConstructionQuantityDetail(
+                id="new-125",
+                kind=ConstructionKind.NEW_WALL,
+                length=2.0,
+                effective_height=3.0,
+                thickness=0.125,
+                area=6.0,
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    wall_120 = _item_row_named(rows, "\u780c120\u539a\u7816\u5899")
+    wall_240 = _item_row_named(rows, "\u780c240\u539a\u7816\u5899")
+    assert wall_120[3] == 44.8
+    assert wall_120[9] == "\u6a21\u677f\u9ed8\u8ba4"
+    assert wall_240[3] == 64.56
+    assert wall_240[9] == "\u6a21\u677f\u9ed8\u8ba4"
+
+
 def test_export_residential_quote_keeps_kitchen_and_balcony_sliding_doors_separate(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
@@ -1564,6 +1683,7 @@ def _create_quote_template(
     include_custom_cabinet_items: bool = False,
     include_balcony_sliding_items: bool = False,
     include_exterior_summary_items: bool = False,
+    include_construction_items: bool = False,
 ) -> None:
     workbook = Workbook()
     half = workbook.active
@@ -1647,6 +1767,14 @@ def _create_quote_template(
         fitout.append([1, "\u5916\u5899\u6279\u5d4c", "M2", 77, 0, 0, 10, None, "\u5916\u5899\u6279\u5d4c"])
         fitout.append([2, "\u5916\u5899\u6279\u5d4c\u4ee5\u53ca\u4fee\u8865", "M2", 88, 0, 0, 10, None, "\u5916\u5899\u4fee\u8865"])
         fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H34:H35)"])
+    if include_construction_items:
+        fitout.append(["\u4e5d", "\u62c6\u6539\u53ca\u65b0\u5efa\u5de5\u7a0b"])
+        fitout.append([1, "\u62c6\u6539\u53ca\u62c6\u5899", "M2", 93, 0, 0, 10, None, "\u62c6\u5899"])
+        fitout.append([2, "\u780c120\u539a\u7816\u5899", "M2", 44.8, 0, 0, 10, None, "\u780c120\u5899"])
+        fitout.append([3, "\u780c240\u539a\u7816\u5899", "M2", 64.56, 0, 0, 10, None, "\u780c240\u5899"])
+        fitout.append([4, "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881", "\u652f", 15, 0, 0, 10, None, "\u8fc7\u6881"])
+        fitout.append([5, "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54", "\u4e2a", 108, 0, 0, 10, None, "\u8fc7\u6881\u5b54"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H37:H41)"])
     fitout.append(["A", "\u76f4\u63a5\u8d39\u5408\u8ba1(\u4e00+\u2026...\u5341)", None, None, None, None, None, "=H12+H18+H21"])
     fitout.append(["B", "\u5de5\u7a0b\u7ba1\u7406\u8d39(D=A* 5%)", None, None, None, None, None, "=H22*0.05"])
     fitout.append(["C", "\u7a0e\u91d1E=(A+B)* 3%", None, None, None, None, None, 0])

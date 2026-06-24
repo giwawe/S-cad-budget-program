@@ -15,6 +15,8 @@ from cad_budget.cad_adapter_models import (
     CadUnit,
 )
 from cad_budget.models import (
+    ConstructionKind,
+    ConstructionMarker,
     DoorMarker,
     FixtureKind,
     FixtureMarker,
@@ -54,6 +56,8 @@ _FIXTURE_TYPE_ATTRIBUTE_KEYS = ("type", "TYPE", "类型")
 _FIXTURE_ROOM_ATTRIBUTE_KEYS = ("room", "ROOM", "空间")
 _FIXTURE_ROOM_ID_ATTRIBUTE_KEYS = ("room_id", "ROOM_ID")
 _FIXTURE_XDATA_APPIDS = ("CAD_BUDGET",)
+_CONSTRUCTION_HEIGHT_ATTRIBUTE_KEYS = ("height", "HEIGHT")
+_CONSTRUCTION_THICKNESS_ATTRIBUTE_KEYS = ("thickness", "THICKNESS")
 
 
 _QUOTE_LAYER_NAMES = {layer.value for layer in LayerName}
@@ -292,6 +296,12 @@ def _fixture_attributes(entity) -> dict[str, str]:
     return _xdata_key_value_attributes(entity, _FIXTURE_XDATA_APPIDS)
 
 
+def _construction_attributes(entity) -> dict[str, str]:
+    attrs = _xdata_key_value_attributes(entity, _FIXTURE_XDATA_APPIDS)
+    attrs.update(_insert_attributes(entity))
+    return attrs
+
+
 def _parse_boolean(value: str) -> bool | None:
     cleaned = value.strip().lower()
     if cleaned in {"true", "1", "yes", "y", "on"}:
@@ -310,6 +320,39 @@ def _exterior_wall_attributes(entity) -> dict[str, bool]:
         if include is not None:
             return {"include_in_quote": include}
     return {}
+
+
+def _dimension_from_attributes(attrs: dict[str, str], keys: tuple[str, ...]) -> float | None:
+    normalized = {str(key).lower(): value for key, value in attrs.items()}
+    for key in keys:
+        value = normalized.get(key.lower())
+        if value is None:
+            continue
+        parsed = _parse_window_dimension(value)
+        if parsed is not None:
+            return round(parsed, 6)
+    return None
+
+
+def _construction_marker_from_points(
+    entity,
+    points: list[Point],
+    layer: LayerName,
+    kind: ConstructionKind,
+) -> ConstructionMarker | None:
+    if not points:
+        return None
+    attrs = _construction_attributes(entity)
+    return ConstructionMarker(
+        id=_entity_id(entity),
+        layer=layer,
+        kind=kind,
+        points=points,
+        length=_polyline_length(points) if len(points) >= 2 else 0.0,
+        height=_dimension_from_attributes(attrs, _CONSTRUCTION_HEIGHT_ATTRIBUTE_KEYS),
+        thickness=_dimension_from_attributes(attrs, _CONSTRUCTION_THICKNESS_ATTRIBUTE_KEYS),
+        attributes=dict(attrs),
+    )
 
 
 def _parse_window_dimension(value: str) -> float | None:
@@ -428,6 +471,8 @@ def _matching_room_floors_for_point(point: Point, rooms: list[RoomBoundary]) -> 
 
 
 def _matching_room_floors_for_polyline(points: list[Point], rooms: list[RoomBoundary]) -> set[str]:
+    if len(points) == 1:
+        return _matching_room_floors_for_point(points[0], rooms)
     marker_line = LineString((point.x, point.y) for point in points)
     floors: set[str] = set()
     for room in rooms:
@@ -451,6 +496,10 @@ def _assign_imported_marker_floors(
     exterior_openings: list[PolylineMarker],
     custom_items: list[FixtureMarker],
     cabinet_items: list[FixtureMarker],
+    demo_walls: list[ConstructionMarker],
+    new_walls: list[ConstructionMarker],
+    lintels: list[ConstructionMarker],
+    lintel_holes: list[ConstructionMarker],
 ) -> None:
     for marker in [*windows, *doors, *heights]:
         if marker.floor is not None:
@@ -459,7 +508,19 @@ def _assign_imported_marker_floors(
         if len(floors) == 1:
             marker.floor = next(iter(floors))
 
-    for marker in [*walls, *openings, *voids, *exterior_walls, *exterior_openings, *custom_items, *cabinet_items]:
+    for marker in [
+        *walls,
+        *openings,
+        *voids,
+        *exterior_walls,
+        *exterior_openings,
+        *custom_items,
+        *cabinet_items,
+        *demo_walls,
+        *new_walls,
+        *lintels,
+        *lintel_holes,
+    ]:
         if marker.floor is not None:
             continue
         floors = _matching_room_floors_for_polyline(marker.points, rooms)
@@ -524,6 +585,10 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     exterior_openings: list[PolylineMarker] = []
     custom_items: list[FixtureMarker] = []
     cabinet_items: list[FixtureMarker] = []
+    demo_walls: list[ConstructionMarker] = []
+    new_walls: list[ConstructionMarker] = []
+    lintels: list[ConstructionMarker] = []
+    lintel_holes: list[ConstructionMarker] = []
 
     for entity in _iter_modelspace(doc):
         layer = _layer(entity)
@@ -748,6 +813,54 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
             marker = _fixture_marker_from_points(entity, points, LayerName.QUOTE_CABINET, FixtureKind.CABINET)
             if marker is not None:
                 cabinet_items.append(marker)
+        elif layer == LayerName.QUOTE_DEMO_WALL.value and entity.dxftype() in {"LINE", "LWPOLYLINE"}:
+            points = (
+                _line_points(entity, options.confirmed_unit)
+                if entity.dxftype() == "LINE"
+                else _lwpolyline_points(entity, options.confirmed_unit)
+            )
+            marker = _construction_marker_from_points(
+                entity, points, LayerName.QUOTE_DEMO_WALL, ConstructionKind.DEMO_WALL
+            )
+            if marker is not None and marker.length > 0:
+                demo_walls.append(marker)
+        elif layer == LayerName.QUOTE_NEW_WALL.value and entity.dxftype() in {"LINE", "LWPOLYLINE"}:
+            points = (
+                _line_points(entity, options.confirmed_unit)
+                if entity.dxftype() == "LINE"
+                else _lwpolyline_points(entity, options.confirmed_unit)
+            )
+            marker = _construction_marker_from_points(
+                entity, points, LayerName.QUOTE_NEW_WALL, ConstructionKind.NEW_WALL
+            )
+            if marker is not None and marker.length > 0:
+                new_walls.append(marker)
+        elif layer == LayerName.QUOTE_LINTEL.value and entity.dxftype() in {"LINE", "LWPOLYLINE"}:
+            points = (
+                _line_points(entity, options.confirmed_unit)
+                if entity.dxftype() == "LINE"
+                else _lwpolyline_points(entity, options.confirmed_unit)
+            )
+            marker = _construction_marker_from_points(
+                entity, points, LayerName.QUOTE_LINTEL, ConstructionKind.LINTEL
+            )
+            if marker is not None:
+                lintels.append(marker)
+        elif layer == LayerName.QUOTE_LINTEL_HOLE.value and entity.dxftype() in {"POINT", "INSERT", "LINE", "LWPOLYLINE"}:
+            if entity.dxftype() == "POINT":
+                point = entity.dxf.location
+                points = [_point(point.x, point.y, options.confirmed_unit)]
+            elif entity.dxftype() == "INSERT":
+                points = [_insert_point(entity, options.confirmed_unit)]
+            elif entity.dxftype() == "LINE":
+                points = _line_points(entity, options.confirmed_unit)
+            else:
+                points = _lwpolyline_points(entity, options.confirmed_unit)
+            marker = _construction_marker_from_points(
+                entity, points, LayerName.QUOTE_LINTEL_HOLE, ConstructionKind.LINTEL_HOLE
+            )
+            if marker is not None:
+                lintel_holes.append(marker)
         elif layer == LayerName.QUOTE_OPENING.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
@@ -806,6 +919,10 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         exterior_openings,
         custom_items,
         cabinet_items,
+        demo_walls,
+        new_walls,
+        lintels,
+        lintel_holes,
     )
     project = ProjectInput(
         project_name=options.project_name,
@@ -824,5 +941,9 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         exterior_openings=exterior_openings,
         custom_items=custom_items,
         cabinet_items=cabinet_items,
+        demo_walls=demo_walls,
+        new_walls=new_walls,
+        lintels=lintels,
+        lintel_holes=lintel_holes,
     )
     return CadImportResult(project=project, issues=issues, source_path=options.source_path, dxf_path=options.source_path)

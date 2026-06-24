@@ -41,6 +41,19 @@ EXTERIOR_HEADERS = [
     "外墙净面积",
 ]
 
+CONSTRUCTION_HEADERS = [
+    "楼层",
+    "标识编号",
+    "类型",
+    "长度",
+    "高度",
+    "有效高度",
+    "高度是否默认",
+    "厚度",
+    "面积",
+    "数量",
+]
+
 _COLUMN_WIDTHS = {
     "A": 10,
     "B": 16,
@@ -77,6 +90,7 @@ _EDITABLE_COLUMNS = {"A", "B", "C", "D", "G", "H", "J", "K", "L", "M", "O", "P",
 _FORMULA_COLUMNS = {"I", "N"}
 _NUMERIC_COLUMNS = {"D", "E", "F", "G", "H", "I", "K", "M", "N"}
 _EXTERIOR_NUMERIC_COLUMNS = {"C", "D", "E", "F", "G"}
+_CONSTRUCTION_NUMERIC_COLUMNS = {"D", "E", "F", "H", "I", "J"}
 
 _HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 _EDITABLE_FILL = PatternFill("solid", fgColor="FFF2CC")
@@ -132,6 +146,8 @@ def export_quantity_result(result: QuantityResult, output_path: Path) -> None:
     _configure_sheet(sheet)
     if result.exterior_rows:
         _create_exterior_sheet(workbook, result)
+    if result.construction_details:
+        _create_construction_sheet(workbook, result)
     workbook.save(output_path)
 
 
@@ -222,3 +238,45 @@ def _create_exterior_sheet(workbook: Workbook, result: QuantityResult) -> None:
     sheet.row_dimensions[3].height = 24
     for column, width in _EXTERIOR_COLUMN_WIDTHS.items():
         sheet.column_dimensions[column].width = width
+
+
+def _create_construction_sheet(workbook: Workbook, result: QuantityResult) -> None:
+    sheet = workbook.create_sheet("施工标识表")
+    sheet["A1"] = "项目名称"
+    sheet["B1"] = result.project_name
+    sheet["A1"].font = _BOLD_FONT
+    sheet.append([])
+    sheet.append(CONSTRUCTION_HEADERS)
+
+    for cell in sheet[3]:
+        cell.fill = _HEADER_FILL
+        cell.font = _WHITE_FONT
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for detail in result.construction_details:
+        sheet.append(
+            [
+                detail.floor,
+                detail.id,
+                detail.kind.value,
+                detail.length,
+                detail.height,
+                detail.effective_height,
+                detail.height_defaulted,
+                detail.thickness,
+                detail.area,
+                detail.count,
+            ]
+        )
+
+    for data_row in sheet.iter_rows(min_row=4, max_row=sheet.max_row, max_col=len(CONSTRUCTION_HEADERS)):
+        for cell in data_row:
+            column = get_column_letter(cell.column)
+            cell.fill = _STATIC_FILL
+            if column in _CONSTRUCTION_NUMERIC_COLUMNS:
+                cell.number_format = "0.###"
+            cell.alignment = Alignment(vertical="top")
+
+    sheet.freeze_panes = "A4"
+    sheet.auto_filter.ref = f"A3:{get_column_letter(len(CONSTRUCTION_HEADERS))}{sheet.max_row}"
+    sheet.row_dimensions[3].height = 24

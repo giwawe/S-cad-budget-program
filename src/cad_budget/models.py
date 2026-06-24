@@ -18,6 +18,10 @@ class LayerName(str, Enum):
     QUOTE_EXT_OPENING = "QUOTE_EXT_OPENING"
     QUOTE_CUSTOM = "QUOTE_CUSTOM"
     QUOTE_CABINET = "QUOTE_CABINET"
+    QUOTE_DEMO_WALL = "QUOTE_DEMO_WALL"
+    QUOTE_NEW_WALL = "QUOTE_NEW_WALL"
+    QUOTE_LINTEL = "QUOTE_LINTEL"
+    QUOTE_LINTEL_HOLE = "QUOTE_LINTEL_HOLE"
 
 
 class SpaceType(str, Enum):
@@ -56,6 +60,13 @@ class FixtureKind(str, Enum):
 class FixturePricingMode(str, Enum):
     PROJECTED_AREA = "projected_area"
     LENGTH = "length"
+
+
+class ConstructionKind(str, Enum):
+    DEMO_WALL = "demo_wall"
+    NEW_WALL = "new_wall"
+    LINTEL = "lintel"
+    LINTEL_HOLE = "lintel_hole"
 
 
 class Point(BaseModel):
@@ -141,6 +152,25 @@ class FixtureMarker(BaseModel):
     attributes: dict[str, Any] = Field(default_factory=dict)
 
 
+class ConstructionMarker(BaseModel):
+    id: str
+    layer: LayerName
+    kind: ConstructionKind
+    points: list[Point]
+    length: float = 0.0
+    height: float | None = None
+    thickness: float | None = None
+    floor: str | None = None
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("points")
+    @classmethod
+    def validate_points(cls, points: list[Point]) -> list[Point]:
+        if len(points) < 1:
+            raise ValueError("construction marker must include at least one point")
+        return points
+
+
 class HeightMarker(BaseModel):
     id: str
     layer: LayerName = LayerName.QUOTE_HEIGHT
@@ -183,6 +213,10 @@ class ProjectInput(BaseModel):
     exterior_openings: list[PolylineMarker] = Field(default_factory=list)
     custom_items: list[FixtureMarker] = Field(default_factory=list)
     cabinet_items: list[FixtureMarker] = Field(default_factory=list)
+    demo_walls: list[ConstructionMarker] = Field(default_factory=list)
+    new_walls: list[ConstructionMarker] = Field(default_factory=list)
+    lintels: list[ConstructionMarker] = Field(default_factory=list)
+    lintel_holes: list[ConstructionMarker] = Field(default_factory=list)
 
 
 class QuantityException(BaseModel):
@@ -224,6 +258,19 @@ class FixtureQuantityDetail(BaseModel):
     projected_area: float = 0.0
     pricing_mode: FixturePricingMode
     fixture_type: str | None = None
+
+
+class ConstructionQuantityDetail(BaseModel):
+    id: str
+    kind: ConstructionKind
+    floor: str | None = None
+    length: float = 0.0
+    height: float | None = None
+    effective_height: float | None = None
+    height_defaulted: bool = False
+    thickness: float | None = None
+    area: float = 0.0
+    count: int = 0
 
 
 class QuantityRow(BaseModel):
@@ -269,4 +316,5 @@ class QuantityResult(BaseModel):
     project_name: str
     rows: list[QuantityRow]
     exterior_rows: list[ExteriorQuantityRow] = Field(default_factory=list)
+    construction_details: list[ConstructionQuantityDetail] = Field(default_factory=list)
     exceptions: list[QuantityException]

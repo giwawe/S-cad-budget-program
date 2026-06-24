@@ -42,6 +42,12 @@ QUOTE_HEIGHT
 QUOTE_VOID
 QUOTE_EXT_WALL
 QUOTE_EXT_OPENING
+QUOTE_CUSTOM
+QUOTE_CABINET
+QUOTE_DEMO_WALL
+QUOTE_NEW_WALL
+QUOTE_LINTEL
+QUOTE_LINTEL_HOLE
 ```
 
 The current implementation starts from normalized JSON. DWG/DXF conversion should produce the same structure used by the fixtures.
@@ -88,6 +94,12 @@ QUOTE_HEIGHT
 QUOTE_VOID
 QUOTE_EXT_WALL
 QUOTE_EXT_OPENING
+QUOTE_CUSTOM
+QUOTE_CABINET
+QUOTE_DEMO_WALL
+QUOTE_NEW_WALL
+QUOTE_LINTEL
+QUOTE_LINTEL_HOLE
 ```
 
 `QUOTE_FLOOR` text markers are optional. Commodity apartment drawings can omit them and use the project default height. Villa or multi-floor drawings can add `QUOTE_FLOOR` text markers inside room boundaries; imported windows, doors, walls, openings, height markers, voids, and exterior linework inherit the matched room floor when the match is unambiguous, so per-floor default heights can be used during quantity calculation.
@@ -103,6 +115,8 @@ Exterior wall quantities are kept separate from room rows. `QUOTE_EXT_WALL` and 
 Stair spaces keep their basic room quantities, but `space_type=stair` is marked with `stair_special_quantity_manual` because stair treads, risers, sloped slabs, handrails, and other stair-specific quantities are manual in the first version.
 
 The main Excel quantity sheet keeps hidden `空间ID` and quote-detail metadata columns. They are not part of the visible review table, but they give a stable key and preserve detail rows used by quote automation, such as window wall segments, door openings, custom cabinetry, and cabinets.
+
+Demolition, new masonry wall, and lintel markers are explicit CAD opt-ins. `QUOTE_DEMO_WALL` linework produces demolition wall area by length times marker/default height. `QUOTE_NEW_WALL` linework uses `CAD_BUDGET` XDATA or block attributes `THICKNESS` and optional `HEIGHT`; 120mm and 240mm walls feed the matching quote lines. `QUOTE_LINTEL` linework counts brick-wall door/window lintels, and `QUOTE_LINTEL_HOLE` point/block/line markers count concrete lintel holes. If these markers are absent, the corresponding quote items remain template-default.
 
 Edited Excel workbooks can be imported back into a `QuantityResult` JSON:
 
@@ -124,7 +138,7 @@ The quote exporter reads only the `整装` worksheet from the template and ignor
 
 Quote generation is automation-first: `confirmed` and `manually_edited` room quantities are marked `自动生成`; `default_inferred` rows are still generated and marked `自动生成-默认推断`; `needs_review` rows are still generated and marked `自动生成-异常提示`; template-default items are marked `按模板生成`. These statuses are review hints and do not block quote generation.
 
-Several non-room quote lines are auto-filled from whole-house aggregates when their template item names match the built-in rules. Cleanup, material handling, tile protection, wiring, water-pipe routing, wall chasing, and similar area-based items use the summed included indoor floor area. `美缝` uses generated tile work area: floor tile area plus wet-area wall tile area. `窗帘` uses the summed wall-segment length for windows and de-duplicates multiple windows on the same room wall. `地面瓷砖` and `墙面瓷砖` parse tile specs such as `750X1500` or `600x1200` from the template text and convert generated tile area to piece counts with the configured loss rate. `瓷砖加工费` uses the summed included indoor floor area as the house-area proxy and is marked for designer confirmation. `室内门` is counted by unique ordinary door openings; wide openings are excluded. `厨房推拉门` uses unique wide door-opening area for matched room names, and `厨房推拉门双包套` uses the matching opening trim length. `阳台推拉门` and `阳台推拉门双包套` use item-specific balcony/terrace room keywords so they do not broaden kitchen sliding-door matching. `外墙批嵌` uses selected exterior net area and deducts exterior openings; `外墙批嵌以及修补` remains template-default. `全屋定制` uses projected area from `QUOTE_CUSTOM`; missing custom height defaults to 2.6m, and custom fixtures lower than 1m are excluded from projected-area totals with a review note for length pricing. `橱柜` uses summed `QUOTE_CABINET` length and keeps a review note for overlapping base/wall cabinet confirmation. `淋浴隔断` is filled by bathroom count, while `玻璃淋浴房` remains template-default unless the rules are customized. Rule files can also opt template items into room-count, wet-room-count, kitchen-count, bathroom-count, window-count, window-area, door-count, door-area, fixed-quantity, curtain wall-length, tile-piece, tile-processing-area, interior-door-count, sliding-door-area, sliding-door-trim-length, exterior-net-area, custom projected-area, and cabinet-length aggregates. Fixed-quantity aggregates are for whole-house one-off lines such as cleaning, switch packages, and lighting packages.
+Several non-room quote lines are auto-filled from whole-house aggregates when their template item names match the built-in rules. Cleanup, material handling, tile protection, wiring, water-pipe routing, wall chasing, and similar area-based items use the summed included indoor floor area. `美缝` uses generated tile work area: floor tile area plus wet-area wall tile area. `窗帘` uses the summed wall-segment length for windows and de-duplicates multiple windows on the same room wall. `地面瓷砖` and `墙面瓷砖` parse tile specs such as `750X1500` or `600x1200` from the template text and convert generated tile area to piece counts with the configured loss rate. `瓷砖加工费` uses the summed included indoor floor area as the house-area proxy and is marked for designer confirmation. `室内门` is counted by unique ordinary door openings; wide openings are excluded. `厨房推拉门` uses unique wide door-opening area for matched room names, and `厨房推拉门双包套` uses the matching opening trim length. `阳台推拉门` and `阳台推拉门双包套` use item-specific balcony/terrace room keywords so they do not broaden kitchen sliding-door matching. `外墙批嵌` uses selected exterior net area and deducts exterior openings; `外墙批嵌以及修补` remains template-default. `拆改及拆墙` uses `QUOTE_DEMO_WALL` area, `砌120厚砖墙` / `砌240厚砖墙` use `QUOTE_NEW_WALL` area matched by thickness, `砖墙门窗洞过梁` counts `QUOTE_LINTEL`, and `打混凝土过梁孔` counts `QUOTE_LINTEL_HOLE`. `全屋定制` uses projected area from `QUOTE_CUSTOM`; missing custom height defaults to 2.6m, and custom fixtures lower than 1m are excluded from projected-area totals with a review note for length pricing. `橱柜` uses summed `QUOTE_CABINET` length and keeps a review note for overlapping base/wall cabinet confirmation. `淋浴隔断` is filled by bathroom count, while `玻璃淋浴房` remains template-default unless the rules are customized. Rule files can also opt template items into room-count, wet-room-count, kitchen-count, bathroom-count, window-count, window-area, door-count, door-area, fixed-quantity, curtain wall-length, tile-piece, tile-processing-area, interior-door-count, sliding-door-area, sliding-door-trim-length, exterior-net-area, construction marker, custom projected-area, and cabinet-length aggregates. Fixed-quantity aggregates are for whole-house one-off lines such as cleaning, switch packages, and lighting packages.
 
 Wet-room quote quantities use dedicated height rules instead of full wall net area: kitchen waterproofing is floor area plus wall length below 0.3m; bathroom waterproofing is floor area plus wall length below 1.8m; wall tile area is wall length below 2.5m minus known window area.
 

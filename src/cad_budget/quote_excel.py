@@ -9,7 +9,15 @@ from typing import Any
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
-from cad_budget.models import DataStatus, ExteriorQuantityRow, FixturePricingMode, QuantityResult, QuantityRow
+from cad_budget.models import (
+    ConstructionKind,
+    ConstructionQuantityDetail,
+    DataStatus,
+    ExteriorQuantityRow,
+    FixturePricingMode,
+    QuantityResult,
+    QuantityRow,
+)
 
 
 FITOUT_SHEET_NAME = "\u6574\u88c5"
@@ -174,6 +182,10 @@ class ResidentialQuoteRules:
     sliding_door_area_items: set[str]
     sliding_door_trim_length_items: set[str]
     exterior_net_area_aggregate_items: set[str]
+    demo_wall_area_items: set[str]
+    new_wall_area_items_by_thickness: dict[str, float]
+    lintel_count_items: set[str]
+    lintel_hole_count_items: set[str]
     custom_projected_area_items: set[str]
     cabinet_length_items: set[str]
     tile_piece_loss_rate: float
@@ -241,6 +253,10 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         sliding_door_area_items=_optional_item_set(data, "sliding_door_area_items"),
         sliding_door_trim_length_items=_optional_item_set(data, "sliding_door_trim_length_items"),
         exterior_net_area_aggregate_items=_optional_item_set(data, "exterior_net_area_aggregate_items"),
+        demo_wall_area_items=_optional_item_set(data, "demo_wall_area_items"),
+        new_wall_area_items_by_thickness=_optional_quantity_map(data, "new_wall_area_items_by_thickness"),
+        lintel_count_items=_optional_item_set(data, "lintel_count_items"),
+        lintel_hole_count_items=_optional_item_set(data, "lintel_hole_count_items"),
         custom_projected_area_items=_optional_item_set(data, "custom_projected_area_items"),
         cabinet_length_items=_optional_item_set(data, "cabinet_length_items"),
         tile_piece_loss_rate=_optional_float(data, "tile_piece_loss_rate", 0.05),
@@ -379,6 +395,7 @@ def export_residential_quote(
                 included_rooms,
                 rules,
                 result.exterior_rows,
+                result.construction_details,
             )
         )
 
@@ -417,6 +434,7 @@ def _append_section(
     included_rooms: list[QuantityRow] | None = None,
     rules: ResidentialQuoteRules | None = None,
     exterior_rows: list[ExteriorQuantityRow] | None = None,
+    construction_details: list[ConstructionQuantityDetail] | None = None,
 ) -> int:
     if rules is None:
         rules = load_default_quote_rules()
@@ -429,7 +447,11 @@ def _append_section(
     first_item_row = sheet.max_row + 1
     for item_number, item in enumerate(items, start=1):
         row_index = sheet.max_row + 1
-        aggregate = _aggregate_quantity_for_item(item, included_rooms or [], rules, exterior_rows or []) if room is None else None
+        aggregate = (
+            _aggregate_quantity_for_item(item, included_rooms or [], rules, exterior_rows or [], construction_details or [])
+            if room is None
+            else None
+        )
         if room is not None:
             quantity = _quantity_for_item(item.name, room, rules)
         elif aggregate is not None:
@@ -601,6 +623,7 @@ def _aggregate_quantity_for_item(
     rooms: list[QuantityRow],
     rules: ResidentialQuoteRules,
     exterior_rows: list[ExteriorQuantityRow] | None = None,
+    construction_details: list[ConstructionQuantityDetail] | None = None,
 ) -> QuoteAggregateQuantity | None:
     item_name = item.name
     if item_name in rules.fixed_quantity_aggregate_items:
@@ -611,6 +634,29 @@ def _aggregate_quantity_for_item(
         )
     if item_name in rules.exterior_net_area_aggregate_items:
         return _exterior_net_area_aggregate(exterior_rows or [])
+    if item_name in rules.demo_wall_area_items:
+        return _construction_area_aggregate(
+            construction_details or [],
+            ConstructionKind.DEMO_WALL,
+            "\u62c6\u6539\u5899\u9762\u79ef\u6c47\u603b",
+        )
+    if item_name in rules.new_wall_area_items_by_thickness:
+        return _new_wall_area_aggregate(
+            construction_details or [],
+            rules.new_wall_area_items_by_thickness[item_name],
+        )
+    if item_name in rules.lintel_count_items:
+        return _construction_count_aggregate(
+            construction_details or [],
+            ConstructionKind.LINTEL,
+            "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
+        )
+    if item_name in rules.lintel_hole_count_items:
+        return _construction_count_aggregate(
+            construction_details or [],
+            ConstructionKind.LINTEL_HOLE,
+            "\u6df7\u51dd\u571f\u8fc7\u6881\u5b54\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
+        )
     if not rooms:
         return None
     if item_name in rules.custom_projected_area_items:
@@ -788,6 +834,76 @@ def _exterior_net_area_aggregate(exterior_rows: list[ExteriorQuantityRow]) -> Qu
         review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
         review_note="\u4f7f\u7528\u9009\u5b9a\u5916\u5899\u51c0\u9762\u79ef\uff0c\u5df2\u6263\u9664\u5916\u5899\u6d1e\u53e3\uff0c\u9700\u786e\u8ba4\u5916\u5899\u6279\u5d4c\u65bd\u5de5\u9762",
     )
+
+
+def _construction_area_aggregate(
+    construction_details: list[ConstructionQuantityDetail],
+    kind: ConstructionKind,
+    basis: str,
+) -> QuoteAggregateQuantity | None:
+    details = [detail for detail in construction_details if detail.kind is kind]
+    quantity = _round_quantity(sum(detail.area for detail in details))
+    if not details or quantity <= 0:
+        return None
+    return QuoteAggregateQuantity(
+        quantity=quantity,
+        basis=basis,
+        rooms=[],
+        review_status=_construction_review_status(details),
+        review_note=_construction_review_note(details),
+    )
+
+
+def _new_wall_area_aggregate(
+    construction_details: list[ConstructionQuantityDetail],
+    thickness: float,
+) -> QuoteAggregateQuantity | None:
+    details = [
+        detail
+        for detail in construction_details
+        if detail.kind is ConstructionKind.NEW_WALL
+        and detail.thickness is not None
+        and abs(detail.thickness - thickness) <= 1e-6
+    ]
+    quantity = _round_quantity(sum(detail.area for detail in details))
+    if not details or quantity <= 0:
+        return None
+    return QuoteAggregateQuantity(
+        quantity=quantity,
+        basis=f"\u65b0\u780c{thickness * 1000:g}mm\u7816\u5899\u9762\u79ef\u6c47\u603b",
+        rooms=[],
+        review_status=_construction_review_status(details),
+        review_note=_construction_review_note(details),
+    )
+
+
+def _construction_count_aggregate(
+    construction_details: list[ConstructionQuantityDetail],
+    kind: ConstructionKind,
+    basis: str,
+) -> QuoteAggregateQuantity | None:
+    details = [detail for detail in construction_details if detail.kind is kind]
+    quantity = sum(detail.count for detail in details)
+    if not details or quantity <= 0:
+        return None
+    return QuoteAggregateQuantity(
+        quantity=quantity,
+        basis=basis,
+        rooms=[],
+        review_status="\u81ea\u52a8\u751f\u6210",
+    )
+
+
+def _construction_review_status(details: list[ConstructionQuantityDetail]) -> str:
+    if any(detail.height_defaulted for detail in details):
+        return "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    return "\u81ea\u52a8\u751f\u6210"
+
+
+def _construction_review_note(details: list[ConstructionQuantityDetail]) -> str | None:
+    if any(detail.height_defaulted for detail in details):
+        return "\u5899\u4f53\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838"
+    return None
 
 
 def _custom_projected_area_aggregate(rooms: list[QuantityRow], rules: ResidentialQuoteRules) -> QuoteAggregateQuantity | None:

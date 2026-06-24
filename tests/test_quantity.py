@@ -1,5 +1,7 @@
 from cad_budget.models import (
     DataStatus,
+    ConstructionKind,
+    ConstructionMarker,
     DoorMarker,
     FixtureKind,
     FixtureMarker,
@@ -1214,3 +1216,66 @@ def test_exterior_wall_include_flag_accepts_string_false_for_json_compatibility(
     result = calculate_quantities(project)
 
     assert result.exterior_rows[0].include_in_quote is False
+
+
+def test_construction_markers_calculate_demo_new_wall_lintel_and_hole_quantities():
+    project = ProjectInput(
+        project_name="Construction Markers",
+        default_height=2.8,
+        demo_walls=[
+            ConstructionMarker(
+                id="demo-1",
+                layer=LayerName.QUOTE_DEMO_WALL,
+                kind=ConstructionKind.DEMO_WALL,
+                points=[Point(x=0, y=0), Point(x=3, y=0)],
+            )
+        ],
+        new_walls=[
+            ConstructionMarker(
+                id="new-120",
+                layer=LayerName.QUOTE_NEW_WALL,
+                kind=ConstructionKind.NEW_WALL,
+                points=[Point(x=0, y=1), Point(x=2, y=1)],
+                height=3.0,
+                thickness=0.12,
+            ),
+            ConstructionMarker(
+                id="new-240",
+                layer=LayerName.QUOTE_NEW_WALL,
+                kind=ConstructionKind.NEW_WALL,
+                points=[Point(x=0, y=2), Point(x=1.5, y=2)],
+                height=3.0,
+                thickness=0.24,
+            ),
+        ],
+        lintels=[
+            ConstructionMarker(
+                id="lintel-1",
+                layer=LayerName.QUOTE_LINTEL,
+                kind=ConstructionKind.LINTEL,
+                points=[Point(x=0, y=3), Point(x=1, y=3)],
+            )
+        ],
+        lintel_holes=[
+            ConstructionMarker(
+                id="hole-1",
+                layer=LayerName.QUOTE_LINTEL_HOLE,
+                kind=ConstructionKind.LINTEL_HOLE,
+                points=[Point(x=0, y=4)],
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    details = {detail.id: detail for detail in result.construction_details}
+    assert details["demo-1"].length == 3.0
+    assert details["demo-1"].effective_height == 2.8
+    assert details["demo-1"].height_defaulted is True
+    assert details["demo-1"].area == 8.4
+    assert details["new-120"].area == 6.0
+    assert details["new-120"].thickness == 0.12
+    assert details["new-240"].area == 4.5
+    assert details["new-240"].thickness == 0.24
+    assert details["lintel-1"].count == 1
+    assert details["hole-1"].count == 1

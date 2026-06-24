@@ -4,6 +4,8 @@ from openpyxl import load_workbook
 
 from cad_budget.export_excel import HEADERS, export_quantity_result
 from cad_budget.models import (
+    ConstructionKind,
+    ConstructionQuantityDetail,
     DataStatus,
     ExteriorQuantityRow,
     HeightMode,
@@ -175,3 +177,40 @@ def test_export_quantity_result_creates_exterior_sheet(tmp_path: Path):
     assert sheet["G4"].value == 9.0
     assert sheet.freeze_panes == "A4"
     assert sheet.auto_filter.ref == "A3:G4"
+
+
+def test_export_quantity_result_creates_construction_sheet(tmp_path: Path):
+    result = QuantityResult(
+        project_name="Construction Demo",
+        rows=[],
+        construction_details=[
+            ConstructionQuantityDetail(
+                id="demo-1",
+                kind=ConstructionKind.DEMO_WALL,
+                floor="1F",
+                length=3.0,
+                effective_height=2.8,
+                height_defaulted=True,
+                area=8.4,
+                count=1,
+            )
+        ],
+        exceptions=[],
+    )
+    output = tmp_path / "construction_takeoff.xlsx"
+
+    export_quantity_result(result, output)
+
+    workbook = load_workbook(output)
+    sheet = workbook["施工标识表"]
+    assert sheet["A1"].value == "项目名称"
+    assert sheet["B1"].value == "Construction Demo"
+    assert sheet["B3"].value == "标识编号"
+    assert sheet["B4"].value == "demo-1"
+    assert sheet["C4"].value == ConstructionKind.DEMO_WALL.value
+    assert sheet["D4"].value == 3.0
+    assert sheet["F4"].value == 2.8
+    assert sheet["G4"].value is True
+    assert sheet["I4"].value == 8.4
+    assert sheet.freeze_panes == "A4"
+    assert sheet.auto_filter.ref == "A3:J4"
