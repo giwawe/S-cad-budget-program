@@ -14,6 +14,10 @@ from cad_budget.models import (
     DataStatus,
     DoorQuantityDetail,
     ExteriorQuantityRow,
+    FixtureKind,
+    FixtureMarker,
+    FixturePricingMode,
+    FixtureQuantityDetail,
     HeightMode,
     LayerName,
     ProjectInput,
@@ -30,6 +34,8 @@ _MARKER_ASSIGNMENT_TOLERANCE_METERS = 0.3
 _WALL_BOUNDARY_TOLERANCE_METERS = 0.1
 _WALL_PARALLEL_CROSS_TOLERANCE = 0.1
 _DEFAULT_DOOR_DETAIL_HEIGHT_METERS = 2.1
+_DEFAULT_CUSTOM_HEIGHT_METERS = 2.6
+_LOW_CUSTOM_HEIGHT_THRESHOLD_METERS = 1.0
 
 
 def _floor_compatible(room_floor: str | None, marker_floor: str | None) -> bool:
@@ -240,6 +246,134 @@ def _resolve_door_assignments(
             assignments[room_id].append(door)
 
     return assignments, exceptions
+
+
+def _fixture_midpoint(fixture: FixtureMarker) -> ShapelyPoint | None:
+    if len(fixture.points) < 2:
+        return None
+    start = fixture.points[0]
+    end = fixture.points[-1]
+    return ShapelyPoint((start.x + end.x) / 2, (start.y + end.y) / 2)
+
+
+def _fixture_room_attribute(fixture: FixtureMarker) -> str | None:
+    for key in ("ROOM", "room"):
+        value = fixture.attributes.get(key)
+        if value is not None:
+            return str(value)
+    return None
+
+
+def _resolve_fixture_assignments(
+    rooms: list[RoomBoundary],
+    fixtures: list[FixtureMarker],
+    room_names: dict[str, str],
+) -> dict[str, list[FixtureMarker]]:
+    assignments: dict[str, list[FixtureMarker]] = defaultdict(list)
+
+    for fixture in fixtures:
+        if fixture.room_id is not None:
+            for room in rooms:
+                if room.id == fixture.room_id and _floor_compatible(room.floor, fixture.floor):
+                    assignments[room.id].append(fixture)
+                    break
+            continue
+
+        room_attribute = _fixture_room_attribute(fixture)
+        if room_attribute is not None:
+            for room in rooms:
+                room_name = room_names.get(room.id)
+                if (
+                    (room.id == room_attribute or room_name == room_attribute)
+                    and _floor_compatible(room.floor, fixture.floor)
+                ):
+                    assignments[room.id].append(fixture)
+                    break
+            continue
+
+        midpoint = _fixture_midpoint(fixture)
+        if midpoint is None:
+            continue
+
+        covered_room_ids: list[str] = []
+        nearest_room_id: str | None = None
+        nearest_distance: float | None = None
+        for room in rooms:
+            if not _floor_compatible(room.floor, fixture.floor):
+                continue
+            polygon = _room_polygon(room)
+            if polygon.covers(midpoint):
+                covered_room_ids.append(room.id)
+                continue
+            distance = float(polygon.boundary.distance(midpoint))
+            if nearest_distance is None or distance < nearest_distance:
+                nearest_room_id = room.id
+                nearest_distance = distance
+
+        if covered_room_ids:
+            for room_id in covered_room_ids:
+                assignments[room_id].append(fixture)
+        elif nearest_room_id is not None and nearest_distance is not None:
+            if nearest_distance <= _MARKER_ASSIGNMENT_TOLERANCE_METERS:
+                assignments[nearest_room_id].append(fixture)
+
+    return assignments
+
+
+def _custom_details_for_room(
+    room: RoomBoundary,
+    room_name: str,
+    fixtures: list[FixtureMarker],
+) -> list[FixtureQuantityDetail]:
+    details: list[FixtureQuantityDetail] = []
+    for fixture in fixtures:
+        effective_height = fixture.height if fixture.height is not None else _DEFAULT_CUSTOM_HEIGHT_METERS
+        height_defaulted = fixture.height is None
+        if fixture.height is not None and effective_height < _LOW_CUSTOM_HEIGHT_THRESHOLD_METERS:
+            pricing_mode = FixturePricingMode.LENGTH
+            projected_area = 0.0
+        else:
+            pricing_mode = FixturePricingMode.PROJECTED_AREA
+            projected_area = fixture.length * effective_height
+        details.append(
+            FixtureQuantityDetail(
+                id=fixture.id,
+                room_id=room.id,
+                room_name=room_name,
+                kind=FixtureKind.CUSTOM,
+                length=round(fixture.length, 6),
+                height=round(fixture.height, 6) if fixture.height is not None else None,
+                effective_height=round(effective_height, 6),
+                height_defaulted=height_defaulted,
+                projected_area=round(projected_area, 6),
+                pricing_mode=pricing_mode,
+                fixture_type=fixture.fixture_type,
+            )
+        )
+    return details
+
+
+def _cabinet_details_for_room(
+    room: RoomBoundary,
+    room_name: str,
+    fixtures: list[FixtureMarker],
+) -> list[FixtureQuantityDetail]:
+    return [
+        FixtureQuantityDetail(
+            id=fixture.id,
+            room_id=room.id,
+            room_name=room_name,
+            kind=FixtureKind.CABINET,
+            length=round(fixture.length, 6),
+            height=round(fixture.height, 6) if fixture.height is not None else None,
+            effective_height=round(fixture.height, 6) if fixture.height is not None else None,
+            height_defaulted=False,
+            projected_area=0.0,
+            pricing_mode=FixturePricingMode.LENGTH,
+            fixture_type=fixture.fixture_type,
+        )
+        for fixture in fixtures
+    ]
 
 
 def _resolve_void_height_assignments(
@@ -563,6 +697,10 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
 
     room_name_assignments, name_exceptions = _resolve_room_names(project, project.rooms)
     exceptions.extend(name_exceptions)
+    resolved_room_names = {
+        room.id: room.name or room_name_assignments.get(room.id, "\u672a\u547d\u540d\u7a7a\u95f4")
+        for room in project.rooms
+    }
 
     void_height_assignments, void_height_exceptions = _resolve_void_height_assignments(project, project.rooms)
     exceptions.extend(void_height_exceptions)
@@ -575,6 +713,9 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
 
     door_assignments, door_exceptions = _resolve_door_assignments(project, project.rooms)
     exceptions.extend(door_exceptions)
+
+    custom_assignments = _resolve_fixture_assignments(project.rooms, project.custom_items, resolved_room_names)
+    cabinet_assignments = _resolve_fixture_assignments(project.rooms, project.cabinet_items, resolved_room_names)
 
     for room in project.rooms:
         room_exceptions: list[QuantityException] = [
@@ -713,6 +854,16 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
             exceptions.append(exception)
 
         status = _determine_status(room_exceptions, has_defaulted_window_height)
+        custom_details = _custom_details_for_room(
+            room,
+            room_name,
+            custom_assignments.get(room.id, []),
+        )
+        cabinet_details = _cabinet_details_for_room(
+            room,
+            room_name,
+            cabinet_assignments.get(room.id, []),
+        )
 
         is_excluded_area_space = room.space_type in {SpaceType.ELEVATOR_SHAFT, SpaceType.VOID_OPENING}
         if is_excluded_area_space:
@@ -728,6 +879,8 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
             door_opening_count = 0
             door_opening_area = 0.0
             door_details = []
+            custom_details = []
+            cabinet_details = []
             net_wall_area = 0.0
 
             include_in_floor_quantity = False
@@ -755,6 +908,8 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
                 door_opening_count=door_opening_count,
                 door_opening_area=round(door_opening_area, 6),
                 door_details=door_details,
+                custom_details=custom_details,
+                cabinet_details=cabinet_details,
                 net_wall_area=net_wall_area,
                 is_outdoor=room.is_outdoor,
                 include_in_floor_quantity=include_in_floor_quantity,

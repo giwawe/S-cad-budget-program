@@ -1,6 +1,9 @@
 from cad_budget.models import (
     DataStatus,
     DoorMarker,
+    FixtureKind,
+    FixtureMarker,
+    FixturePricingMode,
     HeightMode,
     HeightMarker,
     VoidMarker,
@@ -448,6 +451,74 @@ def test_door_details_use_default_effective_height_without_changing_existing_are
     assert normal.effective_height == 2.0
     assert normal.height_defaulted is False
     assert normal.area == 1.8
+
+
+def test_custom_fixture_details_default_height_and_low_height_pricing():
+    project = ProjectInput(
+        project_name="Custom Fixtures",
+        rooms=[RoomBoundary(id="bed", points=rect(0, 0, 4, 3), name="主卧")],
+        custom_items=[
+            FixtureMarker(
+                id="wardrobe",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=0.5, y=0.5), Point(x=2.5, y=0.5)],
+                length=2.0,
+                fixture_type="衣柜",
+            ),
+            FixtureMarker(
+                id="low",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=0.5, y=1.0), Point(x=1.5, y=1.0)],
+                length=1.0,
+                height=0.8,
+                fixture_type="矮柜",
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.custom_details[0].effective_height == 2.6
+    assert row.custom_details[0].height_defaulted is True
+    assert row.custom_details[0].projected_area == 5.2
+    assert row.custom_details[0].pricing_mode == FixturePricingMode.PROJECTED_AREA
+    assert row.custom_details[1].effective_height == 0.8
+    assert row.custom_details[1].projected_area == 0.0
+    assert row.custom_details[1].pricing_mode == FixturePricingMode.LENGTH
+
+
+def test_cabinet_fixture_details_keep_overlapping_base_and_wall_cabinets():
+    project = ProjectInput(
+        project_name="Cabinet Fixtures",
+        rooms=[RoomBoundary(id="kitchen", points=rect(0, 0, 4, 3), name="厨房")],
+        cabinet_items=[
+            FixtureMarker(
+                id="base",
+                layer=LayerName.QUOTE_CABINET,
+                kind=FixtureKind.CABINET,
+                points=[Point(x=0.5, y=0.5), Point(x=3.5, y=0.5)],
+                length=3.0,
+                fixture_type="地柜",
+            ),
+            FixtureMarker(
+                id="wall",
+                layer=LayerName.QUOTE_CABINET,
+                kind=FixtureKind.CABINET,
+                points=[Point(x=0.5, y=0.5), Point(x=3.5, y=0.5)],
+                length=3.0,
+                fixture_type="吊柜",
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert [detail.id for detail in row.cabinet_details] == ["base", "wall"]
+    assert sum(detail.length for detail in row.cabinet_details) == 6.0
 
 
 def test_void_space_uses_custom_height_and_keeps_single_floor_area():
