@@ -52,6 +52,7 @@ _DOOR_HEIGHT_ATTRIBUTE_KEYS = ("height", "门高", "高")
 _FIXTURE_HEIGHT_ATTRIBUTE_KEYS = ("height", "HEIGHT", "高")
 _FIXTURE_TYPE_ATTRIBUTE_KEYS = ("type", "TYPE", "类型")
 _FIXTURE_ROOM_ATTRIBUTE_KEYS = ("room", "ROOM", "空间")
+_FIXTURE_ROOM_ID_ATTRIBUTE_KEYS = ("room_id", "ROOM_ID")
 _FIXTURE_XDATA_APPIDS = ("CAD_BUDGET",)
 
 
@@ -175,6 +176,7 @@ def _fixture_marker_from_points(
     attrs = _fixture_attributes(entity)
     fixture_type = _fixture_text_attribute(attrs, _FIXTURE_TYPE_ATTRIBUTE_KEYS)
     room = _fixture_text_attribute(attrs, _FIXTURE_ROOM_ATTRIBUTE_KEYS)
+    room_id = _fixture_text_attribute(attrs, _FIXTURE_ROOM_ID_ATTRIBUTE_KEYS)
     marker_attrs = dict(attrs)
     if room is not None:
         marker_attrs["ROOM"] = room
@@ -186,6 +188,7 @@ def _fixture_marker_from_points(
         length=length,
         height=_fixture_height_from_attributes(attrs),
         fixture_type=fixture_type,
+        room_id=room_id,
         attributes=marker_attrs,
     )
 

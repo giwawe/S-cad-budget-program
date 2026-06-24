@@ -355,7 +355,10 @@ def test_imports_fixture_xdata_attributes(tmp_path: Path):
     )
     modelspace.add_text("主卧", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
     custom = modelspace.add_line((500, 500), (2500, 500), dxfattribs={"layer": "QUOTE_CUSTOM"})
-    custom.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=2400"), (1000, "TYPE=衣柜"), (1000, "ROOM=主卧")])
+    custom.set_xdata(
+        "CAD_BUDGET",
+        [(1000, "HEIGHT=2400"), (1000, "TYPE=衣柜"), (1000, "ROOM=主卧"), (1000, "ROOM_ID=bedroom")],
+    )
     cabinet = modelspace.add_line((500, 900), (3500, 900), dxfattribs={"layer": "QUOTE_CABINET"})
     cabinet.set_xdata("CAD_BUDGET", [(1000, "TYPE=地柜"), (1000, "ROOM=厨房")])
     dxf_path = _save_doc(tmp_path / "fixture-xdata.dxf", doc)
@@ -367,6 +370,7 @@ def test_imports_fixture_xdata_attributes(tmp_path: Path):
     custom_item = result.project.custom_items[0]
     assert custom_item.height == 2.4
     assert custom_item.fixture_type == "衣柜"
+    assert custom_item.room_id == "bedroom"
     assert custom_item.attributes["ROOM"] == "主卧"
     cabinet_item = result.project.cabinet_items[0]
     assert cabinet_item.fixture_type == "地柜"
