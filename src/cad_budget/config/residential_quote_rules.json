@@ -50,11 +50,17 @@
   "wall_tile_piece_items": [
     "墙面瓷砖"
   ],
+  "tile_processing_area_items": [
+    "瓷砖加工费"
+  ],
   "interior_door_count_items": [
     "室内门"
   ],
   "sliding_door_area_items": [
     "厨房推拉门"
+  ],
+  "sliding_door_trim_length_items": [
+    "厨房推拉门双包套"
   ],
   "tile_piece_loss_rate": 0.05,
   "wide_door_width_threshold": 1.4,

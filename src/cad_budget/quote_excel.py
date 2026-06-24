@@ -169,8 +169,10 @@ class ResidentialQuoteRules:
     curtain_wall_length_items: set[str]
     floor_tile_piece_items: set[str]
     wall_tile_piece_items: set[str]
+    tile_processing_area_items: set[str]
     interior_door_count_items: set[str]
     sliding_door_area_items: set[str]
+    sliding_door_trim_length_items: set[str]
     tile_piece_loss_rate: float
     wide_door_width_threshold: float
     default_door_height: float
@@ -227,8 +229,10 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         curtain_wall_length_items=_optional_item_set(data, "curtain_wall_length_items"),
         floor_tile_piece_items=_optional_item_set(data, "floor_tile_piece_items"),
         wall_tile_piece_items=_optional_item_set(data, "wall_tile_piece_items"),
+        tile_processing_area_items=_optional_item_set(data, "tile_processing_area_items"),
         interior_door_count_items=_optional_item_set(data, "interior_door_count_items"),
         sliding_door_area_items=_optional_item_set(data, "sliding_door_area_items"),
+        sliding_door_trim_length_items=_optional_item_set(data, "sliding_door_trim_length_items"),
         tile_piece_loss_rate=_optional_float(data, "tile_piece_loss_rate", 0.05),
         wide_door_width_threshold=_optional_float(data, "wide_door_width_threshold", 1.4),
         default_door_height=_optional_float(data, "default_door_height", 2.1),
@@ -604,6 +608,15 @@ def _aggregate_quantity_for_item(
             review_status=_wall_tile_review_status(wall_tile_rooms),
             review_note=_window_default_note_for_rooms(wall_tile_rooms),
         )
+    if item_name in rules.tile_processing_area_items:
+        floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
+        return QuoteAggregateQuantity(
+            quantity=_round_quantity(sum(room.floor_area for room in floor_rooms)),
+            basis="\u623f\u5b50\u9762\u79ef\u6c47\u603b",
+            rooms=floor_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
+            review_note="\u74f7\u7816\u52a0\u5de5\u8d39\u6309\u623f\u5b50\u9762\u79ef\u8ba1\u7b97\uff0c\u9700\u8bbe\u8ba1\u5e08\u4fee\u6539\u786e\u8ba4",
+        )
     if item_name in rules.interior_door_count_items:
         door_count, door_rooms = _ordinary_interior_door_count(rooms, rules)
         if door_count <= 0:
@@ -621,6 +634,17 @@ def _aggregate_quantity_for_item(
         return QuoteAggregateQuantity(
             quantity=door_area,
             basis="\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u9762\u79ef\u6c47\u603b",
+            rooms=door_rooms,
+            review_status=_door_area_review_status(door_rooms),
+            review_note=_door_default_note_for_rooms(door_rooms, rules),
+        )
+    if item_name in rules.sliding_door_trim_length_items:
+        trim_length, door_rooms = _sliding_door_trim_length(rooms, rules)
+        if trim_length <= 0:
+            return None
+        return QuoteAggregateQuantity(
+            quantity=trim_length,
+            basis="\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u5957\u7ebf\u957f\u5ea6\u6c47\u603b",
             rooms=door_rooms,
             review_status=_door_area_review_status(door_rooms),
             review_note=_door_default_note_for_rooms(door_rooms, rules),
@@ -948,10 +972,36 @@ def _sliding_door_area(rooms: list[QuantityRow], rules: ResidentialQuoteRules) -
     return _round_quantity(area), list(source_rooms.values())
 
 
+def _sliding_door_trim_length(rooms: list[QuantityRow], rules: ResidentialQuoteRules) -> tuple[float, list[QuantityRow]]:
+    seen_door_ids: set[str] = set()
+    source_rooms: dict[str, QuantityRow] = {}
+    length = 0.0
+    for room in rooms:
+        if not any(keyword in room.room_name for keyword in rules.sliding_door_room_keywords):
+            continue
+        for door in room.door_details:
+            if door.width is None or door.width < rules.wide_door_width_threshold or door.id in seen_door_ids:
+                continue
+            seen_door_ids.add(door.id)
+            source_rooms[room.room_id] = room
+            length += door.width + 2 * _door_quote_height(door, rules)
+    return _round_quantity(length), list(source_rooms.values())
+
+
 def _door_quote_area(door, rules: ResidentialQuoteRules) -> float:
     if door.width is not None and door.height_defaulted:
         return door.width * rules.default_door_height
     return door.area
+
+
+def _door_quote_height(door, rules: ResidentialQuoteRules) -> float:
+    if door.height_defaulted:
+        return rules.default_door_height
+    if door.effective_height is not None:
+        return door.effective_height
+    if door.height is not None:
+        return door.height
+    return rules.default_door_height
 
 
 def _should_generate_room_section(room: QuantityRow) -> bool:

@@ -44,8 +44,10 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u7a97\u5e18" in rules.curtain_wall_length_items
     assert "\u5730\u9762\u74f7\u7816" in rules.floor_tile_piece_items
     assert "\u5899\u9762\u74f7\u7816" in rules.wall_tile_piece_items
+    assert "\u74f7\u7816\u52a0\u5de5\u8d39" in rules.tile_processing_area_items
     assert "\u5ba4\u5185\u95e8" in rules.interior_door_count_items
     assert "\u53a8\u623f\u63a8\u62c9\u95e8" in rules.sliding_door_area_items
+    assert "\u53a8\u623f\u63a8\u62c9\u95e8\u53cc\u5305\u5957" in rules.sliding_door_trim_length_items
     assert "\u6dcb\u6d74\u9694\u65ad" in rules.bathroom_count_aggregate_items
 
 
@@ -762,6 +764,36 @@ def test_export_residential_quote_auto_fills_tile_piece_counts_from_area_and_spe
     assert wall_tiles[12] == "\u5899\u7816\u9762\u79ef\u6309600x1200\u89c4\u683c+5%\u635f\u8017\u6298\u7b97\u7247\u6570"
 
 
+def test_export_residential_quote_auto_fills_tile_processing_by_house_area(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_advanced_summary_items=True)
+    result = QuantityResult(
+        project_name="Tile Processing Demo",
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0),
+            _quantity_row("shaft", "\u7535\u68af\u4e95", floor_area=4.0, net_wall_area=12.0, status=DataStatus.EXCLUDED),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    processing = _item_row_named(rows, "\u74f7\u7816\u52a0\u5de5\u8d39")
+    assert processing[3] == 26.0
+    assert processing[9:15] == (
+        "\u81ea\u52a8\u6c47\u603b",
+        "\u5168\u5c4b",
+        None,
+        "\u623f\u5b50\u9762\u79ef\u6c47\u603b",
+        "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
+        "\u74f7\u7816\u52a0\u5de5\u8d39\u6309\u623f\u5b50\u9762\u79ef\u8ba1\u7b97\uff0c\u9700\u8bbe\u8ba1\u5e08\u4fee\u6539\u786e\u8ba4",
+    )
+
+
 def test_export_residential_quote_parses_tile_spec_with_star_separator(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
@@ -911,6 +943,62 @@ def test_export_residential_quote_auto_fills_doors_and_shower_items(tmp_path: Pa
     assert shower_partition[3] == 1
     assert shower_partition[12] == "\u536b\u751f\u95f4\u6570\u91cf\u6c47\u603b"
     assert glass_shower[9] == "\u6a21\u677f\u9ed8\u8ba4"
+
+
+def test_export_residential_quote_auto_fills_sliding_door_trim_length(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_advanced_summary_items=True)
+    result = QuantityResult(
+        project_name="Sliding Trim Demo",
+        rows=[
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                door_details=[
+                    DoorQuantityDetail(
+                        id="slide",
+                        room_id="kitchen",
+                        width=1.6,
+                        height=None,
+                        effective_height=2.1,
+                        height_defaulted=True,
+                        area=3.36,
+                    )
+                ],
+            ),
+            _quantity_row(
+                "study",
+                "\u4e66\u623f",
+                floor_area=8.0,
+                net_wall_area=24.0,
+                door_details=[
+                    DoorQuantityDetail(
+                        id="slide",
+                        room_id="study",
+                        width=1.6,
+                        height=None,
+                        effective_height=2.1,
+                        height_defaulted=True,
+                        area=3.36,
+                    )
+                ],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    trim = _item_row_named(rows, "\u53a8\u623f\u63a8\u62c9\u95e8\u53cc\u5305\u5957")
+    assert trim[3] == 5.8
+    assert trim[12] == "\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u5957\u7ebf\u957f\u5ea6\u6c47\u603b"
+    assert trim[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert "\u9ed8\u8ba4\u95e8\u9ad82.1m" in trim[14]
 
 
 def test_export_residential_quote_uses_custom_default_door_height_for_sliding_doors(tmp_path: Path):
@@ -1147,11 +1235,13 @@ def _create_quote_template(
         fitout.append(["\u56db", "\u4e3b\u6750\u9879\u76ee"])
         fitout.append([1, "\u5730\u9762\u74f7\u7816", "\u7247", 99, 0, 0, 10, None, "\u5730\u7816(750X1500)"])
         fitout.append([2, "\u5899\u9762\u74f7\u7816", "\u7247", 99, 0, 0, 10, None, "\u5899\u7816(600x1200)"])
-        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H22:H23)"])
+        fitout.append([3, "\u74f7\u7816\u52a0\u5de5\u8d39", "M", 99, 0, 0, 10, None, "\u74f7\u7816\u52a0\u5de5"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H22:H24)"])
         fitout.append(["\u4e94", "\u5ba4\u5185\u95e8"])
         fitout.append([1, "\u5ba4\u5185\u95e8", "\u6a18", 99, 0, 0, 10, None, "\u95e8"])
         fitout.append([2, "\u53a8\u623f\u63a8\u62c9\u95e8", "M2", 99, 0, 0, 10, None, "\u63a8\u62c9\u95e8"])
-        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H25:H26)"])
+        fitout.append([3, "\u53a8\u623f\u63a8\u62c9\u95e8\u53cc\u5305\u5957", "M", 99, 0, 0, 10, None, "\u63a8\u62c9\u95e8\u53cc\u5305\u5957"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H26:H28)"])
         fitout.append(["\u516d", "\u96c6\u6210\u540a\u9876\u3001\u536b\u6d74\u3001\u5168\u5c4b\u5f00\u5173\u706f\u9970"])
         fitout.append([1, "\u6dcb\u6d74\u9694\u65ad", "\u5957", 99, 0, 0, 10, None, "\u6dcb\u6d74\u9694\u65ad"])
         fitout.append([2, "\u73bb\u7483\u6dcb\u6d74\u623f", "\u5957", 99, 0, 0, 10, None, "\u73bb\u7483\u6dcb\u6d74\u623f"])
