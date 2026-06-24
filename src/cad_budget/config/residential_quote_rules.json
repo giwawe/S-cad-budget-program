@@ -62,9 +62,17 @@
   "sliding_door_trim_length_items": [
     "厨房推拉门双包套"
   ],
+  "custom_projected_area_items": [
+    "全屋定制"
+  ],
+  "cabinet_length_items": [
+    "橱柜"
+  ],
   "tile_piece_loss_rate": 0.05,
   "wide_door_width_threshold": 1.4,
   "default_door_height": 2.1,
+  "default_custom_height": 2.6,
+  "low_custom_height_threshold": 1.0,
   "sliding_door_room_keywords": [
     "厨房",
     "书房"

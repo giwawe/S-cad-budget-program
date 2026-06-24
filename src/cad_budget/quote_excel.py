@@ -9,7 +9,7 @@ from typing import Any
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
-from cad_budget.models import DataStatus, QuantityResult, QuantityRow
+from cad_budget.models import DataStatus, FixturePricingMode, QuantityResult, QuantityRow
 
 
 FITOUT_SHEET_NAME = "\u6574\u88c5"
@@ -173,9 +173,13 @@ class ResidentialQuoteRules:
     interior_door_count_items: set[str]
     sliding_door_area_items: set[str]
     sliding_door_trim_length_items: set[str]
+    custom_projected_area_items: set[str]
+    cabinet_length_items: set[str]
     tile_piece_loss_rate: float
     wide_door_width_threshold: float
     default_door_height: float
+    default_custom_height: float
+    low_custom_height_threshold: float
     sliding_door_room_keywords: set[str]
     source_label: str
 
@@ -233,9 +237,13 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         interior_door_count_items=_optional_item_set(data, "interior_door_count_items"),
         sliding_door_area_items=_optional_item_set(data, "sliding_door_area_items"),
         sliding_door_trim_length_items=_optional_item_set(data, "sliding_door_trim_length_items"),
+        custom_projected_area_items=_optional_item_set(data, "custom_projected_area_items"),
+        cabinet_length_items=_optional_item_set(data, "cabinet_length_items"),
         tile_piece_loss_rate=_optional_float(data, "tile_piece_loss_rate", 0.05),
         wide_door_width_threshold=_optional_float(data, "wide_door_width_threshold", 1.4),
         default_door_height=_optional_float(data, "default_door_height", 2.1),
+        default_custom_height=_optional_float(data, "default_custom_height", 2.6),
+        low_custom_height_threshold=_optional_float(data, "low_custom_height_threshold", 1.0),
         sliding_door_room_keywords=_optional_item_set(data, "sliding_door_room_keywords"),
         source_label=source_label,
     )
@@ -577,6 +585,10 @@ def _aggregate_quantity_for_item(
         )
     if not rooms:
         return None
+    if item_name in rules.custom_projected_area_items:
+        return _custom_projected_area_aggregate(rooms, rules)
+    if item_name in rules.cabinet_length_items:
+        return _cabinet_length_aggregate(rooms)
     if item_name in rules.curtain_wall_length_items:
         curtain_quantity = _curtain_wall_length(rooms)
         curtain_rooms = [room for room in rooms if room.window_details]
@@ -734,6 +746,64 @@ def _aggregate_quantity_for_item(
             review_note=_window_default_note_for_rooms(wall_tile_rooms),
         )
     return None
+
+
+def _custom_projected_area_aggregate(rooms: list[QuantityRow], rules: ResidentialQuoteRules) -> QuoteAggregateQuantity | None:
+    detail_pairs = [(room, detail) for room in rooms for detail in room.custom_details]
+    if not detail_pairs:
+        return None
+    projected_area = sum(
+        detail.projected_area for _, detail in detail_pairs if detail.pricing_mode == FixturePricingMode.PROJECTED_AREA
+    )
+    low_height_details = [
+        detail
+        for _, detail in detail_pairs
+        if detail.pricing_mode == FixturePricingMode.LENGTH
+        or (detail.effective_height is not None and detail.effective_height < rules.low_custom_height_threshold)
+    ]
+    notes: list[str] = []
+    if any(detail.height_defaulted for _, detail in detail_pairs):
+        notes.append(f"\u7f3a\u5c11\u9ad8\u5ea6\u7684\u5b9a\u5236\u9879\u6309\u9ed8\u8ba4{rules.default_custom_height:g}m\u8ba1\u7b97")
+    if low_height_details:
+        low_length = _round_quantity(sum(detail.length for detail in low_height_details))
+        notes.append(
+            f"\u9ad8\u5ea6\u5c0f\u4e8e{rules.low_custom_height_threshold:g}m\u7684\u5b9a\u5236\u9879\u6309\u957f\u5ea6\u590d\u6838\uff0c"
+            f"\u5df2\u4ece\u6295\u5f71\u9762\u79ef\u6392\u9664{low_length:g}m"
+        )
+    if any(detail.fixture_type is None for _, detail in detail_pairs):
+        notes.append("\u90e8\u5206\u5b9a\u5236\u9879\u7f3a\u5c11\u7c7b\u578b\uff0c\u9700\u590d\u6838")
+    if any(detail.room_id is None and detail.room_name is None for _, detail in detail_pairs):
+        notes.append("\u90e8\u5206\u5b9a\u5236\u9879\u7f3a\u5c11\u7a7a\u95f4\u5f52\u5c5e\uff0c\u9700\u590d\u6838")
+    detail_rooms = list({room.room_id: room for room, _ in detail_pairs}.values())
+    status = (
+        "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+        if any(detail.height_defaulted for _, detail in detail_pairs) or low_height_details
+        else "\u81ea\u52a8\u751f\u6210"
+    )
+    return QuoteAggregateQuantity(
+        quantity=_round_quantity(projected_area),
+        basis="\u5168\u5c4b\u5b9a\u5236\u6295\u5f71\u9762\u79ef\u6c47\u603b",
+        rooms=detail_rooms,
+        review_status=status,
+        review_note="\uff1b".join(notes) if notes else None,
+    )
+
+
+def _cabinet_length_aggregate(rooms: list[QuantityRow]) -> QuoteAggregateQuantity | None:
+    detail_pairs = [(room, detail) for room in rooms for detail in room.cabinet_details]
+    if not detail_pairs:
+        return None
+    notes = ["\u5730\u67dc/\u540a\u67dc\u9700\u786e\u8ba4"]
+    if any(detail.fixture_type is None for _, detail in detail_pairs):
+        notes.append("\u90e8\u5206\u6a71\u67dc\u7f3a\u5c11\u7c7b\u578b\uff0c\u9700\u590d\u6838")
+    detail_rooms = list({room.room_id: room for room, _ in detail_pairs}.values())
+    return QuoteAggregateQuantity(
+        quantity=_round_quantity(sum(detail.length for _, detail in detail_pairs)),
+        basis="\u6a71\u67dc\u957f\u5ea6\u6c47\u603b",
+        rooms=detail_rooms,
+        review_status="\u81ea\u52a8\u751f\u6210",
+        review_note="\uff1b".join(notes),
+    )
 
 
 def _review_values_for_item(

@@ -3,7 +3,18 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
-from cad_budget.models import DataStatus, DoorQuantityDetail, HeightMode, QuantityRow, QuantityResult, SpaceType, WindowQuantityDetail
+from cad_budget.models import (
+    DataStatus,
+    DoorQuantityDetail,
+    FixtureKind,
+    FixturePricingMode,
+    FixtureQuantityDetail,
+    HeightMode,
+    QuantityRow,
+    QuantityResult,
+    SpaceType,
+    WindowQuantityDetail,
+)
 from cad_budget import quote_excel
 from cad_budget.quote_excel import export_residential_quote, load_default_quote_rules, load_quote_rules, parse_quote_template
 
@@ -49,6 +60,10 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u53a8\u623f\u63a8\u62c9\u95e8" in rules.sliding_door_area_items
     assert "\u53a8\u623f\u63a8\u62c9\u95e8\u53cc\u5305\u5957" in rules.sliding_door_trim_length_items
     assert "\u6dcb\u6d74\u9694\u65ad" in rules.bathroom_count_aggregate_items
+    assert "\u5168\u5c4b\u5b9a\u5236" in rules.custom_projected_area_items
+    assert "\u6a71\u67dc" in rules.cabinet_length_items
+    assert rules.default_custom_height == 2.6
+    assert rules.low_custom_height_threshold == 1.0
 
 
 def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkeypatch):
@@ -104,6 +119,10 @@ def test_load_quote_rules_reads_external_rule_file(tmp_path: Path):
     assert rules.kitchen_waterproof_wall_height == 0.5
     assert rules.bathroom_waterproof_wall_height == 1.2
     assert rules.wall_tile_height == 2.0
+    assert rules.custom_projected_area_items == set()
+    assert rules.cabinet_length_items == set()
+    assert rules.default_custom_height == 2.6
+    assert rules.low_custom_height_threshold == 1.0
     assert rules.source_label == str(rules_path)
 
 
@@ -365,6 +384,123 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
     assert sheet["S3"].value == "=R3/SUM(R3:R5)"
     assert sheet["S4"].value == "=R4/SUM(R3:R5)"
     assert sheet["S5"].value == "=R5/SUM(R3:R5)"
+
+
+def test_export_residential_quote_auto_fills_custom_and_cabinet_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_custom_cabinet_items=True)
+    result = QuantityResult(
+        project_name="Custom Cabinet Quote Demo",
+        rows=[
+            _quantity_row(
+                "bed",
+                "\u4e3b\u5367",
+                floor_area=12.0,
+                net_wall_area=30.0,
+                custom_details=[
+                    FixtureQuantityDetail(
+                        id="wardrobe",
+                        room_id="bed",
+                        room_name="\u4e3b\u5367",
+                        kind=FixtureKind.CUSTOM,
+                        length=2.0,
+                        height=None,
+                        effective_height=2.6,
+                        height_defaulted=True,
+                        projected_area=5.2,
+                        pricing_mode=FixturePricingMode.PROJECTED_AREA,
+                        fixture_type="\u8863\u67dc",
+                    ),
+                    FixtureQuantityDetail(
+                        id="low",
+                        room_id="bed",
+                        room_name="\u4e3b\u5367",
+                        kind=FixtureKind.CUSTOM,
+                        length=1.0,
+                        height=0.8,
+                        effective_height=0.8,
+                        height_defaulted=False,
+                        projected_area=0.0,
+                        pricing_mode=FixturePricingMode.LENGTH,
+                        fixture_type="\u77ee\u67dc",
+                    ),
+                ],
+            ),
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                cabinet_details=[
+                    FixtureQuantityDetail(
+                        id="base",
+                        room_id="kitchen",
+                        room_name="\u53a8\u623f",
+                        kind=FixtureKind.CABINET,
+                        length=3.0,
+                        pricing_mode=FixturePricingMode.LENGTH,
+                        fixture_type="\u5730\u67dc",
+                    ),
+                    FixtureQuantityDetail(
+                        id="wall",
+                        room_id="kitchen",
+                        room_name="\u53a8\u623f",
+                        kind=FixtureKind.CABINET,
+                        length=3.0,
+                        pricing_mode=FixturePricingMode.LENGTH,
+                        fixture_type="\u540a\u67dc",
+                    ),
+                ],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    custom = _item_row_named(rows, "\u5168\u5c4b\u5b9a\u5236")
+    cabinet = _item_row_named(rows, "\u6a71\u67dc")
+    assert custom[3] == 5.2
+    assert custom[12] == "\u5168\u5c4b\u5b9a\u5236\u6295\u5f71\u9762\u79ef\u6c47\u603b"
+    assert custom[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert "\u9ed8\u8ba42.6m" in custom[14]
+    assert "\u9ad8\u5ea6\u5c0f\u4e8e1m" in custom[14]
+    assert cabinet[3] == 6.0
+    assert cabinet[12] == "\u6a71\u67dc\u957f\u5ea6\u6c47\u603b"
+    assert cabinet[13] == "\u81ea\u52a8\u751f\u6210"
+    assert "\u5730\u67dc/\u540a\u67dc\u9700\u786e\u8ba4" in cabinet[14]
+
+
+def test_export_residential_quote_keeps_custom_and_cabinet_template_defaults_without_details(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_custom_cabinet_items=True)
+    result = QuantityResult(
+        project_name="No Fixture Details Demo",
+        rows=[_quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0)],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    custom = _item_row_named(rows, "\u5168\u5c4b\u5b9a\u5236")
+    cabinet = _item_row_named(rows, "\u6a71\u67dc")
+    assert custom[3] == 99
+    assert custom[9:15] == (
+        "\u6a21\u677f\u9ed8\u8ba4",
+        None,
+        None,
+        "\u6a21\u677f\u9ed8\u8ba4\u6570\u91cf",
+        "\u6309\u6a21\u677f\u751f\u6210",
+        None,
+    )
+    assert cabinet[3] == 99
+    assert cabinet[9:15] == custom[9:15]
 
 
 def test_export_residential_quote_auto_fills_whole_house_area_items(tmp_path: Path):
@@ -1177,6 +1313,7 @@ def _create_quote_template(
     include_count_summary_items: bool = False,
     include_fixed_summary_items: bool = False,
     include_advanced_summary_items: bool = False,
+    include_custom_cabinet_items: bool = False,
 ) -> None:
     workbook = Workbook()
     half = workbook.active
@@ -1210,6 +1347,9 @@ def _create_quote_template(
         fitout.append([3, "\u5730\u9762\u7816\u73b0\u573a\u7ef4\u62a4\u8d39", "M2", 99, 0, 0, 10, None, "\u5730\u7816\u7ef4\u62a4"])
         fitout.append([4, "\u5f3a\u7535\u5e03\u7ebf", "M2", 99, 0, 0, 10, None, "\u5f3a\u7535"])
         fitout.append([5, "\u7f8e\u7f1d", "M2", 99, 0, 0, 10, None, "\u7f8e\u7f1d"])
+    if include_custom_cabinet_items:
+        fitout.append([6, "\u5168\u5c4b\u5b9a\u5236", "M2", 99, 0, 0, 10, None, "\u5168\u5c4b\u5b9a\u5236"])
+        fitout.append([7, "\u6a71\u67dc", "M", 99, 0, 0, 10, None, "\u6a71\u67dc"])
     fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H20:H20)"])
     if include_count_summary_items:
         fitout.append(["\u56db", "\u5ba4\u5185\u95e8"])
@@ -1304,6 +1444,8 @@ def _quantity_row(
     door_opening_count: int = 0,
     door_opening_area: float = 0,
     door_details: list[DoorQuantityDetail] | None = None,
+    custom_details: list[FixtureQuantityDetail] | None = None,
+    cabinet_details: list[FixtureQuantityDetail] | None = None,
     status: DataStatus = DataStatus.CONFIRMED,
     exception_notes: list[str] | None = None,
 ) -> QuantityRow:
@@ -1325,6 +1467,8 @@ def _quantity_row(
         door_opening_count=door_opening_count,
         door_opening_area=door_opening_area,
         door_details=door_details or [],
+        custom_details=custom_details or [],
+        cabinet_details=cabinet_details or [],
         net_wall_area=net_wall_area,
         is_outdoor=False,
         include_in_floor_quantity=True,
