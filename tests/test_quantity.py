@@ -521,6 +521,212 @@ def test_cabinet_fixture_details_keep_overlapping_base_and_wall_cabinets():
     assert sum(detail.length for detail in row.cabinet_details) == 6.0
 
 
+def test_fixture_explicit_room_id_wins_before_geometry_assignment():
+    project = ProjectInput(
+        project_name="Fixture Room Id",
+        rooms=[
+            RoomBoundary(id="living", points=rect(0, 0, 3, 3), name="Living"),
+            RoomBoundary(id="bed", points=rect(4, 0, 7, 3), name="Bed"),
+        ],
+        custom_items=[
+            FixtureMarker(
+                id="wardrobe",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=4.5, y=1.0), Point(x=6.5, y=1.0)],
+                length=2.0,
+                room_id="living",
+            )
+        ],
+    )
+
+    rows = {row.room_id: row for row in calculate_quantities(project).rows}
+
+    assert [detail.id for detail in rows["living"].custom_details] == ["wardrobe"]
+    assert rows["bed"].custom_details == []
+
+
+def test_fixture_room_attribute_wins_by_room_id_or_name_before_geometry_assignment():
+    project = ProjectInput(
+        project_name="Fixture Room Attribute",
+        rooms=[
+            RoomBoundary(id="living", points=rect(0, 0, 3, 3), name="Living"),
+            RoomBoundary(id="kitchen", points=rect(4, 0, 7, 3), name="Kitchen"),
+        ],
+        custom_items=[
+            FixtureMarker(
+                id="upper",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=0.5, y=1.0), Point(x=2.5, y=1.0)],
+                length=2.0,
+                attributes={"ROOM": "Kitchen"},
+            ),
+            FixtureMarker(
+                id="lower",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=0.5, y=2.0), Point(x=2.5, y=2.0)],
+                length=2.0,
+                attributes={"room": "kitchen"},
+            ),
+        ],
+    )
+
+    rows = {row.room_id: row for row in calculate_quantities(project).rows}
+
+    assert rows["living"].custom_details == []
+    assert [detail.id for detail in rows["kitchen"].custom_details] == ["upper", "lower"]
+
+
+def test_fixture_wrong_explicit_metadata_falls_back_to_geometry_assignment():
+    project = ProjectInput(
+        project_name="Fixture Metadata Fallback",
+        rooms=[RoomBoundary(id="living", points=rect(0, 0, 4, 3), name="Living")],
+        custom_items=[
+            FixtureMarker(
+                id="wrong-room-id",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=0.5, y=1.0), Point(x=1.5, y=1.0)],
+                length=1.0,
+                room_id="missing",
+            ),
+            FixtureMarker(
+                id="wrong-room-attribute",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=2.0, y=1.0), Point(x=3.0, y=1.0)],
+                length=1.0,
+                attributes={"ROOM": "Missing"},
+            ),
+        ],
+    )
+
+    row = calculate_quantities(project).rows[0]
+
+    assert [detail.id for detail in row.custom_details] == ["wrong-room-id", "wrong-room-attribute"]
+
+
+def test_fixture_assignment_uses_boundary_tolerance():
+    project = ProjectInput(
+        project_name="Fixture Tolerance",
+        rooms=[RoomBoundary(id="living", points=rect(0, 0, 4, 3), name="Living")],
+        custom_items=[
+            FixtureMarker(
+                id="near-edge",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=4.2, y=1.0), Point(x=4.2, y=2.0)],
+                length=1.0,
+            )
+        ],
+    )
+
+    row = calculate_quantities(project).rows[0]
+
+    assert [detail.id for detail in row.custom_details] == ["near-edge"]
+
+
+def test_fixture_marker_outside_tolerance_adds_exception_and_needs_review():
+    project = ProjectInput(
+        project_name="Fixture Outside Tolerance",
+        rooms=[RoomBoundary(id="living", points=rect(0, 0, 4, 3), name="Living")],
+        custom_items=[
+            FixtureMarker(
+                id="far-edge",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=4.5, y=1.0), Point(x=4.5, y=2.0)],
+                length=1.0,
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.custom_details == []
+    assert row.status is DataStatus.NEEDS_REVIEW
+    assert any(
+        exception.code == "fixture_marker_outside_assignment_tolerance"
+        and exception.room_id == "living"
+        for exception in result.exceptions
+    )
+    assert any("fixture_marker_outside_assignment_tolerance" in note for note in row.exception_notes)
+
+
+def test_floorless_fixture_in_floored_room_adds_exception_and_needs_review():
+    project = ProjectInput(
+        project_name="Fixture Floor Mismatch",
+        rooms=[RoomBoundary(id="living", points=rect(0, 0, 4, 3), name="Living", floor="1F")],
+        custom_items=[
+            FixtureMarker(
+                id="floorless",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=0.5, y=1.0), Point(x=1.5, y=1.0)],
+                length=1.0,
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.custom_details == []
+    assert row.status is DataStatus.NEEDS_REVIEW
+    assert any(
+        exception.code == "marker_floor_mismatch_fixture" and exception.room_id == "living"
+        for exception in result.exceptions
+    )
+
+
+def test_fixture_marker_inside_excluded_room_adds_exception_but_details_stay_empty():
+    project = ProjectInput(
+        project_name="Fixture Excluded Room",
+        rooms=[
+            RoomBoundary(
+                id="shaft",
+                points=rect(0, 0, 2, 2),
+                name="Shaft",
+                space_type=SpaceType.ELEVATOR_SHAFT,
+            )
+        ],
+        custom_items=[
+            FixtureMarker(
+                id="custom-in-shaft",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=0.5, y=0.5), Point(x=1.5, y=0.5)],
+                length=1.0,
+            )
+        ],
+        cabinet_items=[
+            FixtureMarker(
+                id="cabinet-in-shaft",
+                layer=LayerName.QUOTE_CABINET,
+                kind=FixtureKind.CABINET,
+                points=[Point(x=0.5, y=1.0), Point(x=1.5, y=1.0)],
+                length=1.0,
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+    row = result.rows[0]
+
+    assert row.status is DataStatus.EXCLUDED
+    assert row.custom_details == []
+    assert row.cabinet_details == []
+    assert {
+        exception.code
+        for exception in result.exceptions
+        if exception.room_id == "shaft"
+    } >= {"fixture_marker_in_excluded_room"}
+    assert any("fixture_marker_in_excluded_room" in note for note in row.exception_notes)
+
+
 def test_void_space_uses_custom_height_and_keeps_single_floor_area():
     project = ProjectInput(
         project_name="Villa Void",

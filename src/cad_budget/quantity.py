@@ -264,60 +264,162 @@ def _fixture_room_attribute(fixture: FixtureMarker) -> str | None:
     return None
 
 
+def _is_excluded_area_space(room: RoomBoundary) -> bool:
+    return room.space_type in {SpaceType.ELEVATOR_SHAFT, SpaceType.VOID_OPENING}
+
+
+def _assign_fixture_to_room(
+    assignments: dict[str, list[FixtureMarker]],
+    exceptions: list[QuantityException],
+    room: RoomBoundary,
+    fixture: FixtureMarker,
+) -> None:
+    assignments[room.id].append(fixture)
+    if _is_excluded_area_space(room):
+        exceptions.append(
+            QuantityException(
+                code="fixture_marker_in_excluded_room",
+                message=(
+                    "fixture_marker_in_excluded_room: "
+                    f"Fixture {fixture.id} assigned to excluded room {room.id}"
+                ),
+                room_id=room.id,
+            )
+        )
+
+
+def _fixture_floor_mismatch_exception(fixture: FixtureMarker, room: RoomBoundary) -> QuantityException:
+    return QuantityException(
+        code="marker_floor_mismatch_fixture",
+        message=(
+            "marker_floor_mismatch_fixture: "
+            f"Fixture {fixture.id} skipped for room {room.id} due floor mismatch"
+        ),
+        room_id=room.id,
+    )
+
+
+def _fixture_outside_tolerance_exception(
+    fixture: FixtureMarker,
+    room_id: str | None,
+    distance: float | None,
+) -> QuantityException:
+    distance_text = "unknown" if distance is None else round(distance, 6)
+    return QuantityException(
+        code="fixture_marker_outside_assignment_tolerance",
+        message=(
+            "fixture_marker_outside_assignment_tolerance: "
+            f"Fixture {fixture.id} is outside fixture assignment tolerance; nearest distance {distance_text}"
+        ),
+        room_id=room_id,
+    )
+
+
+def _fixture_unmatched_exception(fixture: FixtureMarker) -> QuantityException:
+    return QuantityException(
+        code="fixture_marker_unmatched",
+        message=f"fixture_marker_unmatched: Fixture {fixture.id} could not be assigned to any room",
+    )
+
+
 def _resolve_fixture_assignments(
     rooms: list[RoomBoundary],
     fixtures: list[FixtureMarker],
     room_names: dict[str, str],
-) -> dict[str, list[FixtureMarker]]:
+) -> tuple[dict[str, list[FixtureMarker]], list[QuantityException]]:
     assignments: dict[str, list[FixtureMarker]] = defaultdict(list)
+    exceptions: list[QuantityException] = []
 
     for fixture in fixtures:
+        assigned_by_room_id = False
+        explicitly_floor_mismatched = False
         if fixture.room_id is not None:
             for room in rooms:
-                if room.id == fixture.room_id and _floor_compatible(room.floor, fixture.floor):
-                    assignments[room.id].append(fixture)
+                if room.id != fixture.room_id:
+                    continue
+                if _floor_compatible(room.floor, fixture.floor):
+                    _assign_fixture_to_room(assignments, exceptions, room, fixture)
+                    assigned_by_room_id = True
                     break
-            continue
+                exceptions.append(_fixture_floor_mismatch_exception(fixture, room))
+                explicitly_floor_mismatched = True
+                break
+            if assigned_by_room_id:
+                continue
+            if explicitly_floor_mismatched:
+                continue
 
         room_attribute = _fixture_room_attribute(fixture)
         if room_attribute is not None:
+            assigned_by_attribute = False
             for room in rooms:
                 room_name = room_names.get(room.id)
-                if (
-                    (room.id == room_attribute or room_name == room_attribute)
-                    and _floor_compatible(room.floor, fixture.floor)
-                ):
-                    assignments[room.id].append(fixture)
+                if room.id != room_attribute and room_name != room_attribute:
+                    continue
+                if _floor_compatible(room.floor, fixture.floor):
+                    _assign_fixture_to_room(assignments, exceptions, room, fixture)
+                    assigned_by_attribute = True
                     break
-            continue
+                exceptions.append(_fixture_floor_mismatch_exception(fixture, room))
+                explicitly_floor_mismatched = True
+                break
+            if assigned_by_attribute:
+                continue
+            if explicitly_floor_mismatched:
+                continue
 
         midpoint = _fixture_midpoint(fixture)
         if midpoint is None:
+            exceptions.append(_fixture_unmatched_exception(fixture))
             continue
 
         covered_room_ids: list[str] = []
+        floor_mismatch_rooms: list[RoomBoundary] = []
         nearest_room_id: str | None = None
         nearest_distance: float | None = None
+        nearest_any_room_id: str | None = None
+        nearest_any_distance: float | None = None
         for room in rooms:
-            if not _floor_compatible(room.floor, fixture.floor):
-                continue
             polygon = _room_polygon(room)
             if polygon.covers(midpoint):
+                if not _floor_compatible(room.floor, fixture.floor):
+                    floor_mismatch_rooms.append(room)
+                    continue
                 covered_room_ids.append(room.id)
                 continue
             distance = float(polygon.boundary.distance(midpoint))
+            if nearest_any_distance is None or distance < nearest_any_distance:
+                nearest_any_room_id = room.id
+                nearest_any_distance = distance
+            if not _floor_compatible(room.floor, fixture.floor):
+                if distance <= _MARKER_ASSIGNMENT_TOLERANCE_METERS:
+                    floor_mismatch_rooms.append(room)
+                continue
             if nearest_distance is None or distance < nearest_distance:
                 nearest_room_id = room.id
                 nearest_distance = distance
 
         if covered_room_ids:
             for room_id in covered_room_ids:
-                assignments[room_id].append(fixture)
+                room = next(room for room in rooms if room.id == room_id)
+                _assign_fixture_to_room(assignments, exceptions, room, fixture)
+        elif floor_mismatch_rooms:
+            for room in floor_mismatch_rooms:
+                exceptions.append(_fixture_floor_mismatch_exception(fixture, room))
         elif nearest_room_id is not None and nearest_distance is not None:
             if nearest_distance <= _MARKER_ASSIGNMENT_TOLERANCE_METERS:
-                assignments[nearest_room_id].append(fixture)
+                room = next(room for room in rooms if room.id == nearest_room_id)
+                _assign_fixture_to_room(assignments, exceptions, room, fixture)
+            else:
+                exceptions.append(_fixture_outside_tolerance_exception(fixture, nearest_room_id, nearest_distance))
+        elif nearest_any_room_id is not None:
+            exceptions.append(
+                _fixture_outside_tolerance_exception(fixture, nearest_any_room_id, nearest_any_distance)
+            )
+        else:
+            exceptions.append(_fixture_unmatched_exception(fixture))
 
-    return assignments
+    return assignments, exceptions
 
 
 def _custom_details_for_room(
@@ -676,6 +778,7 @@ def _determine_status(exceptions: list[QuantityException], default_inferred: boo
             "marker_floor_mismatch_door",
             "marker_floor_mismatch_opening",
             "marker_floor_mismatch_height",
+            "marker_floor_mismatch_fixture",
             "ambiguous_window_assignment",
             "ambiguous_door_assignment",
             "ambiguous_height_assignment",
@@ -683,6 +786,9 @@ def _determine_status(exceptions: list[QuantityException], default_inferred: boo
             "void_related_floor_height_missing",
             "window_area_exceeds_wall_area",
             "stair_special_quantity_manual",
+            "fixture_marker_outside_assignment_tolerance",
+            "fixture_marker_unmatched",
+            "fixture_marker_in_excluded_room",
         }:
             return DataStatus.NEEDS_REVIEW
     if default_inferred:
@@ -714,8 +820,18 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
     door_assignments, door_exceptions = _resolve_door_assignments(project, project.rooms)
     exceptions.extend(door_exceptions)
 
-    custom_assignments = _resolve_fixture_assignments(project.rooms, project.custom_items, resolved_room_names)
-    cabinet_assignments = _resolve_fixture_assignments(project.rooms, project.cabinet_items, resolved_room_names)
+    custom_assignments, custom_exceptions = _resolve_fixture_assignments(
+        project.rooms,
+        project.custom_items,
+        resolved_room_names,
+    )
+    exceptions.extend(custom_exceptions)
+    cabinet_assignments, cabinet_exceptions = _resolve_fixture_assignments(
+        project.rooms,
+        project.cabinet_items,
+        resolved_room_names,
+    )
+    exceptions.extend(cabinet_exceptions)
 
     for room in project.rooms:
         room_exceptions: list[QuantityException] = [
@@ -865,7 +981,7 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
             cabinet_assignments.get(room.id, []),
         )
 
-        is_excluded_area_space = room.space_type in {SpaceType.ELEVATOR_SHAFT, SpaceType.VOID_OPENING}
+        is_excluded_area_space = _is_excluded_area_space(room)
         if is_excluded_area_space:
             status = DataStatus.EXCLUDED
             floor_area = 0.0

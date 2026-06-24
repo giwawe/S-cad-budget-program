@@ -28,6 +28,8 @@
 | `QUOTE_TEXT` | 推荐 | `TEXT` / `MTEXT` | 文字点放在对应空间边界内 | 空间名称 |
 | `QUOTE_WINDOW` | 推荐 | `INSERT`、闭合 `LWPOLYLINE` | 窗块带宽高属性，或画闭合窗洞轮廓 | 窗数量、窗面积、墙面扣减 |
 | `QUOTE_DOOR` | 推荐 | `INSERT`、`LWPOLYLINE` | 门块带宽高属性，或画门洞线段/闭合轮廓 | 门洞数量、门洞面积 |
+| `QUOTE_CUSTOM` | 可选 | `LINE`、`LWPOLYLINE` | 画全屋定制、固定柜等柜体投影长度 | 定制柜长度、投影面积复核 |
+| `QUOTE_CABINET` | 可选 | `LINE`、`LWPOLYLINE` | 画橱柜、吊柜、地柜等柜体投影长度 | 橱柜长度明细复核 |
 | `QUOTE_WALL` | 推荐 | `LINE`、`LWPOLYLINE` | 画实际墙体或可施工墙面线 | 墙面计量周长 |
 | `QUOTE_OPENING` | 推荐 | `LWPOLYLINE` | 标出开放边界、非墙边界 | 从墙面计量周长中扣除 |
 | `QUOTE_FLOOR` | 多层项目推荐 | `TEXT` / `MTEXT` | 楼层文字放在空间边界内 | 楼层归属、楼层默认层高 |
@@ -146,6 +148,18 @@
 - 第一版默认不从墙面净面积中扣除门洞面积。
 - 共享边界上的门会计入相邻空间。
 
+### 固定柜体辅助标记 `QUOTE_CUSTOM` / `QUOTE_CABINET`
+
+- 使用 `LINE` 或 `LWPOLYLINE` 表示柜体投影长度。
+- `QUOTE_CUSTOM` 用于全屋定制、固定衣柜、书柜等。
+- `QUOTE_CABINET` 用于橱柜、地柜、吊柜等；同一位置的地柜和吊柜可分别画线，系统不会按重叠位置自动去重。
+- 算量会生成 `custom_details` 和 `cabinet_details`，记录柜体长度、高度、默认高度、投影面积和计价模式。
+- 定制柜缺少高度时使用默认高度 2.6m；高度低于 1.0m 时按长度模式复核，不生成投影面积。
+- 如果标记带有明确 `room_id` 或 `ROOM` / `room` 属性并能匹配空间，该空间归属优先于几何位置；如果显式信息无法匹配，会回退到中点和容差几何归属。
+- 多层项目中柜体标记必须与空间楼层一致；楼层不匹配或楼层缺失导致无法归属时，会产生 `marker_floor_mismatch_fixture`。
+- 柜体标记超出空间边界但在 0.3m 容差内时，归属到最近空间；超出容差会产生 `fixture_marker_outside_assignment_tolerance`。
+- 位于电梯井、楼板洞口等 `excluded` 空间内的柜体标记会产生 `fixture_marker_in_excluded_room`，但该空间的 `custom_details` / `cabinet_details` 保持为空。
+
 ## 8. 楼层与层高
 
 ### 商品房
@@ -217,7 +231,7 @@
 - `厨房推拉门` 默认按厨房/书房中宽度大于等于 1.4m 的唯一门洞面积汇总；门洞缺少高度时使用默认门高 2.1m。
 - `厨房推拉门双包套` 默认按同一批推拉门门洞的套线长度汇总，单个门洞长度为门洞宽度加两侧有效门高。
 - `淋浴隔断` 默认按卫生间数量汇总；`玻璃淋浴房` 默认仍按模板生成，避免重复报价。
-- 全屋定制、橱柜和背景墙本轮不自动生成，等后续 CAD 标识图层明确后再定义专用规则。
+- 全屋定制和橱柜可从 `QUOTE_CUSTOM` / `QUOTE_CABINET` 生成长度和投影面积复核明细；背景墙当前仍按模板或人工复核处理。
 - 门洞数量和门洞面积可用于报价汇总，但仍不从墙面净面积中扣除门洞面积；基于 `door_details` 的门类报价会按门洞 `id` 去重，避免共享边界重复计数。
 
 ## 12. 出图检查清单
@@ -233,6 +247,7 @@
 - 需要精确墙面计量的空间已画 `QUOTE_WALL`。
 - 窗块已填写可解析宽度；如果用窗洞轮廓，轮廓已闭合且有面积。
 - 门块已尽量填写宽度和高度；如果没有属性，门洞几何能表达宽度。
+- 需要复核全屋定制或橱柜时，已使用 `QUOTE_CUSTOM` / `QUOTE_CABINET` 画柜体投影长度，并确认楼层和空间归属。
 - 多层项目每个空间楼层标记唯一，且楼层默认层高配置完整。
 - `QUOTE_HEIGHT` 使用米值文本。
 - 挑空、阳台、露台、楼梯、电梯井等特殊空间已经准备好人工复核口径。
@@ -256,6 +271,10 @@
 | 窗高缺失 | 使用默认窗高，产生 `window_height_defaulted` |
 | 窗面积大于墙面毛面积 | 净墙面面积置 0，产生 `window_area_exceeds_wall_area` |
 | 共享边界上的窗无法唯一归属 | 不计入空间窗面积，产生 `ambiguous_window_assignment` |
+| 柜体标记楼层与空间不一致 | 不生成该空间柜体明细，产生 `marker_floor_mismatch_fixture` |
+| 柜体标记超出空间归属容差 | 不生成柜体明细，产生 `fixture_marker_outside_assignment_tolerance` |
+| 柜体标记无法匹配任何空间 | 不生成柜体明细，产生 `fixture_marker_unmatched` |
+| 柜体标记落在 `excluded` 空间 | 保持柜体明细为空，产生 `fixture_marker_in_excluded_room` |
 
 ## 14. 以后变化如何更新规范
 
