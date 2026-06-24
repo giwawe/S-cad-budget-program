@@ -16,6 +16,7 @@ class LayerName(str, Enum):
     QUOTE_VOID = "QUOTE_VOID"
     QUOTE_EXT_WALL = "QUOTE_EXT_WALL"
     QUOTE_EXT_OPENING = "QUOTE_EXT_OPENING"
+    QUOTE_BUILDING_AREA = "QUOTE_BUILDING_AREA"
     QUOTE_CUSTOM = "QUOTE_CUSTOM"
     QUOTE_CABINET = "QUOTE_CABINET"
     QUOTE_DEMO_WALL = "QUOTE_DEMO_WALL"
@@ -211,6 +212,7 @@ class ProjectInput(BaseModel):
     voids: list[VoidMarker] = Field(default_factory=list)
     exterior_walls: list[PolylineMarker] = Field(default_factory=list)
     exterior_openings: list[PolylineMarker] = Field(default_factory=list)
+    building_areas: list[PolylineMarker] = Field(default_factory=list)
     custom_items: list[FixtureMarker] = Field(default_factory=list)
     cabinet_items: list[FixtureMarker] = Field(default_factory=list)
     demo_walls: list[ConstructionMarker] = Field(default_factory=list)
@@ -315,6 +317,7 @@ class ExteriorQuantityRow(BaseModel):
 class QuantityResult(BaseModel):
     project_name: str
     rows: list[QuantityRow]
+    building_area: float | None = None
     exterior_rows: list[ExteriorQuantityRow] = Field(default_factory=list)
     construction_details: list[ConstructionQuantityDetail] = Field(default_factory=list)
     exceptions: list[QuantityException]

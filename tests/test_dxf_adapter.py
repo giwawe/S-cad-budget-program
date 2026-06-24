@@ -629,11 +629,18 @@ def test_import_dxf_warns_for_window_insert_without_parseable_width(tmp_path: Pa
     assert any(issue.code == "WINDOW_WIDTH_ATTRIBUTE_INVALID" for issue in result.issues)
 
 
-def test_import_dxf_reads_height_void_and_exterior_layers(tmp_path: Path):
+def test_import_dxf_reads_height_void_exterior_and_building_area_layers(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4
     modelspace = doc.modelspace()
-    for layer in ["QUOTE_ROOM", "QUOTE_HEIGHT", "QUOTE_VOID", "QUOTE_EXT_WALL", "QUOTE_EXT_OPENING"]:
+    for layer in [
+        "QUOTE_ROOM",
+        "QUOTE_HEIGHT",
+        "QUOTE_VOID",
+        "QUOTE_EXT_WALL",
+        "QUOTE_EXT_OPENING",
+        "QUOTE_BUILDING_AREA",
+    ]:
         doc.layers.add(layer)
     modelspace.add_lwpolyline(
         [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
@@ -646,6 +653,10 @@ def test_import_dxf_reads_height_void_and_exterior_layers(tmp_path: Path):
     )
     modelspace.add_lwpolyline([(0, -200), (4000, -200)], dxfattribs={"layer": "QUOTE_EXT_WALL"})
     modelspace.add_lwpolyline([(1200, -200), (2200, -200)], dxfattribs={"layer": "QUOTE_EXT_OPENING"})
+    modelspace.add_lwpolyline(
+        [(-200, -200), (4200, -200), (4200, 3200), (-200, 3200), (-200, -200)],
+        dxfattribs={"layer": "QUOTE_BUILDING_AREA", "closed": True},
+    )
     dxf_path = _save_doc(tmp_path / "special_layers.dxf", doc)
 
     result = import_dxf(CadImportOptions(source_path=dxf_path))
@@ -657,6 +668,8 @@ def test_import_dxf_reads_height_void_and_exterior_layers(tmp_path: Path):
     assert len(result.project.voids) == 1
     assert len(result.project.exterior_walls) == 1
     assert len(result.project.exterior_openings) == 1
+    assert len(result.project.building_areas) == 1
+    assert calculate_quantities(result.project).building_area == 14.96
 
 
 def test_import_dxf_reads_exterior_wall_quote_include_xdata(tmp_path: Path):

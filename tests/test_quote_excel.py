@@ -1404,9 +1404,10 @@ def test_export_residential_quote_auto_fills_construction_marker_items(tmp_path:
     result = QuantityResult(
         project_name="Construction Quote",
         rows=[
-            _quantity_row("living", "\u5ba2\u5385", floor_area=80.0, net_wall_area=20.0),
-            _quantity_row("bedroom", "\u5367\u5ba4", floor_area=36.0, net_wall_area=18.0),
+            _quantity_row("living", "\u5ba2\u5385", floor_area=10.0, net_wall_area=20.0),
+            _quantity_row("bedroom", "\u5367\u5ba4", floor_area=5.0, net_wall_area=18.0),
         ],
+        building_area=116.0,
         construction_details=[
             ConstructionQuantityDetail(
                 id="demo-1",
@@ -1459,8 +1460,30 @@ def test_export_residential_quote_auto_fills_construction_marker_items(tmp_path:
     assert lintel[9] == "\u6a21\u677f\u9ed8\u8ba4"
     assert hole[3] == 12
     assert hole[9] == "\u81ea\u52a8\u6c47\u603b"
-    assert hole[12] == "\u623f\u5b50\u9762\u79ef\u768410%\u53d6\u6574"
+    assert hole[12] == "\u5efa\u7b51\u9762\u79ef\u768410%\u53d6\u6574"
     assert hole[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+
+
+def test_export_residential_quote_keeps_percent_count_default_without_building_area(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_construction_items=True)
+    result = QuantityResult(
+        project_name="Missing Building Area",
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=80.0, net_wall_area=20.0),
+            _quantity_row("bedroom", "\u5367\u5ba4", floor_area=36.0, net_wall_area=18.0),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    hole = _item_row_named(rows, "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54")
+    assert hole[3] == 108
+    assert hole[9] == "\u6a21\u677f\u9ed8\u8ba4"
+    assert hole[13] == "\u6309\u6a21\u677f\u751f\u6210"
 
 
 def test_export_residential_quote_keeps_construction_items_template_default_without_markers(tmp_path: Path):

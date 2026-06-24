@@ -494,6 +494,7 @@ def _assign_imported_marker_floors(
     voids: list[VoidMarker],
     exterior_walls: list[PolylineMarker],
     exterior_openings: list[PolylineMarker],
+    building_areas: list[PolylineMarker],
     custom_items: list[FixtureMarker],
     cabinet_items: list[FixtureMarker],
     demo_walls: list[ConstructionMarker],
@@ -514,6 +515,7 @@ def _assign_imported_marker_floors(
         *voids,
         *exterior_walls,
         *exterior_openings,
+        *building_areas,
         *custom_items,
         *cabinet_items,
         *demo_walls,
@@ -583,6 +585,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     voids: list[VoidMarker] = []
     exterior_walls: list[PolylineMarker] = []
     exterior_openings: list[PolylineMarker] = []
+    building_areas: list[PolylineMarker] = []
     custom_items: list[FixtureMarker] = []
     cabinet_items: list[FixtureMarker] = []
     demo_walls: list[ConstructionMarker] = []
@@ -886,6 +889,12 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                 exterior_openings.append(
                     PolylineMarker(id=_entity_id(entity), layer=LayerName.QUOTE_EXT_OPENING, points=points)
                 )
+        elif layer == LayerName.QUOTE_BUILDING_AREA.value and entity.dxftype() == "LWPOLYLINE":
+            points = _lwpolyline_points(entity, options.confirmed_unit)
+            if len(points) >= 4 and points[0] == points[-1] and _valid_room_polygon(points):
+                building_areas.append(
+                    PolylineMarker(id=_entity_id(entity), layer=LayerName.QUOTE_BUILDING_AREA, points=points)
+                )
 
     if not rooms:
         issues.append(
@@ -917,6 +926,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         voids,
         exterior_walls,
         exterior_openings,
+        building_areas,
         custom_items,
         cabinet_items,
         demo_walls,
@@ -939,6 +949,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         voids=voids,
         exterior_walls=exterior_walls,
         exterior_openings=exterior_openings,
+        building_areas=building_areas,
         custom_items=custom_items,
         cabinet_items=cabinet_items,
         demo_walls=demo_walls,

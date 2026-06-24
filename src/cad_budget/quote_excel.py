@@ -398,6 +398,7 @@ def export_residential_quote(
                 rules,
                 result.exterior_rows,
                 result.construction_details,
+                result.building_area,
             )
         )
 
@@ -437,6 +438,7 @@ def _append_section(
     rules: ResidentialQuoteRules | None = None,
     exterior_rows: list[ExteriorQuantityRow] | None = None,
     construction_details: list[ConstructionQuantityDetail] | None = None,
+    building_area: float | None = None,
 ) -> int:
     if rules is None:
         rules = load_default_quote_rules()
@@ -450,7 +452,14 @@ def _append_section(
     for item_number, item in enumerate(items, start=1):
         row_index = sheet.max_row + 1
         aggregate = (
-            _aggregate_quantity_for_item(item, included_rooms or [], rules, exterior_rows or [], construction_details or [])
+            _aggregate_quantity_for_item(
+                item,
+                included_rooms or [],
+                rules,
+                exterior_rows or [],
+                construction_details or [],
+                building_area,
+            )
             if room is None
             else None
         )
@@ -626,6 +635,7 @@ def _aggregate_quantity_for_item(
     rules: ResidentialQuoteRules,
     exterior_rows: list[ExteriorQuantityRow] | None = None,
     construction_details: list[ConstructionQuantityDetail] | None = None,
+    building_area: float | None = None,
 ) -> QuoteAggregateQuantity | None:
     item_name = item.name
     if item_name in rules.fixed_quantity_aggregate_items:
@@ -659,10 +669,10 @@ def _aggregate_quantity_for_item(
             ConstructionKind.LINTEL_HOLE,
             "\u6df7\u51dd\u571f\u8fc7\u6881\u5b54\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
         )
+    if item_name in rules.floor_area_percent_count_items:
+        return _floor_area_percent_count_aggregate(building_area, rules.floor_area_percent_count_items[item_name])
     if not rooms:
         return None
-    if item_name in rules.floor_area_percent_count_items:
-        return _floor_area_percent_count_aggregate(rooms, rules.floor_area_percent_count_items[item_name])
     if item_name in rules.custom_projected_area_items:
         return _custom_projected_area_aggregate(rooms, rules)
     if item_name in rules.cabinet_length_items:
@@ -898,18 +908,18 @@ def _construction_count_aggregate(
     )
 
 
-def _floor_area_percent_count_aggregate(rooms: list[QuantityRow], percent: float) -> QuoteAggregateQuantity | None:
-    floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
-    floor_area = sum(room.floor_area for room in floor_rooms)
-    quantity = int(math.floor(floor_area * percent + 0.5))
-    if not floor_rooms or quantity <= 0:
+def _floor_area_percent_count_aggregate(building_area: float | None, percent: float) -> QuoteAggregateQuantity | None:
+    if building_area is None or building_area <= 0:
+        return None
+    quantity = int(math.floor(building_area * percent + 0.5))
+    if quantity <= 0:
         return None
     return QuoteAggregateQuantity(
         quantity=quantity,
-        basis=f"\u623f\u5b50\u9762\u79ef\u7684{percent * 100:g}%\u53d6\u6574",
-        rooms=floor_rooms,
+        basis=f"\u5efa\u7b51\u9762\u79ef\u7684{percent * 100:g}%\u53d6\u6574",
+        rooms=[],
         review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
-        review_note="\u6309\u8ba1\u5165\u5ba4\u5185\u5730\u9762\u9762\u79ef\u4f5c\u4e3a\u5efa\u7b51\u9762\u79ef\u4ee3\u7406\u503c\uff0c\u9700\u8bbe\u8ba1\u5e08\u590d\u6838",
+        review_note="\u5efa\u7b51\u9762\u79ef\u6765\u81ea\u95ed\u5408\u5916\u5899\u8f6e\u5ed3\u6216\u5efa\u7b51\u9762\u79ef\u8f6e\u5ed3\uff0c\u9700\u8bbe\u8ba1\u5e08\u590d\u6838",
     )
 
 

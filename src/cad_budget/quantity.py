@@ -804,6 +804,44 @@ def _calculate_exterior_rows(project: ProjectInput) -> list[ExteriorQuantityRow]
     return rows
 
 
+def _closed_marker_area(marker) -> float | None:
+    points = marker.points
+    if len(points) < 4:
+        return None
+    if points[0].x != points[-1].x or points[0].y != points[-1].y:
+        return None
+    try:
+        area = closed_polygon_area(points)
+    except ValueError:
+        return None
+    if area <= 0:
+        return None
+    return area
+
+
+def _calculate_building_area(project: ProjectInput) -> float | None:
+    exterior_areas = [
+        area
+        for marker in project.exterior_walls
+        if marker.layer == LayerName.QUOTE_EXT_WALL
+        for area in [_closed_marker_area(marker)]
+        if area is not None
+    ]
+    if exterior_areas:
+        return round(sum(exterior_areas), 6)
+
+    building_areas = [
+        area
+        for marker in project.building_areas
+        if marker.layer == LayerName.QUOTE_BUILDING_AREA
+        for area in [_closed_marker_area(marker)]
+        if area is not None
+    ]
+    if building_areas:
+        return round(sum(building_areas), 6)
+    return None
+
+
 def _construction_detail_for_linear_marker(
     project: ProjectInput,
     marker: ConstructionMarker,
@@ -876,6 +914,7 @@ def _determine_status(exceptions: list[QuantityException], default_inferred: boo
 
 def calculate_quantities(project: ProjectInput) -> QuantityResult:
     rows: list[QuantityRow] = []
+    building_area = _calculate_building_area(project)
     exterior_rows = _calculate_exterior_rows(project)
     construction_details = _calculate_construction_details(project)
     exceptions: list[QuantityException] = []
@@ -1117,6 +1156,7 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
     return QuantityResult(
         project_name=project.project_name,
         rows=rows,
+        building_area=building_area,
         exterior_rows=exterior_rows,
         construction_details=construction_details,
         exceptions=exceptions,

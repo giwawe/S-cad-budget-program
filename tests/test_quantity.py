@@ -1218,6 +1218,70 @@ def test_exterior_wall_include_flag_accepts_string_false_for_json_compatibility(
     assert result.exterior_rows[0].include_in_quote is False
 
 
+def test_closed_exterior_wall_contours_produce_building_area():
+    project = ProjectInput(
+        project_name="Building Area",
+        exterior_walls=[
+            PolylineMarker(
+                id="ext-1f",
+                layer=LayerName.QUOTE_EXT_WALL,
+                points=rect(0, 0, 10, 8),
+                attributes={"include_in_quote": False},
+            ),
+            PolylineMarker(
+                id="ext-2f",
+                layer=LayerName.QUOTE_EXT_WALL,
+                points=rect(20, 0, 25, 6),
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    assert result.building_area == 110.0
+
+
+def test_open_exterior_wall_does_not_produce_building_area():
+    project = ProjectInput(
+        project_name="Open Exterior",
+        exterior_walls=[
+            PolylineMarker(
+                id="ext-line",
+                layer=LayerName.QUOTE_EXT_WALL,
+                points=[Point(x=0, y=0), Point(x=10, y=0)],
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    assert result.building_area is None
+
+
+def test_building_area_contour_is_fallback_when_exterior_wall_is_not_closed():
+    project = ProjectInput(
+        project_name="Building Area Fallback",
+        exterior_walls=[
+            PolylineMarker(
+                id="ext-line",
+                layer=LayerName.QUOTE_EXT_WALL,
+                points=[Point(x=0, y=0), Point(x=10, y=0)],
+            )
+        ],
+        building_areas=[
+            PolylineMarker(
+                id="building-area",
+                layer=LayerName.QUOTE_BUILDING_AREA,
+                points=rect(0, 0, 9, 7),
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    assert result.building_area == 63.0
+
+
 def test_construction_markers_calculate_demo_new_wall_lintel_and_hole_quantities():
     project = ProjectInput(
         project_name="Construction Markers",

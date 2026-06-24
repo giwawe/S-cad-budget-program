@@ -60,6 +60,18 @@ def test_export_quantity_result_creates_workbook(tmp_path: Path):
     assert sheet.column_dimensions["U"].hidden is True
 
 
+def test_export_quantity_result_writes_building_area_metadata(tmp_path: Path):
+    result = QuantityResult(project_name="Area Demo", rows=[], building_area=88.6, exceptions=[])
+    output = tmp_path / "takeoff.xlsx"
+
+    export_quantity_result(result, output)
+
+    sheet = load_workbook(output).active
+    assert sheet["A2"].value == "建筑面积"
+    assert sheet["B2"].value == 88.6
+    assert [cell.value for cell in sheet[3][: len(HEADERS)]] == HEADERS
+
+
 def test_export_quantity_result_uses_formulas_and_editable_styles(tmp_path: Path):
     result = QuantityResult(
         project_name="Formula Demo",

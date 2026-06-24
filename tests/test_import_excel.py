@@ -78,6 +78,17 @@ def test_import_quantity_result_reads_edited_room_rows(tmp_path: Path):
     assert row.exception_notes == ["manual_review"]
 
 
+def test_import_quantity_result_preserves_building_area_metadata(tmp_path: Path):
+    source = QuantityResult(project_name="Area Round Trip", rows=[], building_area=88.6, exceptions=[])
+    workbook_path = tmp_path / "area.xlsx"
+    export_quantity_result(source, workbook_path)
+
+    result = import_quantity_result(workbook_path)
+
+    assert result.project_name == "Area Round Trip"
+    assert result.building_area == 88.6
+
+
 def test_import_quantity_result_preserves_hidden_quote_details(tmp_path: Path):
     source = QuantityResult(
         project_name="Detail Round Trip",

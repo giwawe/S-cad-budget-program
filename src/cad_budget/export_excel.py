@@ -108,6 +108,9 @@ def export_quantity_result(result: QuantityResult, output_path: Path) -> None:
     sheet["B1"] = result.project_name
     sheet["A1"].font = _BOLD_FONT
     sheet.append([])
+    if result.building_area is not None:
+        sheet["A2"] = "建筑面积"
+        sheet["B2"] = result.building_area
     sheet.append(HEADERS)
 
     for cell in sheet[3]:

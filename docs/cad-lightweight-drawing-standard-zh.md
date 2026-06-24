@@ -37,10 +37,11 @@
 | `QUOTE_VOID` | 特殊项目可选 | `LWPOLYLINE` | 标出挑空区域或楼板洞口 | 挑空高度和洞口复核 |
 | `QUOTE_EXT_WALL` | 外墙可选 | `LWPOLYLINE` | 画外墙计量线 | 外墙表计量长度 |
 | `QUOTE_EXT_OPENING` | 外墙可选 | `LWPOLYLINE` | 画外墙洞口线 | 外墙表洞口扣减 |
+| `QUOTE_BUILDING_AREA` | 建筑面积可选 | 闭合 `LWPOLYLINE` | 当 `QUOTE_EXT_WALL` 不能画成完整闭合外轮廓时，画一条建筑面积闭合轮廓 | `QuantityResult.building_area` 备用来源 |
 | `QUOTE_DEMO_WALL` | 拆改可选 | `LINE`、`LWPOLYLINE` | 画需要拆除的墙体计量线，可写 `HEIGHT` | 拆改及拆墙面积 |
 | `QUOTE_NEW_WALL` | 新砌墙可选 | `LINE`、`LWPOLYLINE` | 画新砌墙计量线，必须写 `THICKNESS`，可写 `HEIGHT` | 120/240 厚砖墙面积 |
 | `QUOTE_LINTEL` | 过梁可选 | `LINE`、`LWPOLYLINE` | 预留标识砖墙门窗洞过梁位置 | 当前报价仍由设计师人工填写 |
-| `QUOTE_LINTEL_HOLE` | 过梁孔可选 | `POINT`、`INSERT`、`LINE`、`LWPOLYLINE` | 预留标识混凝土过梁孔位置 | 当前默认报价按建筑面积 10% 取整数 |
+| `QUOTE_LINTEL_HOLE` | 过梁孔可选 | `POINT`、`INSERT`、`LINE`、`LWPOLYLINE` | 预留标识混凝土过梁孔位置 | 当前默认报价按 `QuantityResult.building_area` 的 10% 取整数 |
 
 ## 3. 房间边界 `QUOTE_ROOM`
 
@@ -217,6 +218,9 @@
 - `QUOTE_EXT_WALL` 画外墙计量线。
 - `QUOTE_EXT_OPENING` 画外墙洞口线。
 - `QUOTE_EXT_WALL` 默认参与报价外墙批嵌汇总；相邻户外墙等不施工面可在 `CAD_BUDGET` XDATA 中写 `QUOTE_INCLUDE=false` 或 `INCLUDE=false` 排除。
+- 闭合且有面积的 `QUOTE_EXT_WALL` 会自动生成 `QuantityResult.building_area`；开放外墙线只生成外墙表长度和面积，不生成建筑面积。
+- `QUOTE_INCLUDE=false` 只表示该外墙面不参与外墙批嵌报价汇总，不会把闭合外墙轮廓从建筑面积计算中排除。
+- 如果外墙线不能画成完整闭合轮廓，可另画闭合 `QUOTE_BUILDING_AREA` 作为建筑面积备用来源；只有没有闭合 `QUOTE_EXT_WALL` 时才使用该备用轮廓。
 - 外墙结果会进入 `exterior_rows`。
 - Excel 中存在外墙行时，会生成独立的 `外墙表`。
 - 第一版不自动处理复杂外立面建模、保温系统、石材/涂料构造或装饰造型。
@@ -227,7 +231,7 @@
 - `QUOTE_NEW_WALL` 只画新砌墙计量线；必须在 `CAD_BUDGET` XDATA 或块属性中写 `THICKNESS`，支持 `120`、`120mm`、`0.12` 等写法；可选写 `HEIGHT`。
 - `QUOTE_DEMO_WALL` / `QUOTE_NEW_WALL` 缺少 `HEIGHT` 时，系统使用楼层默认高度或项目默认高度，并在报价复核列标记默认推断。
 - `QUOTE_LINTEL` 目前仅作为预留标识；砖墙门窗洞过梁只有新增加的门洞需要，默认仍由设计师人工填写。
-- `QUOTE_LINTEL_HOLE` 目前仅作为预留标识；打混凝土过梁孔默认按建筑面积代理值的 10% 取整数生成。
+- `QUOTE_LINTEL_HOLE` 目前仅作为预留标识；打混凝土过梁孔默认按 `QuantityResult.building_area` 的 10% 取整数生成，没有闭合外墙轮廓或 `QUOTE_BUILDING_AREA` 时保持模板默认。
 - 没有这些标识时，拆改及拆墙、砌 120/240 厚砖墙仍按模板默认生成。
 
 ## 12. 商品房报价对算量结果的使用
@@ -248,7 +252,7 @@
 - `厨房推拉门双包套` 默认按同一批推拉门门洞的套线长度汇总，单个门洞长度为门洞宽度加两侧有效门高。
 - `阳台推拉门` 和 `阳台推拉门双包套` 使用独立的阳台/露台空间关键词，不会放宽厨房推拉门的匹配范围；前者按门洞面积，后者按门洞宽度加两侧有效门高。
 - `外墙批嵌` 默认按选中的 `exterior_rows.net_area` 汇总，已扣除外墙洞口；`外墙批嵌以及修补` 仍按模板默认，避免把修补范围等同于整面外墙。
-- `拆改及拆墙` 默认按 `QUOTE_DEMO_WALL` 面积汇总；`砌120厚砖墙` / `砌240厚砖墙` 默认按 `QUOTE_NEW_WALL` 面积并按 `THICKNESS` 匹配；`砖墙门窗洞过梁` 默认仍由设计师人工填写；`打混凝土过梁孔` 默认按建筑面积代理值的 10% 取整数。
+- `拆改及拆墙` 默认按 `QUOTE_DEMO_WALL` 面积汇总；`砌120厚砖墙` / `砌240厚砖墙` 默认按 `QUOTE_NEW_WALL` 面积并按 `THICKNESS` 匹配；`砖墙门窗洞过梁` 默认仍由设计师人工填写；`打混凝土过梁孔` 默认按 `QuantityResult.building_area` 的 10% 取整数，没有建筑面积来源时保持模板默认。
 - `淋浴隔断` 默认按卫生间数量汇总；`玻璃淋浴房` 默认仍按模板生成，避免重复报价。
 - `全屋定制` 默认从 `QUOTE_CUSTOM` 投影面积汇总；缺少高度时按 2.6m 默认推断，高度低于 1m 的柜体不计入投影面积并提示按长度复核。
 - `橱柜` 默认从 `QUOTE_CABINET` 长度汇总；地柜和吊柜可重叠标注，报价备注会提示设计师确认。
@@ -273,7 +277,7 @@
 - 多层项目每个空间楼层标记唯一，且楼层默认层高配置完整。
 - `QUOTE_HEIGHT` 使用米值文本。
 - 挑空、阳台、露台、楼梯、电梯井等特殊空间已经准备好人工复核口径。
-- 外墙线和外墙洞口使用 `QUOTE_EXT_WALL` / `QUOTE_EXT_OPENING`，不要混入室内墙线。
+- 外墙线和外墙洞口使用 `QUOTE_EXT_WALL` / `QUOTE_EXT_OPENING`，不要混入室内墙线；需要自动建筑面积时，优先把外墙画成闭合 `QUOTE_EXT_WALL` 轮廓，或另画闭合 `QUOTE_BUILDING_AREA`。
 
 ## 14. 常见错误与处理结果
 

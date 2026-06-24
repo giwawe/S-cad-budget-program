@@ -62,6 +62,11 @@ def import_quantity_result(workbook_path: Path) -> QuantityResult:
     workbook = load_workbook(workbook_path, data_only=False)
     quantity_sheet = _find_sheet_with_headers(workbook, HEADERS)
     project_name = _as_text(quantity_sheet["B1"].value) or "Untitled"
+    building_area = (
+        _as_float(quantity_sheet["B2"].value)
+        if _as_text(quantity_sheet["A2"].value) == "建筑面积"
+        else None
+    )
 
     rows = [_read_quantity_row(quantity_sheet, row_index) for row_index in range(4, quantity_sheet.max_row + 1)]
     rows = [row for row in rows if row is not None]
@@ -92,6 +97,7 @@ def import_quantity_result(workbook_path: Path) -> QuantityResult:
     return QuantityResult(
         project_name=project_name,
         rows=rows,
+        building_area=building_area,
         exterior_rows=exterior_rows,
         construction_details=construction_details,
         exceptions=[],
