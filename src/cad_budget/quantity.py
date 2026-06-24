@@ -38,6 +38,18 @@ _DEFAULT_CUSTOM_HEIGHT_METERS = 2.6
 _LOW_CUSTOM_HEIGHT_THRESHOLD_METERS = 1.0
 
 
+def _quote_include_flag(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip().lower()
+        if cleaned in {"false", "0", "no", "n", "off"}:
+            return False
+        if cleaned in {"true", "1", "yes", "y", "on"}:
+            return True
+    return True
+
+
 def _floor_compatible(room_floor: str | None, marker_floor: str | None) -> bool:
     return room_floor == marker_floor
 
@@ -763,7 +775,7 @@ def _calculate_exterior_rows(project: ProjectInput) -> list[ExteriorQuantityRow]
                 opening_length=opening_length,
                 gross_area=gross_area,
                 net_area=net_area,
-                include_in_quote=bool(wall.attributes.get("include_in_quote", True)),
+                include_in_quote=_quote_include_flag(wall.attributes.get("include_in_quote", True)),
             )
         )
     return rows

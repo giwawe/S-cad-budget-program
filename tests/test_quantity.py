@@ -1195,3 +1195,22 @@ def test_exterior_wall_include_flags_are_preserved_and_openings_are_deducted():
     assert rows["ext-included"].net_area == 9.0
     assert rows["ext-excluded"].include_in_quote is False
     assert rows["ext-excluded"].net_area == 9.0
+
+
+def test_exterior_wall_include_flag_accepts_string_false_for_json_compatibility():
+    project = ProjectInput(
+        project_name="Exterior Include String",
+        default_height=3.0,
+        exterior_walls=[
+            PolylineMarker(
+                id="ext-string-excluded",
+                layer=LayerName.QUOTE_EXT_WALL,
+                points=[Point(x=0, y=0), Point(x=4, y=0)],
+                attributes={"include_in_quote": "false"},
+            )
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    assert result.exterior_rows[0].include_in_quote is False
