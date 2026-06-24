@@ -752,9 +752,20 @@ def _custom_projected_area_aggregate(rooms: list[QuantityRow], rules: Residentia
     detail_pairs = [(room, detail) for room in rooms for detail in room.custom_details]
     if not detail_pairs:
         return None
+    projected_area_details = [
+        detail
+        for _, detail in detail_pairs
+        if detail.pricing_mode == FixturePricingMode.PROJECTED_AREA
+        and (
+            detail.effective_height is None
+            or detail.effective_height >= rules.low_custom_height_threshold
+        )
+    ]
     projected_area = sum(
-        detail.projected_area for _, detail in detail_pairs if detail.pricing_mode == FixturePricingMode.PROJECTED_AREA
+        detail.projected_area for detail in projected_area_details
     )
+    if not projected_area_details or projected_area <= 0:
+        return None
     low_height_details = [
         detail
         for _, detail in detail_pairs

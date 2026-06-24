@@ -474,6 +474,103 @@ def test_export_residential_quote_auto_fills_custom_and_cabinet_items(tmp_path: 
     assert "\u5730\u67dc/\u540a\u67dc\u9700\u786e\u8ba4" in cabinet[14]
 
 
+def test_export_residential_quote_excludes_low_height_projected_custom_details(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_custom_cabinet_items=True)
+    result = QuantityResult(
+        project_name="Persisted Low Custom Detail Demo",
+        rows=[
+            _quantity_row(
+                "bed",
+                "\u4e3b\u5367",
+                floor_area=12.0,
+                net_wall_area=30.0,
+                custom_details=[
+                    FixtureQuantityDetail(
+                        id="low-persisted",
+                        room_id="bed",
+                        room_name="\u4e3b\u5367",
+                        kind=FixtureKind.CUSTOM,
+                        length=2.0,
+                        height=0.8,
+                        effective_height=0.8,
+                        height_defaulted=False,
+                        projected_area=1.6,
+                        pricing_mode=FixturePricingMode.PROJECTED_AREA,
+                        fixture_type="\u77ee\u67dc",
+                    ),
+                    FixtureQuantityDetail(
+                        id="wardrobe",
+                        room_id="bed",
+                        room_name="\u4e3b\u5367",
+                        kind=FixtureKind.CUSTOM,
+                        length=2.0,
+                        height=2.4,
+                        effective_height=2.4,
+                        height_defaulted=False,
+                        projected_area=4.8,
+                        pricing_mode=FixturePricingMode.PROJECTED_AREA,
+                        fixture_type="\u8863\u67dc",
+                    ),
+                ],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    custom = _item_row_named(rows, "\u5168\u5c4b\u5b9a\u5236")
+    assert custom[3] == 4.8
+    assert custom[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert "\u9ad8\u5ea6\u5c0f\u4e8e1m" in custom[14]
+
+
+def test_export_residential_quote_keeps_custom_template_default_when_only_low_height_projected_details(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_custom_cabinet_items=True)
+    result = QuantityResult(
+        project_name="Only Low Custom Detail Demo",
+        rows=[
+            _quantity_row(
+                "bed",
+                "\u4e3b\u5367",
+                floor_area=12.0,
+                net_wall_area=30.0,
+                custom_details=[
+                    FixtureQuantityDetail(
+                        id="low-persisted",
+                        room_id="bed",
+                        room_name="\u4e3b\u5367",
+                        kind=FixtureKind.CUSTOM,
+                        length=2.0,
+                        height=0.8,
+                        effective_height=0.8,
+                        height_defaulted=False,
+                        projected_area=1.6,
+                        pricing_mode=FixturePricingMode.PROJECTED_AREA,
+                        fixture_type="\u77ee\u67dc",
+                    ),
+                ],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    custom = _item_row_named(rows, "\u5168\u5c4b\u5b9a\u5236")
+    assert custom[3] == 99
+    assert custom[12] == "\u6a21\u677f\u9ed8\u8ba4\u6570\u91cf"
+    assert custom[13] == "\u6309\u6a21\u677f\u751f\u6210"
+
+
 def test_export_residential_quote_keeps_custom_and_cabinet_template_defaults_without_details(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
