@@ -1,13 +1,16 @@
 from cad_budget.models import (
     DataStatus,
+    FixtureKind,
+    FixtureMarker,
     HeightMode,
     LayerName,
     Point,
-    VoidMarker,
     ProjectInput,
     PolylineMarker,
+    QuantityRow,
     RoomBoundary,
     SpaceType,
+    VoidMarker,
 )
 from pydantic import ValidationError
 import pytest
@@ -42,6 +45,64 @@ def test_status_and_height_modes_are_explicit():
     assert DataStatus.CONFIRMED.value == "confirmed"
     assert DataStatus.DEFAULT_INFERRED.value == "default_inferred"
     assert HeightMode.FLOOR_DEFAULT.value == "floor_default"
+
+
+def test_project_input_accepts_custom_and_cabinet_fixture_markers():
+    project = ProjectInput(
+        project_name="Fixtures",
+        custom_items=[
+            FixtureMarker(
+                id="custom-1",
+                layer=LayerName.QUOTE_CUSTOM,
+                kind=FixtureKind.CUSTOM,
+                points=[Point(x=0, y=0), Point(x=2, y=0)],
+                length=2.0,
+                height=2.6,
+                fixture_type="衣柜",
+            )
+        ],
+        cabinet_items=[
+            FixtureMarker(
+                id="cabinet-1",
+                layer=LayerName.QUOTE_CABINET,
+                kind=FixtureKind.CABINET,
+                points=[Point(x=0, y=1), Point(x=3, y=1)],
+                length=3.0,
+                fixture_type="地柜",
+            )
+        ],
+    )
+
+    assert project.custom_items[0].kind is FixtureKind.CUSTOM
+    assert project.cabinet_items[0].fixture_type == "地柜"
+
+
+def test_quantity_row_fixture_details_default_to_empty_lists():
+    row = QuantityRow(
+        room_id="r1",
+        floor=None,
+        room_name="卧室",
+        space_type=SpaceType.NORMAL,
+        height=2.8,
+        height_mode=HeightMode.PROJECT_DEFAULT,
+        floor_area=10,
+        floor_perimeter=12,
+        wall_measure_perimeter=12,
+        open_boundary_length=0,
+        gross_wall_area=33.6,
+        window_count=0,
+        window_area=0,
+        door_opening_count=0,
+        door_opening_area=0,
+        net_wall_area=33.6,
+        is_outdoor=False,
+        include_in_floor_quantity=True,
+        include_in_wall_paint_quantity=True,
+        status=DataStatus.CONFIRMED,
+    )
+
+    assert row.custom_details == []
+    assert row.cabinet_details == []
 
 
 def test_room_boundary_rejects_non_closed_polygon():

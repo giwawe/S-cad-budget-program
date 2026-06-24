@@ -16,6 +16,8 @@ class LayerName(str, Enum):
     QUOTE_VOID = "QUOTE_VOID"
     QUOTE_EXT_WALL = "QUOTE_EXT_WALL"
     QUOTE_EXT_OPENING = "QUOTE_EXT_OPENING"
+    QUOTE_CUSTOM = "QUOTE_CUSTOM"
+    QUOTE_CABINET = "QUOTE_CABINET"
 
 
 class SpaceType(str, Enum):
@@ -44,6 +46,16 @@ class HeightMode(str, Enum):
     QUOTE_VOID = "quote_void"
     MANUAL = "manual"
     RELATED_FLOORS_SUM = "related_floors_sum"
+
+
+class FixtureKind(str, Enum):
+    CUSTOM = "custom"
+    CABINET = "cabinet"
+
+
+class FixturePricingMode(str, Enum):
+    PROJECTED_AREA = "projected_area"
+    LENGTH = "length"
 
 
 class Point(BaseModel):
@@ -116,6 +128,19 @@ class PolylineMarker(BaseModel):
         return points
 
 
+class FixtureMarker(BaseModel):
+    id: str
+    layer: LayerName
+    kind: FixtureKind
+    points: list[Point]
+    length: float
+    height: float | None = None
+    fixture_type: str | None = None
+    floor: str | None = None
+    room_id: str | None = None
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
 class HeightMarker(BaseModel):
     id: str
     layer: LayerName = LayerName.QUOTE_HEIGHT
@@ -156,6 +181,8 @@ class ProjectInput(BaseModel):
     voids: list[VoidMarker] = Field(default_factory=list)
     exterior_walls: list[PolylineMarker] = Field(default_factory=list)
     exterior_openings: list[PolylineMarker] = Field(default_factory=list)
+    custom_items: list[FixtureMarker] = Field(default_factory=list)
+    cabinet_items: list[FixtureMarker] = Field(default_factory=list)
 
 
 class QuantityException(BaseModel):
@@ -185,6 +212,20 @@ class DoorQuantityDetail(BaseModel):
     area: float = 0.0
 
 
+class FixtureQuantityDetail(BaseModel):
+    id: str
+    room_id: str | None = None
+    room_name: str | None = None
+    kind: FixtureKind
+    length: float
+    height: float | None = None
+    effective_height: float | None = None
+    height_defaulted: bool = False
+    projected_area: float = 0.0
+    pricing_mode: FixturePricingMode
+    fixture_type: str | None = None
+
+
 class QuantityRow(BaseModel):
     room_id: str
     floor: str | None
@@ -203,6 +244,8 @@ class QuantityRow(BaseModel):
     door_opening_count: int
     door_opening_area: float
     door_details: list[DoorQuantityDetail] = Field(default_factory=list)
+    custom_details: list[FixtureQuantityDetail] = Field(default_factory=list)
+    cabinet_details: list[FixtureQuantityDetail] = Field(default_factory=list)
     net_wall_area: float
     is_outdoor: bool
     include_in_floor_quantity: bool
