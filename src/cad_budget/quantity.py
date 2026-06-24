@@ -763,6 +763,7 @@ def _calculate_exterior_rows(project: ProjectInput) -> list[ExteriorQuantityRow]
                 opening_length=opening_length,
                 gross_area=gross_area,
                 net_area=net_area,
+                include_in_quote=bool(wall.attributes.get("include_in_quote", True)),
             )
         )
     return rows

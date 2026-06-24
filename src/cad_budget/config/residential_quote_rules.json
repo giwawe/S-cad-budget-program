@@ -17,6 +17,9 @@
   "tile_area_aggregate_items": [
     "美缝"
   ],
+  "exterior_net_area_aggregate_items": [
+    "外墙批嵌"
+  ],
   "room_count_aggregate_items": [],
   "wet_room_count_aggregate_items": [],
   "kitchen_count_aggregate_items": [],
@@ -57,10 +60,12 @@
     "室内门"
   ],
   "sliding_door_area_items": [
-    "厨房推拉门"
+    "厨房推拉门",
+    "阳台推拉门"
   ],
   "sliding_door_trim_length_items": [
-    "厨房推拉门双包套"
+    "厨房推拉门双包套",
+    "阳台推拉门双包套"
   ],
   "custom_projected_area_items": [
     "全屋定制"
@@ -76,5 +81,17 @@
   "sliding_door_room_keywords": [
     "厨房",
     "书房"
-  ]
+  ],
+  "sliding_door_room_keywords_by_item": {
+    "阳台推拉门": [
+      "阳台",
+      "露台"
+    ]
+  },
+  "sliding_door_trim_room_keywords_by_item": {
+    "阳台推拉门双包套": [
+      "阳台",
+      "露台"
+    ]
+  }
 }

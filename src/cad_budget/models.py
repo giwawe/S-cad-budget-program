@@ -262,6 +262,7 @@ class ExteriorQuantityRow(BaseModel):
     opening_length: float
     gross_area: float
     net_area: float
+    include_in_quote: bool = True
 
 
 class QuantityResult(BaseModel):

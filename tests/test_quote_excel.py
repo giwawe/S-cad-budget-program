@@ -6,6 +6,7 @@ from openpyxl import Workbook, load_workbook
 from cad_budget.models import (
     DataStatus,
     DoorQuantityDetail,
+    ExteriorQuantityRow,
     FixtureKind,
     FixturePricingMode,
     FixtureQuantityDetail,
@@ -59,6 +60,13 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u5ba4\u5185\u95e8" in rules.interior_door_count_items
     assert "\u53a8\u623f\u63a8\u62c9\u95e8" in rules.sliding_door_area_items
     assert "\u53a8\u623f\u63a8\u62c9\u95e8\u53cc\u5305\u5957" in rules.sliding_door_trim_length_items
+    assert "\u5916\u5899\u6279\u5d4c" in rules.exterior_net_area_aggregate_items
+    assert "\u5916\u5899\u6279\u5d4c\u4ee5\u53ca\u4fee\u8865" not in rules.exterior_net_area_aggregate_items
+    assert rules.sliding_door_room_keywords_by_item["\u9633\u53f0\u63a8\u62c9\u95e8"] == {"\u9633\u53f0", "\u9732\u53f0"}
+    assert rules.sliding_door_trim_room_keywords_by_item["\u9633\u53f0\u63a8\u62c9\u95e8\u53cc\u5305\u5957"] == {
+        "\u9633\u53f0",
+        "\u9732\u53f0",
+    }
     assert "\u6dcb\u6d74\u9694\u65ad" in rules.bathroom_count_aggregate_items
     assert "\u5168\u5c4b\u5b9a\u5236" in rules.custom_projected_area_items
     assert "\u6a71\u67dc" in rules.cabinet_length_items
@@ -1291,6 +1299,149 @@ def test_export_residential_quote_uses_custom_default_door_height_for_sliding_do
     assert "\u9ed8\u8ba4\u95e8\u9ad82.4m" in sliding_door[14]
 
 
+def test_export_residential_quote_auto_fills_exterior_plaster_from_included_net_area(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_exterior_summary_items=True)
+    result = QuantityResult(
+        project_name="Exterior Quote Demo",
+        rows=[],
+        exterior_rows=[
+            ExteriorQuantityRow(
+                exterior_wall_id="ext-included",
+                floor=None,
+                height=3.0,
+                measure_length=4.0,
+                opening_length=1.0,
+                gross_area=12.0,
+                net_area=9.0,
+                include_in_quote=True,
+            ),
+            ExteriorQuantityRow(
+                exterior_wall_id="ext-excluded",
+                floor=None,
+                height=3.0,
+                measure_length=5.0,
+                opening_length=2.0,
+                gross_area=15.0,
+                net_area=9.0,
+                include_in_quote=False,
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    exterior_plaster = _item_row_named(rows, "\u5916\u5899\u6279\u5d4c")
+    exterior_repair = _item_row_named(rows, "\u5916\u5899\u6279\u5d4c\u4ee5\u53ca\u4fee\u8865")
+    assert exterior_plaster[3] == 9.0
+    assert exterior_plaster[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert exterior_plaster[12] == "\u9009\u5b9a\u5916\u5899\u51c0\u9762\u79ef\u6c47\u603b"
+    assert exterior_plaster[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert "\u6263\u9664\u5916\u5899\u6d1e\u53e3" in exterior_plaster[14]
+    assert "\u786e\u8ba4\u5916\u5899\u6279\u5d4c\u65bd\u5de5\u9762" in exterior_plaster[14]
+    assert exterior_repair[3] == 88
+    assert exterior_repair[9] == "\u6a21\u677f\u9ed8\u8ba4"
+
+
+def test_export_residential_quote_keeps_exterior_and_balcony_defaults_without_matching_details(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(
+        template_path,
+        include_advanced_summary_items=True,
+        include_balcony_sliding_items=True,
+        include_exterior_summary_items=True,
+    )
+    result = QuantityResult(
+        project_name="Defaults Demo",
+        rows=[
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                door_details=[
+                    DoorQuantityDetail(
+                        id="kitchen-slide",
+                        room_id="kitchen",
+                        width=1.6,
+                        height=2.1,
+                        effective_height=2.1,
+                        area=3.36,
+                    )
+                ],
+            )
+        ],
+        exterior_rows=[],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    assert _item_row_named(rows, "\u5916\u5899\u6279\u5d4c")[3] == 77
+    assert _item_row_named(rows, "\u9633\u53f0\u63a8\u62c9\u95e8")[3] == 66
+    assert _item_row_named(rows, "\u9633\u53f0\u63a8\u62c9\u95e8\u53cc\u5305\u5957")[3] == 55
+
+
+def test_export_residential_quote_keeps_kitchen_and_balcony_sliding_doors_separate(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_advanced_summary_items=True, include_balcony_sliding_items=True)
+    result = QuantityResult(
+        project_name="Balcony Door Demo",
+        rows=[
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                door_details=[
+                    DoorQuantityDetail(
+                        id="kitchen-slide",
+                        room_id="kitchen",
+                        width=1.6,
+                        height=2.1,
+                        effective_height=2.1,
+                        area=3.36,
+                    )
+                ],
+            ),
+            _quantity_row(
+                "balcony",
+                "\u9633\u53f0",
+                floor_area=4.0,
+                net_wall_area=10.0,
+                door_details=[
+                    DoorQuantityDetail(
+                        id="balcony-slide",
+                        room_id="balcony",
+                        width=2.0,
+                        height=2.2,
+                        effective_height=2.2,
+                        area=4.4,
+                    )
+                ],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    assert _item_row_named(rows, "\u53a8\u623f\u63a8\u62c9\u95e8")[3] == 3.36
+    assert _item_row_named(rows, "\u53a8\u623f\u63a8\u62c9\u95e8\u53cc\u5305\u5957")[3] == 5.8
+    assert _item_row_named(rows, "\u9633\u53f0\u63a8\u62c9\u95e8")[3] == 4.4
+    assert _item_row_named(rows, "\u9633\u53f0\u63a8\u62c9\u95e8\u53cc\u5305\u5957")[3] == 6.4
+
+
 def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
@@ -1411,6 +1562,8 @@ def _create_quote_template(
     include_fixed_summary_items: bool = False,
     include_advanced_summary_items: bool = False,
     include_custom_cabinet_items: bool = False,
+    include_balcony_sliding_items: bool = False,
+    include_exterior_summary_items: bool = False,
 ) -> None:
     workbook = Workbook()
     half = workbook.active
@@ -1478,6 +1631,9 @@ def _create_quote_template(
         fitout.append([1, "\u5ba4\u5185\u95e8", "\u6a18", 99, 0, 0, 10, None, "\u95e8"])
         fitout.append([2, "\u53a8\u623f\u63a8\u62c9\u95e8", "M2", 99, 0, 0, 10, None, "\u63a8\u62c9\u95e8"])
         fitout.append([3, "\u53a8\u623f\u63a8\u62c9\u95e8\u53cc\u5305\u5957", "M", 99, 0, 0, 10, None, "\u63a8\u62c9\u95e8\u53cc\u5305\u5957"])
+        if include_balcony_sliding_items:
+            fitout.append([4, "\u9633\u53f0\u63a8\u62c9\u95e8", "M2", 66, 0, 0, 10, None, "\u9633\u53f0\u63a8\u62c9\u95e8"])
+            fitout.append([5, "\u9633\u53f0\u63a8\u62c9\u95e8\u53cc\u5305\u5957", "M", 55, 0, 0, 10, None, "\u9633\u53f0\u63a8\u62c9\u95e8\u53cc\u5305\u5957"])
         fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H26:H28)"])
         fitout.append(["\u516d", "\u96c6\u6210\u540a\u9876\u3001\u536b\u6d74\u3001\u5168\u5c4b\u5f00\u5173\u706f\u9970"])
         fitout.append([1, "\u6dcb\u6d74\u9694\u65ad", "\u5957", 99, 0, 0, 10, None, "\u6dcb\u6d74\u9694\u65ad"])
@@ -1486,6 +1642,11 @@ def _create_quote_template(
         fitout.append(["\u4e03", "\u5176\u4ed6\uff08\u7a97\u5e18\u3001\u7f8e\u7f1d\u3001\u7a97\u53f0\u77f3\u7b49\uff09"])
         fitout.append([1, "\u7a97\u5e18", "\u7c73", 99, 0, 0, 10, None, "\u7a97\u5e18"])
         fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H31:H31)"])
+    if include_exterior_summary_items:
+        fitout.append(["\u516b", "\u5916\u5899\u5de5\u7a0b"])
+        fitout.append([1, "\u5916\u5899\u6279\u5d4c", "M2", 77, 0, 0, 10, None, "\u5916\u5899\u6279\u5d4c"])
+        fitout.append([2, "\u5916\u5899\u6279\u5d4c\u4ee5\u53ca\u4fee\u8865", "M2", 88, 0, 0, 10, None, "\u5916\u5899\u4fee\u8865"])
+        fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H34:H35)"])
     fitout.append(["A", "\u76f4\u63a5\u8d39\u5408\u8ba1(\u4e00+\u2026...\u5341)", None, None, None, None, None, "=H12+H18+H21"])
     fitout.append(["B", "\u5de5\u7a0b\u7ba1\u7406\u8d39(D=A* 5%)", None, None, None, None, None, "=H22*0.05"])
     fitout.append(["C", "\u7a0e\u91d1E=(A+B)* 3%", None, None, None, None, None, 0])

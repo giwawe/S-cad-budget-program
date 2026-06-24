@@ -1155,3 +1155,43 @@ def test_exterior_wall_quantities_are_reported_separately_from_room_rows():
     assert row.opening_length == 1.0
     assert row.gross_area == 12.0
     assert row.net_area == 9.0
+
+
+def test_exterior_wall_include_flags_are_preserved_and_openings_are_deducted():
+    project = ProjectInput(
+        project_name="Exterior Include",
+        default_height=3.0,
+        exterior_walls=[
+            PolylineMarker(
+                id="ext-included",
+                layer=LayerName.QUOTE_EXT_WALL,
+                points=[Point(x=0, y=0), Point(x=4, y=0)],
+            ),
+            PolylineMarker(
+                id="ext-excluded",
+                layer=LayerName.QUOTE_EXT_WALL,
+                points=[Point(x=0, y=3), Point(x=5, y=3)],
+                attributes={"include_in_quote": False},
+            ),
+        ],
+        exterior_openings=[
+            PolylineMarker(
+                id="open-included",
+                layer=LayerName.QUOTE_EXT_OPENING,
+                points=[Point(x=1, y=0), Point(x=2, y=0)],
+            ),
+            PolylineMarker(
+                id="open-excluded",
+                layer=LayerName.QUOTE_EXT_OPENING,
+                points=[Point(x=1, y=3), Point(x=3, y=3)],
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    rows = {row.exterior_wall_id: row for row in result.exterior_rows}
+    assert rows["ext-included"].include_in_quote is True
+    assert rows["ext-included"].net_area == 9.0
+    assert rows["ext-excluded"].include_in_quote is False
+    assert rows["ext-excluded"].net_area == 9.0

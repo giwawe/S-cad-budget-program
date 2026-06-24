@@ -292,6 +292,26 @@ def _fixture_attributes(entity) -> dict[str, str]:
     return _xdata_key_value_attributes(entity, _FIXTURE_XDATA_APPIDS)
 
 
+def _parse_boolean(value: str) -> bool | None:
+    cleaned = value.strip().lower()
+    if cleaned in {"true", "1", "yes", "y", "on"}:
+        return True
+    if cleaned in {"false", "0", "no", "n", "off"}:
+        return False
+    return None
+
+
+def _exterior_wall_attributes(entity) -> dict[str, bool]:
+    attrs = _xdata_key_value_attributes(entity, _FIXTURE_XDATA_APPIDS)
+    for key in ("QUOTE_INCLUDE", "INCLUDE", "quote_include", "include"):
+        if key not in attrs:
+            continue
+        include = _parse_boolean(attrs[key])
+        if include is not None:
+            return {"include_in_quote": include}
+    return {}
+
+
 def _parse_window_dimension(value: str) -> float | None:
     cleaned = value.strip().lower().replace(" ", "")
     if not cleaned:
@@ -739,7 +759,14 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         elif layer == LayerName.QUOTE_EXT_WALL.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
-                exterior_walls.append(PolylineMarker(id=_entity_id(entity), layer=LayerName.QUOTE_EXT_WALL, points=points))
+                exterior_walls.append(
+                    PolylineMarker(
+                        id=_entity_id(entity),
+                        layer=LayerName.QUOTE_EXT_WALL,
+                        points=points,
+                        attributes=_exterior_wall_attributes(entity),
+                    )
+                )
         elif layer == LayerName.QUOTE_EXT_OPENING.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
