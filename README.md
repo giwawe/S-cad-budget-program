@@ -167,3 +167,11 @@ The generated quote workbook records the rule source in the automation summary a
 The quote workbook writes a small automation summary in columns `Q:S`, counting `自动算量`, `自动汇总`, and `模板默认` lines and showing their percentages. The main quote table remains in columns `A:O`.
 
 Remaining template-default items from the real commodity-apartment sample are tracked in `docs/residential-quote-remaining-defaults-audit-zh.md`, grouped by whether they need new CAD marker layers or should stay manual. A designer-facing checklist for reducing those defaults is available at `docs/residential-quote-sample-cad-marker-checklist-zh.md`.
+
+To generate a compact local sample that already contains the supported quote marker layers and demonstrates the expected automation stats, run:
+
+```powershell
+$env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --output-dir scratch\marker-rich-quote-sample
+```
+
+The generated folder contains a small DXF, a minimal quote template, imported `project.json`, calculated `result.json`, generated `quote.xlsx`, and a README summarizing the automatic aggregate counts.

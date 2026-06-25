@@ -4,6 +4,14 @@
 
 完整 CAD 出图规范见 `docs/cad-lightweight-drawing-standard-zh.md`。本文只列商品房整装报价样例中最能减少模板默认行的补图动作。
 
+可先生成一套最小对照样例：
+
+```powershell
+$env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --output-dir scratch\marker-rich-quote-sample
+```
+
+生成目录包含 `marker-rich-plan.dxf`、`marker-rich-template.xlsx`、`project.json`、`result.json`、`quote.xlsx` 和说明 README，可用于核对补齐标识后哪些报价行会从 `模板默认` 变为 `自动汇总`。
+
 ## 当前样例缺口
 
 基于 `scratch/cad-import-test/quote-ext-repair.xlsx`：

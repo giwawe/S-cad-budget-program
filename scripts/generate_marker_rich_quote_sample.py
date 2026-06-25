@@ -1,7 +1,7 @@
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
-import os
-import subprocess
-import sys
 
 import ezdxf
 from openpyxl import Workbook, load_workbook
@@ -12,91 +12,46 @@ from cad_budget.quantity import calculate_quantities
 from cad_budget.quote_excel import export_residential_quote
 
 
-def test_marker_rich_dxf_turns_quote_defaults_into_automatic_aggregates(tmp_path: Path):
-    dxf_path = tmp_path / "marker_rich_plan.dxf"
-    template_path = tmp_path / "template.xlsx"
-    output_path = tmp_path / "quote.xlsx"
-    _build_marker_rich_dxf(dxf_path)
-    _create_marker_quote_template(template_path)
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Generate a small CAD-to-quote sample with quote marker layers."
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("scratch") / "marker-rich-quote-sample",
+        help="Directory for generated DXF, JSON, template, quote workbook, and README.",
+    )
+    args = parser.parse_args()
+
+    output_dir: Path = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    dxf_path = output_dir / "marker-rich-plan.dxf"
+    template_path = output_dir / "marker-rich-template.xlsx"
+    project_path = output_dir / "project.json"
+    result_path = output_dir / "result.json"
+    quote_path = output_dir / "quote.xlsx"
+    readme_path = output_dir / "README.md"
+
+    build_marker_rich_dxf(dxf_path)
+    create_marker_quote_template(template_path)
 
     import_result = import_dxf(CadImportOptions(source_path=dxf_path, confirmed_unit=CadUnit.MILLIMETER))
-    assert not import_result.has_blockers
-    assert import_result.project is not None
+    if import_result.has_blockers or import_result.project is None:
+        issues = "\n".join(f"- {issue.code}: {issue.message}" for issue in import_result.issues)
+        raise SystemExit(f"DXF import failed:\n{issues}")
+
     quantity = calculate_quantities(import_result.project)
+    export_residential_quote(quantity, template_path, quote_path)
+    project_path.write_text(import_result.project.model_dump_json(indent=2), encoding="utf-8")
+    result_path.write_text(quantity.model_dump_json(indent=2), encoding="utf-8")
+    readme_path.write_text(_sample_readme(quote_path), encoding="utf-8")
 
-    assert quantity.building_area == 36.0
-    assert len(quantity.exterior_rows) == 1
-    assert len(quantity.construction_details) == 6
-
-    export_residential_quote(quantity, template_path, output_path)
-
-    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
-    expected_quantities = {
-        "外墙批嵌": 70.0,
-        "外墙批嵌以及修补": 6.0,
-        "拆改及拆墙": 7.8,
-        "砌120厚砖墙": 5.6,
-        "砌240厚砖墙": 4.5,
-        "打混凝土过梁孔": 4,
-        "厨房、卫生间排污管包隔音棉": 2.4,
-        "包上/下水管道(单管)": 2.1,
-        "全屋定制": 5.2,
-        "橱柜": 3.0,
-        "阳台推拉门": 4.2,
-        "阳台推拉门双包套": 6.2,
-    }
-    for item_name, expected_quantity in expected_quantities.items():
-        row = _row_containing(rows, item_name)
-        assert row[3] == expected_quantity
-        assert row[9] == "自动汇总"
-
-    assert _row_containing(rows, "砖墙门窗洞过梁")[3] == 15
-    assert _row_containing(rows, "砖墙门窗洞过梁")[9] == "模板默认"
-    assert _summary_value(rows, "自动汇总") == 12
-    assert _summary_value(rows, "模板默认") == 1
+    print(f"Wrote marker-rich quote sample to {output_dir}")
 
 
-def test_marker_rich_quote_sample_script_writes_reusable_outputs(tmp_path: Path):
-    output_dir = tmp_path / "marker-sample"
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
-
-    completed = subprocess.run(
-        [
-            sys.executable,
-            "scripts/generate_marker_rich_quote_sample.py",
-            "--output-dir",
-            str(output_dir),
-        ],
-        cwd=Path(__file__).resolve().parents[1],
-        env=env,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert completed.returncode == 0, completed.stderr
-    expected_files = {
-        "marker-rich-plan.dxf",
-        "marker-rich-template.xlsx",
-        "project.json",
-        "result.json",
-        "quote.xlsx",
-        "README.md",
-    }
-    assert {path.name for path in output_dir.iterdir()} == expected_files
-
-    rows = list(load_workbook(output_dir / "quote.xlsx", data_only=False).active.iter_rows(values_only=True))
-    assert _row_containing(rows, "外墙批嵌")[3] == 70.0
-    assert _row_containing(rows, "阳台推拉门双包套")[3] == 6.2
-    assert _summary_value(rows, "自动汇总") == 12
-    assert _summary_value(rows, "模板默认") == 1
-    readme = (output_dir / "README.md").read_text(encoding="utf-8")
-    assert "QUOTE_EXT_WALL" in readme
-    assert "自动汇总: 12" in readme
-
-
-def _build_marker_rich_dxf(path: Path) -> None:
+def build_marker_rich_dxf(path: Path) -> None:
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4
     doc.appids.new("CAD_BUDGET")
@@ -161,7 +116,7 @@ def _build_marker_rich_dxf(path: Path) -> None:
     doc.saveas(path)
 
 
-def _create_marker_quote_template(path: Path) -> None:
+def create_marker_quote_template(path: Path) -> None:
     workbook = Workbook()
     half = workbook.active
     half.title = "半包"
@@ -211,15 +166,45 @@ def _write_quote_header(sheet) -> None:
     sheet.append([None, None, None, None, "主材\n单价", "辅材\n单价"])
 
 
-def _row_containing(rows, item_name: str):
-    for row in rows:
-        if row[1] == item_name:
-            return row
-    raise AssertionError(f"Missing quote row for {item_name}")
+def _sample_readme(quote_path: Path) -> str:
+    rows = list(load_workbook(quote_path, data_only=False).active.iter_rows(values_only=True))
+    auto_summary = _summary_value(rows, "自动汇总")
+    template_default = _summary_value(rows, "模板默认")
+    return "\n".join(
+        [
+            "# Marker-Rich Quote Sample",
+            "",
+            "This directory is generated by `scripts/generate_marker_rich_quote_sample.py`.",
+            "",
+            "Generated files:",
+            "- `marker-rich-plan.dxf`: small CAD sample with QUOTE_* marker layers.",
+            "- `marker-rich-template.xlsx`: minimal residential quote template.",
+            "- `project.json`: imported ProjectInput JSON.",
+            "- `result.json`: calculated QuantityResult JSON.",
+            "- `quote.xlsx`: generated residential quote workbook.",
+            "",
+            "Covered CAD layers:",
+            "- `QUOTE_EXT_WALL` / `QUOTE_EXT_OPENING`",
+            "- `QUOTE_EXT_REPAIR`",
+            "- `QUOTE_DEMO_WALL`",
+            "- `QUOTE_NEW_WALL`",
+            "- `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP`",
+            "- `QUOTE_CUSTOM` / `QUOTE_CABINET`",
+            "- `QUOTE_DOOR`",
+            "",
+            f"自动汇总: {auto_summary}",
+            f"模板默认: {template_default}",
+            "",
+        ]
+    )
 
 
 def _summary_value(rows, label: str):
     for row in rows:
         if row[16] == label:
             return row[17]
-    raise AssertionError(f"Missing summary row for {label}")
+    raise ValueError(f"Missing summary row for {label}")
+
+
+if __name__ == "__main__":
+    main()
