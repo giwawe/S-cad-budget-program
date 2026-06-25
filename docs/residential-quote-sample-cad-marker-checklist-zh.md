@@ -3,6 +3,7 @@
 本文面向设计师和预算复核人员，用于把当前真实样例中仍为模板默认、但系统已经具备自动化能力的项目补齐 CAD 数据源。
 
 完整 CAD 出图规范见 `docs/cad-lightweight-drawing-standard-zh.md`。本文只列商品房整装报价样例中最能减少模板默认行的补图动作。
+当前真实样例与 marker-rich 对照样例的验收记录见 `docs/residential-quote-real-sample-validation-zh.md`。
 
 可先生成一套最小对照样例：
 
