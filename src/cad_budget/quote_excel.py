@@ -182,6 +182,7 @@ class ResidentialQuoteRules:
     sliding_door_area_items: set[str]
     sliding_door_trim_length_items: set[str]
     exterior_net_area_aggregate_items: set[str]
+    exterior_repair_area_items: set[str]
     demo_wall_area_items: set[str]
     new_wall_area_items_by_thickness: dict[str, float]
     lintel_count_items: set[str]
@@ -256,6 +257,7 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         sliding_door_area_items=_optional_item_set(data, "sliding_door_area_items"),
         sliding_door_trim_length_items=_optional_item_set(data, "sliding_door_trim_length_items"),
         exterior_net_area_aggregate_items=_optional_item_set(data, "exterior_net_area_aggregate_items"),
+        exterior_repair_area_items=_optional_item_set(data, "exterior_repair_area_items"),
         demo_wall_area_items=_optional_item_set(data, "demo_wall_area_items"),
         new_wall_area_items_by_thickness=_optional_quantity_map(data, "new_wall_area_items_by_thickness"),
         lintel_count_items=_optional_item_set(data, "lintel_count_items"),
@@ -656,6 +658,12 @@ def _aggregate_quantity_for_item(
         )
     if item_name in rules.exterior_net_area_aggregate_items:
         return _exterior_net_area_aggregate(exterior_rows or [])
+    if item_name in rules.exterior_repair_area_items:
+        return _construction_area_aggregate(
+            construction_details or [],
+            ConstructionKind.EXTERIOR_REPAIR,
+            "\u5916\u5899\u4fee\u8865\u8303\u56f4\u9762\u79ef\u6c47\u603b",
+        )
     if item_name in rules.demo_wall_area_items:
         return _construction_area_aggregate(
             construction_details or [],

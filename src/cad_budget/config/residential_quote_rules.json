@@ -20,6 +20,9 @@
   "exterior_net_area_aggregate_items": [
     "外墙批嵌"
   ],
+  "exterior_repair_area_items": [
+    "\u5916\u5899\u6279\u5d4c\u4ee5\u53ca\u4fee\u8865"
+  ],
   "demo_wall_area_items": [
     "拆改及拆墙"
   ],

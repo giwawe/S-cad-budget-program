@@ -64,6 +64,7 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u53a8\u623f\u63a8\u62c9\u95e8\u53cc\u5305\u5957" in rules.sliding_door_trim_length_items
     assert "\u5916\u5899\u6279\u5d4c" in rules.exterior_net_area_aggregate_items
     assert "\u5916\u5899\u6279\u5d4c\u4ee5\u53ca\u4fee\u8865" not in rules.exterior_net_area_aggregate_items
+    assert "\u5916\u5899\u6279\u5d4c\u4ee5\u53ca\u4fee\u8865" in rules.exterior_repair_area_items
     assert rules.sliding_door_room_keywords_by_item["\u9633\u53f0\u63a8\u62c9\u95e8"] == {"\u9633\u53f0", "\u9732\u53f0"}
     assert rules.sliding_door_trim_room_keywords_by_item["\u9633\u53f0\u63a8\u62c9\u95e8\u53cc\u5305\u5957"] == {
         "\u9633\u53f0",
@@ -1379,6 +1380,45 @@ def test_export_residential_quote_auto_fills_exterior_plaster_from_included_net_
     assert "\u786e\u8ba4\u5916\u5899\u6279\u5d4c\u65bd\u5de5\u9762" in exterior_plaster[14]
     assert exterior_repair[3] == 88
     assert exterior_repair[9] == "\u6a21\u677f\u9ed8\u8ba4"
+
+
+def test_export_residential_quote_auto_fills_exterior_repair_from_marked_area(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_exterior_summary_items=True)
+    result = QuantityResult(
+        project_name="Exterior Repair Quote Demo",
+        rows=[],
+        exceptions=[],
+        construction_details=[
+            ConstructionQuantityDetail(
+                id="repair-outline",
+                kind=ConstructionKind.EXTERIOR_REPAIR,
+                length=10.0,
+                effective_height=None,
+                height_defaulted=False,
+                area=6.0,
+            ),
+            ConstructionQuantityDetail(
+                id="repair-line",
+                kind=ConstructionKind.EXTERIOR_REPAIR,
+                length=2.0,
+                effective_height=1.5,
+                height_defaulted=False,
+                area=3.0,
+            ),
+        ],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    exterior_repair = _item_row_named(rows, "\u5916\u5899\u6279\u5d4c\u4ee5\u53ca\u4fee\u8865")
+    assert exterior_repair[3] == 9.0
+    assert exterior_repair[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert exterior_repair[12] == "\u5916\u5899\u4fee\u8865\u8303\u56f4\u9762\u79ef\u6c47\u603b"
+    assert exterior_repair[13] == "\u81ea\u52a8\u751f\u6210"
 
 
 def test_export_residential_quote_keeps_exterior_and_balcony_defaults_without_matching_details(tmp_path: Path):

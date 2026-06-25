@@ -1390,3 +1390,36 @@ def test_pipe_markers_calculate_vertical_lengths_from_height_or_default():
     assert details["pipe-wrap-1"].effective_height == 2.8
     assert details["pipe-wrap-1"].height_defaulted is True
     assert details["pipe-wrap-1"].count == 1
+
+
+def test_exterior_repair_markers_calculate_closed_area_or_linear_area():
+    project = ProjectInput(
+        project_name="Exterior Repair",
+        default_height=2.8,
+        exterior_repairs=[
+            ConstructionMarker(
+                id="repair-outline",
+                layer=LayerName.QUOTE_EXT_REPAIR,
+                kind=ConstructionKind.EXTERIOR_REPAIR,
+                points=rect(0, 0, 2, 3),
+            ),
+            ConstructionMarker(
+                id="repair-line",
+                layer=LayerName.QUOTE_EXT_REPAIR,
+                kind=ConstructionKind.EXTERIOR_REPAIR,
+                points=[Point(x=3, y=0), Point(x=5, y=0)],
+                height=1.5,
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    details = {detail.id: detail for detail in result.construction_details}
+    assert details["repair-outline"].length == 10.0
+    assert details["repair-outline"].area == 6.0
+    assert details["repair-outline"].effective_height is None
+    assert details["repair-outline"].height_defaulted is False
+    assert details["repair-line"].length == 2.0
+    assert details["repair-line"].area == 3.0
+    assert details["repair-line"].effective_height == 1.5

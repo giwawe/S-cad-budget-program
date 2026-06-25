@@ -904,6 +904,27 @@ def _construction_detail_for_vertical_marker(
     )
 
 
+def _construction_detail_for_exterior_repair(
+    project: ProjectInput,
+    marker: ConstructionMarker,
+) -> ConstructionQuantityDetail:
+    area = _closed_marker_area(marker)
+    if area is None:
+        return _construction_detail_for_linear_marker(project, marker)
+    return ConstructionQuantityDetail(
+        id=marker.id,
+        kind=marker.kind,
+        floor=marker.floor,
+        length=round(_polyline_marker_length(marker), 6),
+        height=round(marker.height, 6) if marker.height is not None else None,
+        effective_height=None,
+        height_defaulted=False,
+        thickness=round(marker.thickness, 6) if marker.thickness is not None else None,
+        area=round(area, 6),
+        count=1,
+    )
+
+
 def _calculate_construction_details(project: ProjectInput) -> list[ConstructionQuantityDetail]:
     details: list[ConstructionQuantityDetail] = []
     details.extend(_construction_detail_for_linear_marker(project, marker) for marker in project.demo_walls)
@@ -912,6 +933,7 @@ def _calculate_construction_details(project: ProjectInput) -> list[ConstructionQ
     details.extend(_construction_detail_for_count_marker(marker) for marker in project.lintel_holes)
     details.extend(_construction_detail_for_vertical_marker(project, marker) for marker in project.pipe_insulations)
     details.extend(_construction_detail_for_vertical_marker(project, marker) for marker in project.pipe_wraps)
+    details.extend(_construction_detail_for_exterior_repair(project, marker) for marker in project.exterior_repairs)
     return details
 
 

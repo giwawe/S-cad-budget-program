@@ -503,6 +503,7 @@ def _assign_imported_marker_floors(
     lintel_holes: list[ConstructionMarker],
     pipe_insulations: list[ConstructionMarker],
     pipe_wraps: list[ConstructionMarker],
+    exterior_repairs: list[ConstructionMarker],
 ) -> None:
     for marker in [*windows, *doors, *heights]:
         if marker.floor is not None:
@@ -526,6 +527,7 @@ def _assign_imported_marker_floors(
         *lintel_holes,
         *pipe_insulations,
         *pipe_wraps,
+        *exterior_repairs,
     ]:
         if marker.floor is not None:
             continue
@@ -598,6 +600,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     lintel_holes: list[ConstructionMarker] = []
     pipe_insulations: list[ConstructionMarker] = []
     pipe_wraps: list[ConstructionMarker] = []
+    exterior_repairs: list[ConstructionMarker] = []
 
     for entity in _iter_modelspace(doc):
         layer = _layer(entity)
@@ -903,6 +906,20 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                 )
                 if marker is not None:
                     pipe_wraps.append(marker)
+        elif layer == LayerName.QUOTE_EXT_REPAIR.value and entity.dxftype() in {"LINE", "LWPOLYLINE"}:
+            points = (
+                _line_points(entity, options.confirmed_unit)
+                if entity.dxftype() == "LINE"
+                else _lwpolyline_points(entity, options.confirmed_unit)
+            )
+            marker = _construction_marker_from_points(
+                entity,
+                points,
+                LayerName.QUOTE_EXT_REPAIR,
+                ConstructionKind.EXTERIOR_REPAIR,
+            )
+            if marker is not None and marker.length > 0:
+                exterior_repairs.append(marker)
         elif layer == LayerName.QUOTE_OPENING.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
@@ -974,6 +991,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         lintel_holes,
         pipe_insulations,
         pipe_wraps,
+        exterior_repairs,
     )
     project = ProjectInput(
         project_name=options.project_name,
@@ -999,5 +1017,6 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         lintel_holes=lintel_holes,
         pipe_insulations=pipe_insulations,
         pipe_wraps=pipe_wraps,
+        exterior_repairs=exterior_repairs,
     )
     return CadImportResult(project=project, issues=issues, source_path=options.source_path, dxf_path=options.source_path)

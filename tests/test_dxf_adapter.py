@@ -766,6 +766,39 @@ def test_import_dxf_reads_pipe_marker_layers_and_heights(tmp_path: Path):
     assert details[result.project.pipe_wraps[0].id].length == 2.1
 
 
+def test_import_dxf_reads_exterior_repair_markers_as_area_or_heighted_line(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.appids.new("CAD_BUDGET")
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_TEXT", "QUOTE_EXT_REPAIR"]:
+        doc.layers.add(layer)
+
+    modelspace.add_lwpolyline(
+        [(-1000, -1000), (5000, -1000), (5000, 5000), (-1000, 5000), (-1000, -1000)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("Room", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
+    modelspace.add_lwpolyline(
+        [(0, 0), (2000, 0), (2000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_EXT_REPAIR", "closed": True},
+    )
+    repair_line = modelspace.add_line((3000, 0), (5000, 0), dxfattribs={"layer": "QUOTE_EXT_REPAIR"})
+    repair_line.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=1500")])
+    dxf_path = _save_doc(tmp_path / "exterior_repair_markers.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.exterior_repairs) == 2
+    assert {marker.kind for marker in result.project.exterior_repairs} == {ConstructionKind.EXTERIOR_REPAIR}
+    quantity = calculate_quantities(result.project)
+    details = {detail.id: detail for detail in quantity.construction_details}
+    assert details[result.project.exterior_repairs[0].id].area == 6.0
+    assert details[result.project.exterior_repairs[1].id].area == 3.0
+
+
 def test_import_dxf_assigns_room_floor_from_quote_floor_text(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4
