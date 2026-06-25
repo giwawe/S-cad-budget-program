@@ -8,6 +8,8 @@
 
 本文件只记录“现有算量结果是否足以继续自动化”。原则是：没有可靠 CAD / 算量来源的项目继续保留模板默认，不为了降低默认行数而硬推断。
 
+针对当前样例的补图操作清单见 `docs/residential-quote-sample-cad-marker-checklist-zh.md`。
+
 ## 当前样例仍为模板默认，但能力已具备
 
 这些项目已经有自动化规则；当前真实样例保持模板默认，是因为 `scratch/cad-import-test/result-building-area.json` 中没有对应 CAD 标识、外墙行、建筑面积或匹配门洞。后续设计师按规范补图层后即可自动汇总。
