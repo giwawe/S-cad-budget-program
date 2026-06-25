@@ -72,6 +72,7 @@ def build_marker_rich_dxf(path: Path) -> None:
         "QUOTE_CABINET",
         "QUOTE_BASE_CABINET",
         "QUOTE_WALL_CABINET",
+        "QUOTE_WALL_TILE",
     ]:
         doc.layers.add(layer)
 
@@ -112,6 +113,8 @@ def build_marker_rich_dxf(path: Path) -> None:
     custom.set_xdata("CAD_BUDGET", [(1000, "TYPE=衣柜")])
     modelspace.add_line((500, 2600), (3500, 2600), dxfattribs={"layer": "QUOTE_BASE_CABINET"})
     modelspace.add_line((500, 2600), (2500, 2600), dxfattribs={"layer": "QUOTE_WALL_CABINET"})
+    wall_tile = modelspace.add_line((5200, 1800), (7200, 1800), dxfattribs={"layer": "QUOTE_WALL_TILE"})
+    wall_tile.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=1200")])
 
     modelspace.add_lwpolyline([(5000, 500), (7000, 500)], dxfattribs={"layer": "QUOTE_DOOR"})
 
@@ -143,6 +146,9 @@ def create_marker_quote_template(path: Path) -> None:
         ("地柜", "M", 18, "地柜"),
         ("吊柜", "M", 16, "吊柜"),
         ("橱柜", "M", 22, "橱柜"),
+        ("地面瓷砖", "片", 99, "地砖(750X1500)"),
+        ("墙面瓷砖", "片", 99, "墙砖(600x1200)"),
+        ("美缝", "M2", 99, "美缝"),
         ("阳台推拉门", "M2", 66, "阳台推拉门"),
         ("阳台推拉门双包套", "M", 55, "阳台推拉门双包套"),
     ]
@@ -194,6 +200,7 @@ def _sample_readme(quote_path: Path) -> str:
             "- `QUOTE_NEW_WALL`",
             "- `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP`",
             "- `QUOTE_CUSTOM` / `QUOTE_CABINET` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET`",
+            "- `QUOTE_WALL_TILE`",
             "- `QUOTE_DOOR`",
             "",
             f"自动汇总: {auto_summary}",
