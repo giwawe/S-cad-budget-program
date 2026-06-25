@@ -6,7 +6,7 @@ import pytest
 
 from cad_budget.cad_adapter_models import CadImportOptions, CadUnit
 from cad_budget.dxf_adapter import import_dxf
-from cad_budget.models import ConstructionKind, FixtureKind
+from cad_budget.models import ConstructionKind, FixtureKind, LayerName
 from cad_budget.quantity import calculate_quantities
 
 
@@ -376,6 +376,35 @@ def test_imports_fixture_xdata_attributes(tmp_path: Path):
     cabinet_item = result.project.cabinet_items[0]
     assert cabinet_item.fixture_type == "地柜"
     assert cabinet_item.attributes["ROOM"] == "厨房"
+
+
+def test_imports_base_and_wall_cabinet_layers_as_typed_cabinet_markers(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_TEXT", "QUOTE_BASE_CABINET", "QUOTE_WALL_CABINET"]:
+        doc.layers.add(layer)
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("厨房", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
+    modelspace.add_line((500, 900), (3500, 900), dxfattribs={"layer": "QUOTE_BASE_CABINET"})
+    modelspace.add_line((500, 900), (3500, 900), dxfattribs={"layer": "QUOTE_WALL_CABINET"})
+    dxf_path = _save_doc(tmp_path / "typed-cabinets.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path, confirmed_unit=CadUnit.MILLIMETER))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.cabinet_items) == 2
+    assert [item.layer for item in result.project.cabinet_items] == [
+        LayerName.QUOTE_BASE_CABINET,
+        LayerName.QUOTE_WALL_CABINET,
+    ]
+    assert [item.kind for item in result.project.cabinet_items] == [FixtureKind.CABINET, FixtureKind.CABINET]
+    assert [item.length for item in result.project.cabinet_items] == [3.0, 3.0]
+    assert [item.fixture_type for item in result.project.cabinet_items] == ["地柜", "吊柜"]
 
 
 def test_imports_closed_custom_outline_using_longest_rectangle_edge(tmp_path: Path):

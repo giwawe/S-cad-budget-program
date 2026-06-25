@@ -36,7 +36,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 | 1 | `QUOTE_EXT_WALL` 或 `QUOTE_BUILDING_AREA` | 外墙批嵌、打混凝土过梁孔 | 既影响外墙面积，也影响建筑面积百分比项目 |
 | 2 | `QUOTE_DEMO_WALL` / `QUOTE_NEW_WALL` | 拆改及拆墙、砌120厚砖墙、砌240厚砖墙 | 拆改和新砌墙不能从房间面积推断，必须显式标识 |
 | 3 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 点位少、补图成本低，收益明确 |
-| 4 | `QUOTE_CUSTOM` / `QUOTE_CABINET` | 全屋定制、橱柜 | 对主材金额影响较大，需要设计方案同步 |
+| 4 | `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` | 全屋定制、橱柜 | 对主材金额影响较大，需要设计方案同步；旧图可继续用 `QUOTE_CABINET + TYPE` |
 | 5 | `QUOTE_EXT_REPAIR` | 外墙批嵌以及修补 | 必须由设计师确认修补范围 |
 | 6 | 阳台/露台门洞信息 | 阳台推拉门、阳台推拉门双包套 | 依赖阳台/露台空间和宽门洞匹配 |
 
@@ -150,8 +150,8 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 补图方式：
 
-- 使用 `QUOTE_CABINET` 画橱柜长度，可用 `LINE` 或 `LWPOLYLINE`。
-- 可填写 `TYPE` / `类型`，例如地柜、吊柜。
+- 新图优先使用 `QUOTE_BASE_CABINET` 画地柜长度，使用 `QUOTE_WALL_CABINET` 画吊柜长度，可用 `LINE` 或 `LWPOLYLINE`。
+- 旧图可继续使用 `QUOTE_CABINET`，并填写 `TYPE` / `类型`，例如地柜、吊柜。
 - 可填写 `ROOM` / `空间`，例如厨房。
 - 地柜和吊柜在 CAD 平面中可以重叠画线，系统不自动去重。
 

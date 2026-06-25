@@ -26,7 +26,7 @@
 | 厨房、卫生间排污管包隔音棉 | 模板默认 | `QUOTE_PIPE_INSULATION` 立管长度 | 当前样例无管道隔音棉标识 |
 | 包上/下水管道(单管) | 模板默认 | `QUOTE_PIPE_WRAP` 立管长度 | 当前样例无包管标识 |
 | 全屋定制 | 模板默认 | `QUOTE_CUSTOM` 投影面积；缺高默认 2.6m；低于 1m 的柜体按长度复核 | 当前样例无全屋定制标识 |
-| 橱柜 | 模板默认 | `QUOTE_CABINET` 长度 | 当前样例无橱柜标识 |
+| 橱柜 | 模板默认 | `QUOTE_CABINET` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` 长度 | 当前样例无橱柜标识 |
 | 阳台推拉门 | 模板默认 | 阳台/露台空间中宽度大于等于 1.4m 的唯一门洞面积 | 当前样例无匹配阳台/露台宽门洞 |
 | 阳台推拉门双包套 | 模板默认 | 与阳台推拉门同源门洞，按门洞宽度加两侧有效门高 | 当前样例无匹配阳台/露台宽门洞 |
 
@@ -57,10 +57,10 @@
 | 阳台推拉门 | 有阳台/露台空间宽门洞时自动汇总；没有匹配门洞时仍按模板默认 | 阳台/露台 `QuantityRow.door_details` 宽度大于等于 1.4m 的唯一门洞 | 按门洞面积汇总，使用独立空间关键词，不影响厨房推拉门 |
 | 阳台推拉门双包套 | 有阳台/露台空间宽门洞时自动汇总；没有匹配门洞时仍按模板默认 | 与阳台推拉门同源门洞 | 按门洞宽度加两侧有效门高汇总，门高缺失时使用默认门高并提示复核 |
 | 全屋定制 | 有 `QUOTE_CUSTOM` 时自动汇总；样例未画标识时仍按模板默认 | `QUOTE_CUSTOM` 线/闭合轮廓、`HEIGHT`/`高`、`TYPE`/`类型`、`ROOM`/`空间` | 按投影面积汇总；缺高默认 2.6m；高度低于 1m 的柜体不计投影面积，复核备注提示按长度确认 |
-| 橱柜 | 有 `QUOTE_CABINET` 时自动汇总；样例未画标识时仍按模板默认 | `QUOTE_CABINET` 线/闭合轮廓、`TYPE`/`类型`、`ROOM`/`空间` | 按长度汇总；地柜和吊柜可重叠画线，不自动去重，复核备注提示确认 |
+| 橱柜 | 有橱柜标识时自动汇总；样例未画标识时仍按模板默认 | 新图优先用 `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET`，旧图可用 `QUOTE_CABINET` 线/闭合轮廓加 `TYPE`/`类型`、`ROOM`/`空间` | 按长度汇总；地柜和吊柜可重叠画线，不自动去重，复核备注提示确认 |
 
 ## 下一阶段推荐
 
-1. 若目标是继续降低真实样例的 17 行模板默认，优先补 CAD 标识：`QUOTE_EXT_WALL` / `QUOTE_BUILDING_AREA`、`QUOTE_DEMO_WALL`、`QUOTE_NEW_WALL`、`QUOTE_PIPE_INSULATION`、`QUOTE_PIPE_WRAP`、`QUOTE_CUSTOM`、`QUOTE_CABINET`、`QUOTE_EXT_REPAIR`。
+1. 若目标是继续降低真实样例的 17 行模板默认，优先补 CAD 标识：`QUOTE_EXT_WALL` / `QUOTE_BUILDING_AREA`、`QUOTE_DEMO_WALL`、`QUOTE_NEW_WALL`、`QUOTE_PIPE_INSULATION`、`QUOTE_PIPE_WRAP`、`QUOTE_CUSTOM`、`QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET`、`QUOTE_EXT_REPAIR`。
 2. 背景墙仍需要业务口径或范围标识，不应从现有面积硬推。
 3. 入户门、蹲坑、玻璃淋浴房、砖墙门窗洞过梁继续作为人工/模板默认项处理。

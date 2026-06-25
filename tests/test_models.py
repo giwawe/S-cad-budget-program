@@ -79,6 +79,11 @@ def test_project_input_accepts_custom_and_cabinet_fixture_markers():
     assert project.cabinet_items[0].fixture_type == "地柜"
 
 
+def test_layer_name_includes_explicit_cabinet_type_layers():
+    assert LayerName.QUOTE_BASE_CABINET.value == "QUOTE_BASE_CABINET"
+    assert LayerName.QUOTE_WALL_CABINET.value == "QUOTE_WALL_CABINET"
+
+
 def test_project_input_accepts_wall_tile_markers():
     project = ProjectInput(
         project_name="Wall Tile",

@@ -29,7 +29,9 @@
 | `QUOTE_WINDOW` | 推荐 | `INSERT`、闭合 `LWPOLYLINE` | 窗块带宽高属性，或画闭合窗洞轮廓 | 窗数量、窗面积、墙面扣减 |
 | `QUOTE_DOOR` | 推荐 | `INSERT`、`LWPOLYLINE` | 门块带宽高属性，或画门洞线段/闭合轮廓 | 门洞数量、门洞面积 |
 | `QUOTE_CUSTOM` | 可选 | `LINE`、`LWPOLYLINE` | 画全屋定制、固定柜等柜体投影长度 | 定制柜长度、投影面积复核 |
-| `QUOTE_CABINET` | 可选 | `LINE`、`LWPOLYLINE` | 画橱柜、吊柜、地柜等柜体投影长度 | 橱柜长度明细复核 |
+| `QUOTE_CABINET` | 兼容旧图可选 | `LINE`、`LWPOLYLINE` | 画橱柜投影长度，可用 `TYPE` 区分地柜/吊柜 | 橱柜长度明细复核 |
+| `QUOTE_BASE_CABINET` | 橱柜推荐 | `LINE`、`LWPOLYLINE` | 画地柜投影长度 | 地柜长度明细复核 |
+| `QUOTE_WALL_CABINET` | 橱柜推荐 | `LINE`、`LWPOLYLINE` | 画吊柜投影长度 | 吊柜长度明细复核 |
 | `QUOTE_WALL` | 推荐 | `LINE`、`LWPOLYLINE` | 画实际墙体或可施工墙面线 | 墙面计量周长 |
 | `QUOTE_OPENING` | 推荐 | `LWPOLYLINE` | 标出开放边界、非墙边界 | 从墙面计量周长中扣除 |
 | `QUOTE_FLOOR` | 多层项目推荐 | `TEXT` / `MTEXT` | 楼层文字放在空间边界内 | 楼层归属、楼层默认层高 |
@@ -161,7 +163,9 @@
 
 - 使用 `LINE` 或 `LWPOLYLINE` 表示柜体投影长度。
 - `QUOTE_CUSTOM` 用于全屋定制、固定衣柜、书柜等。
-- `QUOTE_CABINET` 用于橱柜、地柜、吊柜等；同一位置的地柜和吊柜可分别画线，系统不会按重叠位置自动去重。
+- 新图优先使用 `QUOTE_BASE_CABINET` 表示地柜、`QUOTE_WALL_CABINET` 表示吊柜；这两个图层不需要额外填写 `TYPE`。
+- `QUOTE_CABINET` 保留用于兼容旧图；使用旧图层时可填写 `TYPE` / `类型` 区分 `地柜`、`吊柜`。
+- 同一位置的地柜和吊柜可分别画线，系统不会按重叠位置自动去重。
 - 可填写属性：`HEIGHT` / `高` 表示柜体高度，`TYPE` / `类型` 表示柜体类型，`ROOM` / `空间` 表示归属空间。
 - 对 `LINE` / `LWPOLYLINE`，这些属性可写入 `CAD_BUDGET` XDATA，格式为 `KEY=VALUE`，例如 `HEIGHT=2400`、`TYPE=衣柜`、`ROOM=主卧`、`ROOM_ID=bedroom`；高度大于 20 时按毫米转米，`ROOM_ID` 会直接写入柜体标识的空间 ID。
 - 算量会生成 `custom_details` 和 `cabinet_details`，记录柜体长度、高度、默认高度、投影面积和计价模式。
@@ -279,7 +283,7 @@
 - `厨房、卫生间排污管包隔音棉` 默认按 `QUOTE_PIPE_INSULATION` 立管长度汇总；`包上/下水管道(单管)` 默认按 `QUOTE_PIPE_WRAP` 立管长度汇总，缺少高度时按楼层/项目默认高度推断并提示复核。
 - `淋浴隔断` 默认按卫生间数量汇总；`玻璃淋浴房` 默认仍按模板生成，避免重复报价。
 - `全屋定制` 默认从 `QUOTE_CUSTOM` 投影面积汇总；缺少高度时按 2.6m 默认推断，高度低于 1m 的柜体不计入投影面积并提示按长度复核。
-- `橱柜` 默认从 `QUOTE_CABINET` 长度汇总；地柜和吊柜可重叠标注，报价备注会提示设计师确认。
+- `橱柜` 默认从 `QUOTE_CABINET` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` 长度汇总；显式地柜/吊柜图层会自动写入类型，地柜和吊柜可重叠标注，报价备注会提示设计师确认。
 - 背景墙当前仍按模板或人工复核处理。
 - 门洞数量和门洞面积可用于报价汇总，但仍不从墙面净面积中扣除门洞面积；基于 `door_details` 的门类报价会按门洞 `id` 去重，避免共享边界重复计数。
 
@@ -296,7 +300,7 @@
 - 需要精确墙面计量的空间已画 `QUOTE_WALL`。
 - 窗块已填写可解析宽度；如果用窗洞轮廓，轮廓已闭合且有面积。
 - 门块已尽量填写宽度和高度；如果没有属性，门洞几何能表达宽度。
-- 需要复核全屋定制或橱柜时，已使用 `QUOTE_CUSTOM` / `QUOTE_CABINET` 画柜体投影长度，并确认楼层和空间归属。
+- 需要复核全屋定制或橱柜时，已使用 `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` 画柜体投影长度；旧图可继续使用 `QUOTE_CABINET + TYPE`，并确认楼层和空间归属。
 - 需要自动报价拆改、新砌墙或过梁时，已使用 `QUOTE_DEMO_WALL` / `QUOTE_NEW_WALL` / `QUOTE_LINTEL` / `QUOTE_LINTEL_HOLE` 标识；新砌墙已填写 `THICKNESS`。
 - 需要自动报价排污管隔音棉或包管时，已使用 `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` 标识立管点位，并尽量填写 `HEIGHT`。
 - 需要自动报价阳台、露台等非湿区局部墙砖时，已使用 `QUOTE_WALL_TILE` 标识贴砖范围，并尽量填写 `HEIGHT`。

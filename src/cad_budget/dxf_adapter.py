@@ -166,7 +166,11 @@ def _outline_polygon(points: list[Point]) -> Polygon | None:
 
 
 def _fixture_marker_from_points(
-    entity, points: list[Point], layer: LayerName, kind: FixtureKind
+    entity,
+    points: list[Point],
+    layer: LayerName,
+    kind: FixtureKind,
+    fixture_type_override: str | None = None,
 ) -> FixtureMarker | None:
     if len(points) < 2:
         return None
@@ -178,10 +182,12 @@ def _fixture_marker_from_points(
     if length <= 0:
         return None
     attrs = _fixture_attributes(entity)
-    fixture_type = _fixture_text_attribute(attrs, _FIXTURE_TYPE_ATTRIBUTE_KEYS)
+    fixture_type = fixture_type_override or _fixture_text_attribute(attrs, _FIXTURE_TYPE_ATTRIBUTE_KEYS)
     room = _fixture_text_attribute(attrs, _FIXTURE_ROOM_ATTRIBUTE_KEYS)
     room_id = _fixture_text_attribute(attrs, _FIXTURE_ROOM_ID_ATTRIBUTE_KEYS)
     marker_attrs = dict(attrs)
+    if fixture_type_override is not None:
+        marker_attrs["TYPE"] = fixture_type_override
     if room is not None:
         marker_attrs["ROOM"] = room
     return FixtureMarker(
@@ -826,6 +832,26 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                 else _lwpolyline_points(entity, options.confirmed_unit)
             )
             marker = _fixture_marker_from_points(entity, points, LayerName.QUOTE_CABINET, FixtureKind.CABINET)
+            if marker is not None:
+                cabinet_items.append(marker)
+        elif layer in {LayerName.QUOTE_BASE_CABINET.value, LayerName.QUOTE_WALL_CABINET.value} and entity.dxftype() in {
+            "LINE",
+            "LWPOLYLINE",
+        }:
+            points = (
+                _line_points(entity, options.confirmed_unit)
+                if entity.dxftype() == "LINE"
+                else _lwpolyline_points(entity, options.confirmed_unit)
+            )
+            marker_layer = LayerName(layer)
+            fixture_type = "地柜" if marker_layer is LayerName.QUOTE_BASE_CABINET else "吊柜"
+            marker = _fixture_marker_from_points(
+                entity,
+                points,
+                marker_layer,
+                FixtureKind.CABINET,
+                fixture_type_override=fixture_type,
+            )
             if marker is not None:
                 cabinet_items.append(marker)
         elif layer == LayerName.QUOTE_DEMO_WALL.value and entity.dxftype() in {"LINE", "LWPOLYLINE"}:
