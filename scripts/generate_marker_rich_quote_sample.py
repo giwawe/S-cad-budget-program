@@ -70,6 +70,8 @@ def build_marker_rich_dxf(path: Path) -> None:
         "QUOTE_PIPE_WRAP",
         "QUOTE_CUSTOM",
         "QUOTE_CABINET",
+        "QUOTE_BASE_CABINET",
+        "QUOTE_WALL_CABINET",
     ]:
         doc.layers.add(layer)
 
@@ -108,8 +110,8 @@ def build_marker_rich_dxf(path: Path) -> None:
 
     custom = modelspace.add_line((500, 2200), (2500, 2200), dxfattribs={"layer": "QUOTE_CUSTOM"})
     custom.set_xdata("CAD_BUDGET", [(1000, "TYPE=衣柜")])
-    cabinet = modelspace.add_line((500, 2600), (3500, 2600), dxfattribs={"layer": "QUOTE_CABINET"})
-    cabinet.set_xdata("CAD_BUDGET", [(1000, "TYPE=地柜")])
+    modelspace.add_line((500, 2600), (3500, 2600), dxfattribs={"layer": "QUOTE_BASE_CABINET"})
+    modelspace.add_line((500, 2600), (2500, 2600), dxfattribs={"layer": "QUOTE_WALL_CABINET"})
 
     modelspace.add_lwpolyline([(5000, 500), (7000, 500)], dxfattribs={"layer": "QUOTE_DOOR"})
 
@@ -138,6 +140,8 @@ def create_marker_quote_template(path: Path) -> None:
         ("厨房、卫生间排污管包隔音棉", "M", 50, "隔音棉"),
         ("包上/下水管道(单管)", "M", 36, "包管"),
         ("全屋定制", "M2", 66, "全屋定制"),
+        ("地柜", "M", 18, "地柜"),
+        ("吊柜", "M", 16, "吊柜"),
         ("橱柜", "M", 22, "橱柜"),
         ("阳台推拉门", "M2", 66, "阳台推拉门"),
         ("阳台推拉门双包套", "M", 55, "阳台推拉门双包套"),
@@ -189,7 +193,7 @@ def _sample_readme(quote_path: Path) -> str:
             "- `QUOTE_DEMO_WALL`",
             "- `QUOTE_NEW_WALL`",
             "- `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP`",
-            "- `QUOTE_CUSTOM` / `QUOTE_CABINET`",
+            "- `QUOTE_CUSTOM` / `QUOTE_CABINET` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET`",
             "- `QUOTE_DOOR`",
             "",
             f"自动汇总: {auto_summary}",

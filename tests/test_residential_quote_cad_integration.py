@@ -41,7 +41,9 @@ def test_marker_rich_dxf_turns_quote_defaults_into_automatic_aggregates(tmp_path
         "厨房、卫生间排污管包隔音棉": 2.4,
         "包上/下水管道(单管)": 2.1,
         "全屋定制": 5.2,
-        "橱柜": 3.0,
+        "地柜": 3.0,
+        "吊柜": 2.0,
+        "橱柜": 5.0,
         "阳台推拉门": 4.2,
         "阳台推拉门双包套": 6.2,
     }
@@ -52,7 +54,7 @@ def test_marker_rich_dxf_turns_quote_defaults_into_automatic_aggregates(tmp_path
 
     assert _row_containing(rows, "砖墙门窗洞过梁")[3] == 15
     assert _row_containing(rows, "砖墙门窗洞过梁")[9] == "模板默认"
-    assert _summary_value(rows, "自动汇总") == 12
+    assert _summary_value(rows, "自动汇总") == 14
     assert _summary_value(rows, "模板默认") == 1
 
 
@@ -89,11 +91,14 @@ def test_marker_rich_quote_sample_script_writes_reusable_outputs(tmp_path: Path)
     rows = list(load_workbook(output_dir / "quote.xlsx", data_only=False).active.iter_rows(values_only=True))
     assert _row_containing(rows, "外墙批嵌")[3] == 70.0
     assert _row_containing(rows, "阳台推拉门双包套")[3] == 6.2
-    assert _summary_value(rows, "自动汇总") == 12
+    assert _row_containing(rows, "地柜")[3] == 3.0
+    assert _row_containing(rows, "吊柜")[3] == 2.0
+    assert _row_containing(rows, "橱柜")[3] == 5.0
+    assert _summary_value(rows, "自动汇总") == 14
     assert _summary_value(rows, "模板默认") == 1
     readme = (output_dir / "README.md").read_text(encoding="utf-8")
     assert "QUOTE_EXT_WALL" in readme
-    assert "自动汇总: 12" in readme
+    assert "自动汇总: 14" in readme
 
 
 def _build_marker_rich_dxf(path: Path) -> None:
@@ -115,6 +120,8 @@ def _build_marker_rich_dxf(path: Path) -> None:
         "QUOTE_PIPE_WRAP",
         "QUOTE_CUSTOM",
         "QUOTE_CABINET",
+        "QUOTE_BASE_CABINET",
+        "QUOTE_WALL_CABINET",
     ]:
         doc.layers.add(layer)
 
@@ -153,8 +160,8 @@ def _build_marker_rich_dxf(path: Path) -> None:
 
     custom = modelspace.add_line((500, 2200), (2500, 2200), dxfattribs={"layer": "QUOTE_CUSTOM"})
     custom.set_xdata("CAD_BUDGET", [(1000, "TYPE=衣柜")])
-    cabinet = modelspace.add_line((500, 2600), (3500, 2600), dxfattribs={"layer": "QUOTE_CABINET"})
-    cabinet.set_xdata("CAD_BUDGET", [(1000, "TYPE=地柜")])
+    modelspace.add_line((500, 2600), (3500, 2600), dxfattribs={"layer": "QUOTE_BASE_CABINET"})
+    modelspace.add_line((500, 2600), (2500, 2600), dxfattribs={"layer": "QUOTE_WALL_CABINET"})
 
     modelspace.add_lwpolyline([(5000, 500), (7000, 500)], dxfattribs={"layer": "QUOTE_DOOR"})
 
@@ -183,6 +190,8 @@ def _create_marker_quote_template(path: Path) -> None:
         ("厨房、卫生间排污管包隔音棉", "M", 50, "隔音棉"),
         ("包上/下水管道(单管)", "M", 36, "包管"),
         ("全屋定制", "M2", 66, "全屋定制"),
+        ("地柜", "M", 18, "地柜"),
+        ("吊柜", "M", 16, "吊柜"),
         ("橱柜", "M", 22, "橱柜"),
         ("阳台推拉门", "M2", 66, "阳台推拉门"),
         ("阳台推拉门双包套", "M", 55, "阳台推拉门双包套"),
