@@ -1,4 +1,6 @@
 from cad_budget.models import (
+    ConstructionKind,
+    ConstructionMarker,
     DataStatus,
     FixtureKind,
     FixtureMarker,
@@ -75,6 +77,23 @@ def test_project_input_accepts_custom_and_cabinet_fixture_markers():
 
     assert project.custom_items[0].kind is FixtureKind.CUSTOM
     assert project.cabinet_items[0].fixture_type == "地柜"
+
+
+def test_project_input_accepts_wall_tile_markers():
+    project = ProjectInput(
+        project_name="Wall Tile",
+        wall_tiles=[
+            ConstructionMarker(
+                id="balcony-wall-tile",
+                layer=LayerName.QUOTE_WALL_TILE,
+                kind=ConstructionKind.WALL_TILE,
+                points=[Point(x=0, y=0), Point(x=3, y=0)],
+                length=3.0,
+            )
+        ],
+    )
+
+    assert project.wall_tiles[0].kind is ConstructionKind.WALL_TILE
 
 
 def test_quantity_row_fixture_details_default_to_empty_lists():

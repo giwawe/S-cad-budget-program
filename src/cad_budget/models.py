@@ -26,6 +26,7 @@ class LayerName(str, Enum):
     QUOTE_LINTEL_HOLE = "QUOTE_LINTEL_HOLE"
     QUOTE_PIPE_INSULATION = "QUOTE_PIPE_INSULATION"
     QUOTE_PIPE_WRAP = "QUOTE_PIPE_WRAP"
+    QUOTE_WALL_TILE = "QUOTE_WALL_TILE"
 
 
 class SpaceType(str, Enum):
@@ -74,6 +75,7 @@ class ConstructionKind(str, Enum):
     PIPE_INSULATION = "pipe_insulation"
     PIPE_WRAP = "pipe_wrap"
     EXTERIOR_REPAIR = "exterior_repair"
+    WALL_TILE = "wall_tile"
 
 
 class Point(BaseModel):
@@ -228,6 +230,7 @@ class ProjectInput(BaseModel):
     pipe_insulations: list[ConstructionMarker] = Field(default_factory=list)
     pipe_wraps: list[ConstructionMarker] = Field(default_factory=list)
     exterior_repairs: list[ConstructionMarker] = Field(default_factory=list)
+    wall_tiles: list[ConstructionMarker] = Field(default_factory=list)
 
 
 class QuantityException(BaseModel):
@@ -275,6 +278,8 @@ class ConstructionQuantityDetail(BaseModel):
     id: str
     kind: ConstructionKind
     floor: str | None = None
+    room_id: str | None = None
+    room_name: str | None = None
     length: float = 0.0
     height: float | None = None
     effective_height: float | None = None

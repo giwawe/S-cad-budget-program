@@ -845,6 +845,8 @@ def _calculate_building_area(project: ProjectInput) -> float | None:
 def _construction_detail_for_linear_marker(
     project: ProjectInput,
     marker: ConstructionMarker,
+    room_id: str | None = None,
+    room_name: str | None = None,
 ) -> ConstructionQuantityDetail:
     length = _polyline_marker_length(marker)
     effective_height, height_defaulted = _construction_effective_height(project, marker)
@@ -853,6 +855,8 @@ def _construction_detail_for_linear_marker(
         id=marker.id,
         kind=marker.kind,
         floor=marker.floor,
+        room_id=room_id,
+        room_name=room_name,
         length=round(length, 6),
         height=round(marker.height, 6) if marker.height is not None else None,
         effective_height=round(effective_height, 6) if effective_height is not None else None,
@@ -925,7 +929,36 @@ def _construction_detail_for_exterior_repair(
     )
 
 
-def _calculate_construction_details(project: ProjectInput) -> list[ConstructionQuantityDetail]:
+def _construction_midpoint(marker: ConstructionMarker) -> ShapelyPoint | None:
+    if len(marker.points) < 2:
+        return None
+    start = marker.points[0]
+    end = marker.points[-1]
+    return ShapelyPoint((start.x + end.x) / 2, (start.y + end.y) / 2)
+
+
+def _room_for_construction_marker(project: ProjectInput, marker: ConstructionMarker) -> RoomBoundary | None:
+    midpoint = _construction_midpoint(marker)
+    if midpoint is None:
+        return None
+    nearest_room: RoomBoundary | None = None
+    nearest_distance: float | None = None
+    for room in project.rooms:
+        if not _floor_compatible(room.floor, marker.floor):
+            continue
+        polygon = _room_polygon(room)
+        if polygon.covers(midpoint):
+            return room
+        distance = float(polygon.boundary.distance(midpoint))
+        if nearest_distance is None or distance < nearest_distance:
+            nearest_room = room
+            nearest_distance = distance
+    if nearest_room is not None and nearest_distance is not None and nearest_distance <= _MARKER_ASSIGNMENT_TOLERANCE_METERS:
+        return nearest_room
+    return None
+
+
+def _calculate_construction_details(project: ProjectInput, room_names: dict[str, str]) -> list[ConstructionQuantityDetail]:
     details: list[ConstructionQuantityDetail] = []
     details.extend(_construction_detail_for_linear_marker(project, marker) for marker in project.demo_walls)
     details.extend(_construction_detail_for_linear_marker(project, marker) for marker in project.new_walls)
@@ -934,6 +967,16 @@ def _calculate_construction_details(project: ProjectInput) -> list[ConstructionQ
     details.extend(_construction_detail_for_vertical_marker(project, marker) for marker in project.pipe_insulations)
     details.extend(_construction_detail_for_vertical_marker(project, marker) for marker in project.pipe_wraps)
     details.extend(_construction_detail_for_exterior_repair(project, marker) for marker in project.exterior_repairs)
+    for marker in project.wall_tiles:
+        room = _room_for_construction_marker(project, marker)
+        details.append(
+            _construction_detail_for_linear_marker(
+                project,
+                marker,
+                room_id=room.id if room is not None else None,
+                room_name=room_names.get(room.id) if room is not None else None,
+            )
+        )
     return details
 
 
@@ -969,7 +1012,6 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
     rows: list[QuantityRow] = []
     building_area = _calculate_building_area(project)
     exterior_rows = _calculate_exterior_rows(project)
-    construction_details = _calculate_construction_details(project)
     exceptions: list[QuantityException] = []
 
     room_name_assignments, name_exceptions = _resolve_room_names(project, project.rooms)
@@ -978,6 +1020,7 @@ def calculate_quantities(project: ProjectInput) -> QuantityResult:
         room.id: room.name or room_name_assignments.get(room.id, "\u672a\u547d\u540d\u7a7a\u95f4")
         for room in project.rooms
     }
+    construction_details = _calculate_construction_details(project, resolved_room_names)
 
     void_height_assignments, void_height_exceptions = _resolve_void_height_assignments(project, project.rooms)
     exceptions.extend(void_height_exceptions)

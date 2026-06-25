@@ -1040,6 +1040,61 @@ def test_export_residential_quote_auto_fills_tile_piece_counts_from_area_and_spe
     assert wall_tiles[12] == "\u5899\u7816\u9762\u79ef\u6309600x1200\u89c4\u683c+5%\u635f\u8017\u6298\u7b97\u7247\u6570"
 
 
+def test_export_residential_quote_adds_explicit_non_wet_wall_tile_markers(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_area_summary_items=True, include_advanced_summary_items=True)
+    result = QuantityResult(
+        project_name="Explicit Wall Tile Demo",
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                wall_measure_perimeter=10.0,
+                window_area=1.0,
+            ),
+            _quantity_row("balcony", "\u9633\u53f0", floor_area=4.0, net_wall_area=8.0),
+        ],
+        construction_details=[
+            ConstructionQuantityDetail(
+                id="balcony-wall-tile",
+                kind=ConstructionKind.WALL_TILE,
+                room_id="balcony",
+                room_name="\u9633\u53f0",
+                length=3.0,
+                height=1.2,
+                effective_height=1.2,
+                area=3.6,
+            ),
+            ConstructionQuantityDetail(
+                id="kitchen-wall-tile",
+                kind=ConstructionKind.WALL_TILE,
+                room_id="kitchen",
+                room_name="\u53a8\u623f",
+                length=2.0,
+                height=1.2,
+                effective_height=1.2,
+                area=2.4,
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    wall_tiles = _item_row_named(rows, "\u5899\u9762\u74f7\u7816")
+    tile_grout = _item_row_named(rows, "\u7f8e\u7f1d")
+    assert wall_tiles[3] == 41
+    assert wall_tiles[13] == "\u81ea\u52a8\u751f\u6210"
+    assert tile_grout[3] == 57.6
+    assert tile_grout[12] == "\u5730\u7816\u9762\u79ef+2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef+QUOTE_WALL_TILE\u663e\u5f0f\u5899\u7816\u9762\u79ef"
+
+
 def test_export_residential_quote_auto_fills_tile_processing_by_house_area(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"

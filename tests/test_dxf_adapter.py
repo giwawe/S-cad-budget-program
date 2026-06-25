@@ -732,6 +732,35 @@ def test_import_dxf_reads_construction_marker_layers_and_xdata(tmp_path: Path):
     assert result.project.lintel_holes[0].kind is ConstructionKind.LINTEL_HOLE
 
 
+def test_import_dxf_reads_wall_tile_marker_layer_and_height(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.appids.new("CAD_BUDGET")
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_TEXT", "QUOTE_WALL_TILE"]:
+        doc.layers.add(layer)
+
+    modelspace.add_lwpolyline(
+        [(-1000, -1000), (4000, -1000), (4000, 4000), (-1000, 4000), (-1000, -1000)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("阳台", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
+    wall_tile = modelspace.add_lwpolyline([(0, 0), (3000, 0)], dxfattribs={"layer": "QUOTE_WALL_TILE"})
+    wall_tile.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=1200")])
+    dxf_path = _save_doc(tmp_path / "wall_tile_marker.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path, confirmed_unit=CadUnit.MILLIMETER))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.wall_tiles) == 1
+    assert result.project.wall_tiles[0].kind is ConstructionKind.WALL_TILE
+    assert result.project.wall_tiles[0].height == 1.2
+    quantity = calculate_quantities(result.project)
+    details = {detail.id: detail for detail in quantity.construction_details}
+    assert details[result.project.wall_tiles[0].id].area == 3.6
+
+
 def test_import_dxf_reads_pipe_marker_layers_and_heights(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4

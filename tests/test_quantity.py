@@ -1392,6 +1392,50 @@ def test_pipe_markers_calculate_vertical_lengths_from_height_or_default():
     assert details["pipe-wrap-1"].count == 1
 
 
+def test_wall_tile_markers_calculate_area_and_default_missing_height():
+    project = ProjectInput(
+        project_name="Wall Tile Markers",
+        default_height=2.8,
+        rooms=[
+            RoomBoundary(
+                id="balcony",
+                points=rect(0, 0, 4, 3),
+                name="阳台",
+            )
+        ],
+        wall_tiles=[
+            ConstructionMarker(
+                id="wall-tile-explicit",
+                layer=LayerName.QUOTE_WALL_TILE,
+                kind=ConstructionKind.WALL_TILE,
+                points=[Point(x=0.5, y=0.5), Point(x=3.5, y=0.5)],
+                height=1.2,
+            ),
+            ConstructionMarker(
+                id="wall-tile-default",
+                layer=LayerName.QUOTE_WALL_TILE,
+                kind=ConstructionKind.WALL_TILE,
+                points=[Point(x=0.5, y=1.0), Point(x=2.5, y=1.0)],
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    details = {detail.id: detail for detail in result.construction_details}
+    assert details["wall-tile-explicit"].kind is ConstructionKind.WALL_TILE
+    assert details["wall-tile-explicit"].length == 3.0
+    assert details["wall-tile-explicit"].effective_height == 1.2
+    assert details["wall-tile-explicit"].height_defaulted is False
+    assert details["wall-tile-explicit"].area == 3.6
+    assert details["wall-tile-explicit"].room_id == "balcony"
+    assert details["wall-tile-explicit"].room_name == "阳台"
+    assert details["wall-tile-default"].length == 2.0
+    assert details["wall-tile-default"].effective_height == 2.8
+    assert details["wall-tile-default"].height_defaulted is True
+    assert details["wall-tile-default"].area == 5.6
+
+
 def test_exterior_repair_markers_calculate_closed_area_or_linear_area():
     project = ProjectInput(
         project_name="Exterior Repair",

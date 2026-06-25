@@ -637,6 +637,8 @@ def _quantity_for_item(item_name: str, room: QuantityRow, rules: ResidentialQuot
         "\u5899\u9762\u8d34\u74f7\u7816(600x1200)",
         "\u5899\u9762\u8d34\u74f7\u7816(600X1200)",
     }:
+        if not _is_wet_room(room):
+            return 0
         return _wet_wall_tile_area(room, rules)
     return 0
 
@@ -732,13 +734,19 @@ def _aggregate_quantity_for_item(
         )
     if item_name in rules.wall_tile_piece_items:
         wall_tile_rooms = [room for room in rooms if _room_has_wall_tile(room)]
+        explicit_wall_tile_details = _explicit_wall_tile_details(construction_details or [], rooms)
         spec = _tile_spec_from_text(item.name, item.description)
         return QuoteAggregateQuantity(
-            quantity=_tile_piece_count(sum(_wet_wall_tile_area(room, rules) for room in wall_tile_rooms), spec, rules.tile_piece_loss_rate),
+            quantity=_tile_piece_count(
+                sum(_wet_wall_tile_area(room, rules) for room in wall_tile_rooms)
+                + _explicit_wall_tile_area(explicit_wall_tile_details),
+                spec,
+                rules.tile_piece_loss_rate,
+            ),
             basis=_tile_piece_basis("\u5899\u7816\u9762\u79ef", spec, rules.tile_piece_loss_rate),
-            rooms=wall_tile_rooms,
-            review_status=_wall_tile_review_status(wall_tile_rooms),
-            review_note=_window_default_note_for_rooms(wall_tile_rooms),
+            rooms=_wall_tile_rooms_with_explicit_details(wall_tile_rooms, explicit_wall_tile_details, rooms),
+            review_status=_wall_tile_review_status(wall_tile_rooms, explicit_wall_tile_details),
+            review_note=_wall_tile_review_note(wall_tile_rooms, explicit_wall_tile_details),
         )
     if item_name in rules.tile_processing_area_items:
         floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
@@ -856,14 +864,25 @@ def _aggregate_quantity_for_item(
     if item_name in rules.tile_area_aggregate_items:
         floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
         wall_tile_rooms = [room for room in rooms if _room_has_wall_tile(room)]
+        explicit_wall_tile_details = _explicit_wall_tile_details(construction_details or [], rooms)
+        explicit_wall_tile_area = _explicit_wall_tile_area(explicit_wall_tile_details)
         return QuoteAggregateQuantity(
             quantity=_round_quantity(
-                sum(room.floor_area for room in floor_rooms) + sum(_wet_wall_tile_area(room, rules) for room in wall_tile_rooms)
+                sum(room.floor_area for room in floor_rooms)
+                + sum(_wet_wall_tile_area(room, rules) for room in wall_tile_rooms)
+                + explicit_wall_tile_area
             ),
-            basis="\u5730\u7816\u9762\u79ef+2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef",
-            rooms=list({room.room_id: room for room in [*floor_rooms, *wall_tile_rooms]}.values()),
-            review_status=_wall_tile_review_status(wall_tile_rooms),
-            review_note=_window_default_note_for_rooms(wall_tile_rooms),
+            basis=(
+                "\u5730\u7816\u9762\u79ef+2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef+QUOTE_WALL_TILE\u663e\u5f0f\u5899\u7816\u9762\u79ef"
+                if explicit_wall_tile_area > 0
+                else "\u5730\u7816\u9762\u79ef+2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef"
+            ),
+            rooms=list({
+                room.room_id: room
+                for room in [*floor_rooms, *_wall_tile_rooms_with_explicit_details(wall_tile_rooms, explicit_wall_tile_details, rooms)]
+            }.values()),
+            review_status=_wall_tile_review_status(wall_tile_rooms, explicit_wall_tile_details),
+            review_note=_wall_tile_review_note(wall_tile_rooms, explicit_wall_tile_details),
         )
     return None
 
@@ -1117,12 +1136,67 @@ def _review_note_for_rooms(rooms: list[QuantityRow], rules: ResidentialQuoteRule
     return "\uff1b".join(notes) if notes else None
 
 
-def _wall_tile_review_status(rooms: list[QuantityRow]) -> str:
+def _wall_tile_review_status(
+    rooms: list[QuantityRow],
+    explicit_details: list[ConstructionQuantityDetail] | None = None,
+) -> str:
+    explicit_details = explicit_details or []
     if any(room.status == DataStatus.NEEDS_REVIEW for room in rooms):
         return "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
-    if any(any(window.height_defaulted for window in room.window_details) for room in rooms):
+    if any(any(window.height_defaulted for window in room.window_details) for room in rooms) or any(
+        detail.height_defaulted for detail in explicit_details
+    ):
         return "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
     return "\u81ea\u52a8\u751f\u6210"
+
+
+def _wall_tile_review_note(
+    rooms: list[QuantityRow],
+    explicit_details: list[ConstructionQuantityDetail],
+) -> str | None:
+    notes: list[str] = []
+    window_note = _window_default_note_for_rooms(rooms)
+    if window_note is not None:
+        notes.append(window_note)
+    if any(detail.height_defaulted for detail in explicit_details):
+        notes.append("QUOTE_WALL_TILE\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u5f53\u524d\u5c42\u9ad8/\u9879\u76ee\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97")
+    return "\uff1b".join(notes) if notes else None
+
+
+def _explicit_wall_tile_details(
+    construction_details: list[ConstructionQuantityDetail],
+    rooms: list[QuantityRow],
+) -> list[ConstructionQuantityDetail]:
+    rooms_by_id = {room.room_id: room for room in rooms}
+    explicit_details: list[ConstructionQuantityDetail] = []
+    for detail in construction_details:
+        if detail.kind is not ConstructionKind.WALL_TILE or detail.area <= 0:
+            continue
+        room = rooms_by_id.get(detail.room_id or "")
+        room_name = detail.room_name or (room.room_name if room is not None else "")
+        if room is not None and _is_wet_room(room):
+            continue
+        if room is None and any(keyword in room_name for keyword in ["\u53a8\u623f", "\u536b", "\u6d17\u624b\u95f4", "\u536b\u751f\u95f4"]):
+            continue
+        explicit_details.append(detail)
+    return explicit_details
+
+
+def _explicit_wall_tile_area(details: list[ConstructionQuantityDetail]) -> float:
+    return _round_quantity(sum(detail.area for detail in details))
+
+
+def _wall_tile_rooms_with_explicit_details(
+    wall_tile_rooms: list[QuantityRow],
+    explicit_details: list[ConstructionQuantityDetail],
+    rooms: list[QuantityRow],
+) -> list[QuantityRow]:
+    rooms_by_id = {room.room_id: room for room in rooms}
+    selected = {room.room_id: room for room in wall_tile_rooms}
+    for detail in explicit_details:
+        if detail.room_id and detail.room_id in rooms_by_id:
+            selected[detail.room_id] = rooms_by_id[detail.room_id]
+    return list(selected.values())
 
 
 def _window_default_note_for_rooms(rooms: list[QuantityRow]) -> str | None:
@@ -1340,8 +1414,7 @@ def _should_generate_room_section(room: QuantityRow) -> bool:
 
 
 def _room_has_wall_tile(room: QuantityRow) -> bool:
-    name = room.room_name
-    return _is_wet_room(room) or any(keyword in name for keyword in ["\u9732\u53f0", "\u9633\u53f0"])
+    return _is_wet_room(room)
 
 
 def _is_wet_room(room: QuantityRow) -> bool:
