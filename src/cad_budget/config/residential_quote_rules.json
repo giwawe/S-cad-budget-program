@@ -94,6 +94,12 @@
   "cabinet_length_items": [
     "橱柜"
   ],
+  "base_cabinet_length_items": [
+    "地柜"
+  ],
+  "wall_cabinet_length_items": [
+    "吊柜"
+  ],
   "tile_piece_loss_rate": 0.05,
   "wide_door_width_threshold": 1.4,
   "default_door_height": 2.1,

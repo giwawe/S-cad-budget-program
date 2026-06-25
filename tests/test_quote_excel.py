@@ -73,6 +73,8 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u6dcb\u6d74\u9694\u65ad" in rules.bathroom_count_aggregate_items
     assert "\u5168\u5c4b\u5b9a\u5236" in rules.custom_projected_area_items
     assert "\u6a71\u67dc" in rules.cabinet_length_items
+    assert "\u5730\u67dc" in rules.base_cabinet_length_items
+    assert "\u540a\u67dc" in rules.wall_cabinet_length_items
     assert rules.default_custom_height == 2.6
     assert rules.low_custom_height_threshold == 1.0
     assert "\u62c6\u6539\u53ca\u62c6\u5899" in rules.demo_wall_area_items
@@ -140,6 +142,8 @@ def test_load_quote_rules_reads_external_rule_file(tmp_path: Path):
     assert rules.wall_tile_height == 2.0
     assert rules.custom_projected_area_items == set()
     assert rules.cabinet_length_items == set()
+    assert rules.base_cabinet_length_items == set()
+    assert rules.wall_cabinet_length_items == set()
     assert rules.default_custom_height == 2.6
     assert rules.low_custom_height_threshold == 1.0
     assert rules.source_label == str(rules_path)
@@ -515,6 +519,70 @@ def test_export_residential_quote_auto_fills_custom_and_cabinet_items(tmp_path: 
     assert cabinet[12] == "\u6a71\u67dc\u957f\u5ea6\u6c47\u603b"
     assert cabinet[13] == "\u81ea\u52a8\u751f\u6210"
     assert "\u5730\u67dc/\u540a\u67dc\u9700\u786e\u8ba4" in cabinet[14]
+
+
+def test_export_residential_quote_auto_fills_split_base_and_wall_cabinet_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_split_cabinet_items=True)
+    result = QuantityResult(
+        project_name="Split Cabinet Quote Demo",
+        rows=[
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                cabinet_details=[
+                    FixtureQuantityDetail(
+                        id="base",
+                        room_id="kitchen",
+                        room_name="\u53a8\u623f",
+                        kind=FixtureKind.CABINET,
+                        length=3.2,
+                        pricing_mode=FixturePricingMode.LENGTH,
+                        fixture_type="\u5730\u67dc",
+                    ),
+                    FixtureQuantityDetail(
+                        id="wall",
+                        room_id="kitchen",
+                        room_name="\u53a8\u623f",
+                        kind=FixtureKind.CABINET,
+                        length=2.1,
+                        pricing_mode=FixturePricingMode.LENGTH,
+                        fixture_type="\u540a\u67dc",
+                    ),
+                    FixtureQuantityDetail(
+                        id="unknown",
+                        room_id="kitchen",
+                        room_name="\u53a8\u623f",
+                        kind=FixtureKind.CABINET,
+                        length=1.0,
+                        pricing_mode=FixturePricingMode.LENGTH,
+                        fixture_type=None,
+                    ),
+                ],
+            )
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    workbook = load_workbook(output_path, data_only=False)
+    rows = list(workbook.active.iter_rows(values_only=True))
+    base = _item_row_named(rows, "\u5730\u67dc")
+    wall = _item_row_named(rows, "\u540a\u67dc")
+    cabinet = _item_row_named(rows, "\u6a71\u67dc")
+    assert base[3] == 3.2
+    assert base[12] == "\u5730\u67dc\u957f\u5ea6\u6c47\u603b"
+    assert base[13] == "\u81ea\u52a8\u751f\u6210"
+    assert base[14] is None
+    assert wall[3] == 2.1
+    assert wall[12] == "\u540a\u67dc\u957f\u5ea6\u6c47\u603b"
+    assert wall[13] == "\u81ea\u52a8\u751f\u6210"
+    assert cabinet[3] == 6.3
+    assert cabinet[12] == "\u6a71\u67dc\u957f\u5ea6\u6c47\u603b"
 
 
 def test_export_residential_quote_excludes_low_height_projected_custom_details(tmp_path: Path):
@@ -1884,6 +1952,7 @@ def _create_quote_template(
     include_exterior_summary_items: bool = False,
     include_construction_items: bool = False,
     include_pipe_items: bool = False,
+    include_split_cabinet_items: bool = False,
 ) -> None:
     workbook = Workbook()
     half = workbook.active
@@ -1920,6 +1989,10 @@ def _create_quote_template(
     if include_custom_cabinet_items:
         fitout.append([6, "\u5168\u5c4b\u5b9a\u5236", "M2", 99, 0, 0, 10, None, "\u5168\u5c4b\u5b9a\u5236"])
         fitout.append([7, "\u6a71\u67dc", "M", 99, 0, 0, 10, None, "\u6a71\u67dc"])
+    if include_split_cabinet_items:
+        fitout.append([6, "\u5730\u67dc", "M", 99, 0, 0, 10, None, "\u5730\u67dc"])
+        fitout.append([7, "\u540a\u67dc", "M", 99, 0, 0, 10, None, "\u540a\u67dc"])
+        fitout.append([8, "\u6a71\u67dc", "M", 99, 0, 0, 10, None, "\u6a71\u67dc"])
     fitout.append([None, "\u5c0f \u8ba1", None, None, None, None, None, "=SUM(H20:H20)"])
     if include_count_summary_items:
         fitout.append(["\u56db", "\u5ba4\u5185\u95e8"])

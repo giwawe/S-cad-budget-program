@@ -192,6 +192,8 @@ class ResidentialQuoteRules:
     building_area_percent_count_items: dict[str, float]
     custom_projected_area_items: set[str]
     cabinet_length_items: set[str]
+    base_cabinet_length_items: set[str]
+    wall_cabinet_length_items: set[str]
     tile_piece_loss_rate: float
     wide_door_width_threshold: float
     default_door_height: float
@@ -267,6 +269,8 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         building_area_percent_count_items=_building_area_percent_count_items(data),
         custom_projected_area_items=_optional_item_set(data, "custom_projected_area_items"),
         cabinet_length_items=_optional_item_set(data, "cabinet_length_items"),
+        base_cabinet_length_items=_optional_item_set(data, "base_cabinet_length_items"),
+        wall_cabinet_length_items=_optional_item_set(data, "wall_cabinet_length_items"),
         tile_piece_loss_rate=_optional_float(data, "tile_piece_loss_rate", 0.05),
         wide_door_width_threshold=_optional_float(data, "wide_door_width_threshold", 1.4),
         default_door_height=_optional_float(data, "default_door_height", 2.1),
@@ -709,6 +713,10 @@ def _aggregate_quantity_for_item(
         return None
     if item_name in rules.custom_projected_area_items:
         return _custom_projected_area_aggregate(rooms, rules)
+    if item_name in rules.base_cabinet_length_items:
+        return _cabinet_length_aggregate(rooms, fixture_type="\u5730\u67dc", basis="\u5730\u67dc\u957f\u5ea6\u6c47\u603b")
+    if item_name in rules.wall_cabinet_length_items:
+        return _cabinet_length_aggregate(rooms, fixture_type="\u540a\u67dc", basis="\u540a\u67dc\u957f\u5ea6\u6c47\u603b")
     if item_name in rules.cabinet_length_items:
         return _cabinet_length_aggregate(rooms)
     if item_name in rules.curtain_wall_length_items:
@@ -1057,20 +1065,26 @@ def _custom_projected_area_aggregate(rooms: list[QuantityRow], rules: Residentia
     )
 
 
-def _cabinet_length_aggregate(rooms: list[QuantityRow]) -> QuoteAggregateQuantity | None:
+def _cabinet_length_aggregate(
+    rooms: list[QuantityRow],
+    fixture_type: str | None = None,
+    basis: str = "\u6a71\u67dc\u957f\u5ea6\u6c47\u603b",
+) -> QuoteAggregateQuantity | None:
     detail_pairs = [(room, detail) for room in rooms for detail in room.cabinet_details]
+    if fixture_type is not None:
+        detail_pairs = [(room, detail) for room, detail in detail_pairs if detail.fixture_type == fixture_type]
     if not detail_pairs:
         return None
-    notes = ["\u5730\u67dc/\u540a\u67dc\u9700\u786e\u8ba4"]
+    notes = [] if fixture_type is not None else ["\u5730\u67dc/\u540a\u67dc\u9700\u786e\u8ba4"]
     if any(detail.fixture_type is None for _, detail in detail_pairs):
         notes.append("\u90e8\u5206\u6a71\u67dc\u7f3a\u5c11\u7c7b\u578b\uff0c\u9700\u590d\u6838")
     detail_rooms = list({room.room_id: room for room, _ in detail_pairs}.values())
     return QuoteAggregateQuantity(
         quantity=_round_quantity(sum(detail.length for _, detail in detail_pairs)),
-        basis="\u6a71\u67dc\u957f\u5ea6\u6c47\u603b",
+        basis=basis,
         rooms=detail_rooms,
         review_status="\u81ea\u52a8\u751f\u6210",
-        review_note="\uff1b".join(notes),
+        review_note="\uff1b".join(notes) if notes else None,
     )
 
 
