@@ -1,6 +1,6 @@
 # 商品房整装报价剩余模板默认项审计
 
-审计基于真实样例 `scratch/cad-import-test/quote-ext-repair.xlsx`。当前样例统计为：
+审计基于真实样例 `scratch/cad-import-test/quote-current-audit.xlsx`。当前样例统计为：
 
 - 自动算量：47 行
 - 自动汇总：28 行
@@ -13,7 +13,7 @@
 
 ## 当前样例仍为模板默认，但能力已具备
 
-这些项目已经有自动化规则；当前真实样例保持模板默认，是因为 `scratch/cad-import-test/result-building-area.json` 中没有对应 CAD 标识、外墙行、建筑面积或匹配门洞。后续设计师按规范补图层后即可自动汇总。
+这些项目已经有自动化规则；当前真实样例保持模板默认，是因为 `scratch/cad-import-test/result-current-audit.json` 中没有对应 CAD 标识、外墙行、建筑面积或匹配门洞。后续设计师按规范补图层后即可自动汇总。
 
 | 项目 | 当前样例状态 | 已支持的数据来源 | 当前样例默认原因 |
 | --- | --- | --- | --- |

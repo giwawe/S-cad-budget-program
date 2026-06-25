@@ -4,8 +4,8 @@
 
 ## 样例来源
 
-- 真实样例报价：`scratch/cad-import-test/quote-ext-repair.xlsx`
-- 真实样例算量：`scratch/cad-import-test/result-building-area.json`
+- 真实样例报价：`scratch/cad-import-test/quote-current-audit.xlsx`
+- 真实样例算量：`scratch/cad-import-test/result-current-audit.json`
 - 对照样例生成命令：
 
 ```powershell
