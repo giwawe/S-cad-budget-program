@@ -49,7 +49,7 @@ marker-rich 对照样例证明以下数据源接通后可稳定生成：
 | 外墙批嵌 | 235 | `QUOTE_EXT_WALL`、`QUOTE_EXT_OPENING`，相邻户外墙用 `QUOTE_INCLUDE=false` 排除 | 选定外墙净面积汇总，扣除外墙洞口 |
 | 打混凝土过梁孔 | 108 | 闭合 `QUOTE_EXT_WALL` 或闭合 `QUOTE_BUILDING_AREA` | 建筑面积的 10% 取整 |
 | 全屋定制 | 66 | `QUOTE_CUSTOM` | 投影面积汇总，缺高默认 2.6m；低于 1m 的柜体提示按长度复核 |
-| 地柜 / 吊柜 | 18 / 16 | `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET`，旧图可用 `QUOTE_CABINET + TYPE` | 按地柜、吊柜分别汇总投影长度；模板只有通用橱柜行时自动拆分；重叠画线不去重 |
+| 地柜 / 吊柜 | 18 / 16 | `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET`，旧图可用 `QUOTE_CABINET + TYPE` | 按地柜、吊柜分别汇总长度；闭合轮廓按占地面积除以推断柜深折算；模板只有通用橱柜行时自动拆分；重叠画线不去重 |
 | 非湿区局部墙砖 | 模板瓷砖/美缝项 | `QUOTE_WALL_TILE`，建议写 `HEIGHT` | 局部墙砖面积并入 `墙面瓷砖` 片数和 `美缝` 面积；湿区不重复叠加 |
 
 ### 继续保留人工/模板默认

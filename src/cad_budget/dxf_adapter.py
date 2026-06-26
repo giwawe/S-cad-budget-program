@@ -173,6 +173,23 @@ def _outline_width_from_points(points: list[Point]) -> float:
     )
 
 
+def _cabinet_footprint_length_from_points(points: list[Point]) -> float:
+    polygon = _outline_polygon(points)
+    if polygon is None:
+        return 0.0
+    segment_lengths = []
+    for current, following in zip(points, points[1:]):
+        segment_length = hypot(following.x - current.x, following.y - current.y)
+        if segment_length > 0.05:
+            segment_lengths.append(segment_length)
+    if not segment_lengths:
+        return 0.0
+    depth = min(segment_lengths)
+    if depth <= 0:
+        return 0.0
+    return round(polygon.area / depth, 10)
+
+
 def _outline_polygon(points: list[Point]) -> Polygon | None:
     polygon = Polygon((point.x, point.y) for point in points)
     if polygon.is_empty or polygon.area <= 0:
@@ -190,7 +207,10 @@ def _fixture_marker_from_points(
     if len(points) < 2:
         return None
     if len(points) >= 4 and _points_within_tolerance(points[0], points[-1], 0.01):
-        length = _outline_width_from_points(points)
+        if kind is FixtureKind.CABINET:
+            length = _cabinet_footprint_length_from_points(points)
+        else:
+            length = _outline_width_from_points(points)
     else:
         length = _polyline_length(points)
     if length <= 0:
