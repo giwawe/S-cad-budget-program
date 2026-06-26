@@ -83,6 +83,7 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881" in rules.lintel_count_items
     assert "\u80cc\u666f\u5899" in rules.background_wall_area_items
     assert "\u73bb\u7483\u6dcb\u6d74\u623f" in rules.shower_glass_count_items
+    assert "\u8e72\u5751" in rules.squat_toilet_count_items
     assert "\u53a8\u623f\u3001\u536b\u751f\u95f4\u6392\u6c61\u7ba1\u5305\u9694\u97f3\u68c9" in rules.pipe_insulation_length_items
     assert "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053(\u5355\u7ba1)" in rules.pipe_wrap_length_items
     assert "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54" in rules.building_area_percent_count_items
@@ -1796,6 +1797,47 @@ def test_export_residential_quote_defaults_missing_shower_glass_markers_to_zero(
     assert shower_glass[14] == "\u672a\u8bc6\u522bQUOTE_SHOWER_GLASS\u6dcb\u6d74\u623f\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff0c\u907f\u514d\u4e0e\u6dcb\u6d74\u9694\u65ad\u91cd\u590d\u62a5\u4ef7"
 
 
+def test_export_residential_quote_counts_squat_toilet_markers(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_squat_toilet_items=True)
+    result = QuantityResult(
+        project_name="Squat Toilet Quote",
+        rows=[],
+        construction_details=[
+            ConstructionQuantityDetail(id="squat-toilet-1", kind=ConstructionKind.SQUAT_TOILET, count=1),
+            ConstructionQuantityDetail(id="squat-toilet-2", kind=ConstructionKind.SQUAT_TOILET, count=1),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    squat_toilet = _item_row_named(rows, "\u8e72\u5751")
+    assert squat_toilet[3] == 2
+    assert squat_toilet[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert squat_toilet[12] == "\u8e72\u5751\u6807\u8bc6\u6570\u91cf\u6c47\u603b"
+    assert squat_toilet[13] == "\u81ea\u52a8\u751f\u6210"
+
+
+def test_export_residential_quote_defaults_missing_squat_toilet_markers_to_zero(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_squat_toilet_items=True)
+    result = QuantityResult(project_name="No Squat Toilet", rows=[], construction_details=[], exceptions=[])
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    squat_toilet = _item_row_named(rows, "\u8e72\u5751")
+    assert squat_toilet[3] == 0
+    assert squat_toilet[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert squat_toilet[12] == "\u8e72\u5751\u6807\u8bc6\u6570\u91cf\u6c47\u603b"
+    assert squat_toilet[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert squat_toilet[14] == "\u672a\u8bc6\u522bQUOTE_SQUAT_TOILET\u8e72\u5751\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff0c\u907f\u514d\u4e0e\u9a6c\u6876\u91cd\u590d\u62a5\u4ef7"
+
+
 def test_export_residential_quote_auto_fills_pipe_marker_items(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
@@ -2119,6 +2161,7 @@ def _create_quote_template(
     include_split_cabinet_items: bool = False,
     include_background_wall_items: bool = False,
     include_shower_glass_items: bool = False,
+    include_squat_toilet_items: bool = False,
 ) -> None:
     workbook = Workbook()
     half = workbook.active
@@ -2159,6 +2202,8 @@ def _create_quote_template(
         fitout.append([8, "\u80cc\u666f\u5899", "M2", 60, 0, 0, 10, None, "\u80cc\u666f\u5899"])
     if include_shower_glass_items:
         fitout.append([9, "\u73bb\u7483\u6dcb\u6d74\u623f", "\u4e2a", 6, 0, 0, 10, None, "\u73bb\u7483\u6dcb\u6d74\u623f"])
+    if include_squat_toilet_items:
+        fitout.append([10, "\u8e72\u5751", "\u4e2a", 1, 0, 0, 10, None, "\u8e72\u5751"])
     if include_split_cabinet_items:
         fitout.append([6, "\u5730\u67dc", "M", 99, 0, 0, 10, None, "\u5730\u67dc"])
         fitout.append([7, "\u540a\u67dc", "M", 99, 0, 0, 10, None, "\u540a\u67dc"])

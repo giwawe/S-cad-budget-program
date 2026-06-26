@@ -118,6 +118,22 @@ def test_project_input_accepts_shower_glass_markers():
     assert project.shower_glasses[0].kind is ConstructionKind.SHOWER_GLASS
 
 
+def test_project_input_accepts_squat_toilet_markers():
+    project = ProjectInput(
+        project_name="Squat Toilet",
+        squat_toilets=[
+            ConstructionMarker(
+                id="squat-toilet-1",
+                layer=LayerName.QUOTE_SQUAT_TOILET,
+                kind=ConstructionKind.SQUAT_TOILET,
+                points=[Point(x=1, y=1)],
+            )
+        ],
+    )
+
+    assert project.squat_toilets[0].kind is ConstructionKind.SQUAT_TOILET
+
+
 def test_project_input_accepts_wall_tile_markers():
     project = ProjectInput(
         project_name="Wall Tile",

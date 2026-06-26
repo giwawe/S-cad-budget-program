@@ -189,6 +189,7 @@ class ResidentialQuoteRules:
     lintel_hole_count_items: set[str]
     background_wall_area_items: set[str]
     shower_glass_count_items: set[str]
+    squat_toilet_count_items: set[str]
     pipe_insulation_length_items: set[str]
     pipe_wrap_length_items: set[str]
     building_area_percent_count_items: dict[str, float]
@@ -268,6 +269,7 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         lintel_hole_count_items=_optional_item_set(data, "lintel_hole_count_items"),
         background_wall_area_items=_optional_item_set(data, "background_wall_area_items"),
         shower_glass_count_items=_optional_item_set(data, "shower_glass_count_items"),
+        squat_toilet_count_items=_optional_item_set(data, "squat_toilet_count_items"),
         pipe_insulation_length_items=_optional_item_set(data, "pipe_insulation_length_items"),
         pipe_wrap_length_items=_optional_item_set(data, "pipe_wrap_length_items"),
         building_area_percent_count_items=_building_area_percent_count_items(data),
@@ -727,6 +729,8 @@ def _aggregate_quantity_for_item(
         return _background_wall_area_aggregate(construction_details or [])
     if item_name in rules.shower_glass_count_items:
         return _shower_glass_count_aggregate(construction_details or [])
+    if item_name in rules.squat_toilet_count_items:
+        return _squat_toilet_count_aggregate(construction_details or [])
     if item_name in rules.pipe_insulation_length_items:
         return _construction_length_aggregate(
             construction_details or [],
@@ -1055,6 +1059,24 @@ def _shower_glass_count_aggregate(
     return QuoteAggregateQuantity(
         quantity=quantity,
         basis="\u6dcb\u6d74\u623f\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
+        rooms=[],
+        review_status="\u81ea\u52a8\u751f\u6210",
+    )
+
+
+def _squat_toilet_count_aggregate(
+    construction_details: list[ConstructionQuantityDetail],
+) -> QuoteAggregateQuantity:
+    details = [detail for detail in construction_details if detail.kind is ConstructionKind.SQUAT_TOILET]
+    quantity = sum(detail.count for detail in details)
+    if not details or quantity <= 0:
+        return _zero_aggregate(
+            "\u8e72\u5751\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
+            "\u672a\u8bc6\u522bQUOTE_SQUAT_TOILET\u8e72\u5751\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff0c\u907f\u514d\u4e0e\u9a6c\u6876\u91cd\u590d\u62a5\u4ef7",
+        )
+    return QuoteAggregateQuantity(
+        quantity=quantity,
+        basis="\u8e72\u5751\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
         rooms=[],
         review_status="\u81ea\u52a8\u751f\u6210",
     )

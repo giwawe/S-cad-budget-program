@@ -31,6 +31,7 @@ class LayerName(str, Enum):
     QUOTE_WALL_TILE = "QUOTE_WALL_TILE"
     QUOTE_BACKGROUND_WALL = "QUOTE_BACKGROUND_WALL"
     QUOTE_SHOWER_GLASS = "QUOTE_SHOWER_GLASS"
+    QUOTE_SQUAT_TOILET = "QUOTE_SQUAT_TOILET"
 
 
 class SpaceType(str, Enum):
@@ -82,6 +83,7 @@ class ConstructionKind(str, Enum):
     WALL_TILE = "wall_tile"
     BACKGROUND_WALL = "background_wall"
     SHOWER_GLASS = "shower_glass"
+    SQUAT_TOILET = "squat_toilet"
 
 
 class Point(BaseModel):
@@ -239,6 +241,7 @@ class ProjectInput(BaseModel):
     wall_tiles: list[ConstructionMarker] = Field(default_factory=list)
     background_walls: list[ConstructionMarker] = Field(default_factory=list)
     shower_glasses: list[ConstructionMarker] = Field(default_factory=list)
+    squat_toilets: list[ConstructionMarker] = Field(default_factory=list)
 
 
 class QuantityException(BaseModel):

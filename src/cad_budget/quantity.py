@@ -965,6 +965,7 @@ def _calculate_construction_details(project: ProjectInput, room_names: dict[str,
     details.extend(_construction_detail_for_count_marker(marker) for marker in project.lintels)
     details.extend(_construction_detail_for_count_marker(marker) for marker in project.lintel_holes)
     details.extend(_construction_detail_for_count_marker(marker) for marker in project.shower_glasses)
+    details.extend(_construction_detail_for_count_marker(marker) for marker in project.squat_toilets)
     details.extend(_construction_detail_for_vertical_marker(project, marker) for marker in project.pipe_insulations)
     details.extend(_construction_detail_for_vertical_marker(project, marker) for marker in project.pipe_wraps)
     details.extend(_construction_detail_for_exterior_repair(project, marker) for marker in project.exterior_repairs)

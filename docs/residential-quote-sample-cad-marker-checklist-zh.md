@@ -15,17 +15,17 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 ## 当前样例缺口
 
-基于 `scratch/cad-import-10-shower-glass-default/quote.xlsx`：
+基于 `scratch/cad-import-10-squat-toilet-default/quote.xlsx`：
 
 - 自动算量：47 行
-- 自动汇总：42 行
-- 模板默认：4 行
+- 自动汇总：43 行
+- 模板默认：3 行
 
-当前最新 `scratch/cad-import-10-shower-glass-default/result.json` 已接通建筑面积、外墙、新砌墙、全屋定制、地柜/吊柜和局部墙砖来源；剩余模板默认主要集中在人工项、未补的过梁标识和未补的背景墙范围标识；玻璃淋浴房未标识时按 0 自动汇总，避免和淋浴隔断重复报价：
+当前最新 `scratch/cad-import-10-squat-toilet-default/result.json` 已接通建筑面积、外墙、新砌墙、全屋定制、地柜/吊柜和局部墙砖来源；剩余模板默认主要集中在人工项、未补的过梁标识和未补的背景墙范围标识；玻璃淋浴房和蹲坑未标识时按 0 自动汇总，避免和淋浴隔断、马桶重复报价：
 
 - `building_area=136.237652`
 - `exterior_rows=1`
-- `construction_details=4`，包含新砌墙和 `QUOTE_WALL_TILE`，暂无 `QUOTE_LINTEL`、`QUOTE_BACKGROUND_WALL`、`QUOTE_SHOWER_GLASS`、拆墙、管道或外墙修补标识
+- `construction_details=4`，包含新砌墙和 `QUOTE_WALL_TILE`，暂无 `QUOTE_LINTEL`、`QUOTE_BACKGROUND_WALL`、`QUOTE_SHOWER_GLASS`、`QUOTE_SQUAT_TOILET`、拆墙、管道或外墙修补标识
 - 已有全屋定制、地柜/吊柜标识；拆墙、管道、外墙修补、阳台推拉门缺标识时已按 0 自动汇总并提示复核
 - 无匹配阳台/露台宽门洞
 
@@ -36,12 +36,13 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 | 1 | `QUOTE_LINTEL` | 砖墙门窗洞过梁 | 只需标新增门窗洞，能把剩余默认项中唯一已有可靠 CAD 口径的项目转为自动汇总 |
 | 2 | `QUOTE_BACKGROUND_WALL` | 背景墙 | 只在有明确背景墙方案时自动汇总，避免从普通墙面面积硬推 |
 | 3 | `QUOTE_SHOWER_GLASS` | 玻璃淋浴房 | 每个标识按 1 个计；无标识时按 0，避免和淋浴隔断重复报价 |
-| 4 | `QUOTE_EXT_WALL` 或 `QUOTE_BUILDING_AREA` | 外墙批嵌、打混凝土过梁孔 | 既影响外墙面积，也影响建筑面积百分比项目；最新 `10.dxf` 样例已补齐，可作为参考 |
-| 5 | `QUOTE_NEW_WALL` | 砌120厚砖墙、砌240厚砖墙 | 新砌墙不能从房间面积推断；缺少 `THICKNESS` 时按 240mm；最新 `10.dxf` 样例已补齐 |
-| 6 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 缺标识时按 0 并提示手工输入；点位少、补图成本低 |
-| 7 | `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` | 全屋定制、地柜、吊柜 | 对主材金额影响较大，需要设计方案同步；旧图可继续用 `QUOTE_CABINET + TYPE`；最新 `10.dxf` 样例已补齐 |
-| 8 | `QUOTE_EXT_REPAIR` | 外墙批嵌以及修补 | 缺标识时按 0 并提示手工输入；必须由设计师确认修补范围 |
-| 9 | 阳台/露台门洞信息 | 阳台推拉门、阳台推拉门双包套 | 没有匹配阳台/露台宽门洞时按 0 |
+| 4 | `QUOTE_SQUAT_TOILET` | 蹲坑 | 每个标识按 1 个计；无标识时按 0，避免和马桶重复报价 |
+| 5 | `QUOTE_EXT_WALL` 或 `QUOTE_BUILDING_AREA` | 外墙批嵌、打混凝土过梁孔 | 既影响外墙面积，也影响建筑面积百分比项目；最新 `10.dxf` 样例已补齐，可作为参考 |
+| 6 | `QUOTE_NEW_WALL` | 砌120厚砖墙、砌240厚砖墙 | 新砌墙不能从房间面积推断；缺少 `THICKNESS` 时按 240mm；最新 `10.dxf` 样例已补齐 |
+| 7 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 缺标识时按 0 并提示手工输入；点位少、补图成本低 |
+| 8 | `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` | 全屋定制、地柜、吊柜 | 对主材金额影响较大，需要设计方案同步；旧图可继续用 `QUOTE_CABINET + TYPE`；最新 `10.dxf` 样例已补齐 |
+| 9 | `QUOTE_EXT_REPAIR` | 外墙批嵌以及修补 | 缺标识时按 0 并提示手工输入；必须由设计师确认修补范围 |
+| 10 | 阳台/露台门洞信息 | 阳台推拉门、阳台推拉门双包套 | 没有匹配阳台/露台宽门洞时按 0 |
 
 ## 逐项补图要求
 
@@ -218,6 +219,22 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 - 没有 `QUOTE_SHOWER_GLASS` 时，系统按 0 自动汇总，避免和按卫生间数量生成的 `淋浴隔断` 重复报价。
 - 不从卫生间数量推断玻璃淋浴房；只有明确采用玻璃淋浴房方案时才补该标识。
 
+### 蹲坑
+
+目标报价项：
+
+- `蹲坑`
+
+补图方式：
+- 使用 `QUOTE_SQUAT_TOILET` 标识明确需要按蹲坑报价的洁具。
+- 支持 `POINT`、`INSERT`、`LINE`、`LWPOLYLINE`；每个实体按 1 个蹲坑计。
+- 蹲坑按个数报价，不按面积或长度报价；线段/折线只作为平面位置或范围提示。
+
+复核点：
+
+- 没有 `QUOTE_SQUAT_TOILET` 时，系统按 0 自动汇总，避免和按卫生间数量生成的 `马桶` 重复报价。
+- 不从卫生间数量推断蹲坑；只有明确采用蹲坑方案时才补该标识。
+
 ## 不建议通过补图自动化的项目
 
 以下项目继续人工/模板默认，除非后续单独确认业务口径：
@@ -225,7 +242,6 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 | 项目 | 原因 |
 | --- | --- |
 | 入户门 | 是否更换属于套餐/主材选择 |
-| 蹲坑 | 卫生间数量不能判断坐便/蹲坑配置 |
 
 ## 补图后验证建议
 

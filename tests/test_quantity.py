@@ -1510,6 +1510,36 @@ def test_shower_glass_markers_calculate_counts():
     assert details["shower-glass-line"].area == 0
 
 
+def test_squat_toilet_markers_calculate_counts():
+    project = ProjectInput(
+        project_name="Squat Toilet Markers",
+        squat_toilets=[
+            ConstructionMarker(
+                id="squat-toilet-point",
+                layer=LayerName.QUOTE_SQUAT_TOILET,
+                kind=ConstructionKind.SQUAT_TOILET,
+                points=[Point(x=1, y=1)],
+            ),
+            ConstructionMarker(
+                id="squat-toilet-block-footprint",
+                layer=LayerName.QUOTE_SQUAT_TOILET,
+                kind=ConstructionKind.SQUAT_TOILET,
+                points=[Point(x=2, y=1), Point(x=3, y=1)],
+                length=1.0,
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    details = {detail.id: detail for detail in result.construction_details}
+    assert details["squat-toilet-point"].kind is ConstructionKind.SQUAT_TOILET
+    assert details["squat-toilet-point"].count == 1
+    assert details["squat-toilet-point"].area == 0
+    assert details["squat-toilet-block-footprint"].count == 1
+    assert details["squat-toilet-block-footprint"].area == 0
+
+
 def test_exterior_repair_markers_calculate_closed_area_or_linear_area():
     project = ProjectInput(
         project_name="Exterior Repair",
