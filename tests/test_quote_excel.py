@@ -80,7 +80,7 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u62c6\u6539\u53ca\u62c6\u5899" in rules.demo_wall_area_items
     assert rules.new_wall_area_items_by_thickness["\u780c120\u539a\u7816\u5899"] == 0.12
     assert rules.new_wall_area_items_by_thickness["\u780c240\u539a\u7816\u5899"] == 0.24
-    assert "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881" not in rules.lintel_count_items
+    assert "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881" in rules.lintel_count_items
     assert "\u53a8\u623f\u3001\u536b\u751f\u95f4\u6392\u6c61\u7ba1\u5305\u9694\u97f3\u68c9" in rules.pipe_insulation_length_items
     assert "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053(\u5355\u7ba1)" in rules.pipe_wrap_length_items
     assert "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54" in rules.building_area_percent_count_items
@@ -1703,8 +1703,9 @@ def test_export_residential_quote_auto_fills_construction_marker_items(tmp_path:
     assert demo[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
     assert wall_120[3] == 6.0
     assert wall_240[3] == 4.5
-    assert lintel[3] == 15
-    assert lintel[9] == "\u6a21\u677f\u9ed8\u8ba4"
+    assert lintel[3] == 1
+    assert lintel[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert lintel[12] == "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881\u6807\u8bc6\u6570\u91cf\u6c47\u603b"
     assert hole[3] == 12
     assert hole[9] == "\u81ea\u52a8\u6c47\u603b"
     assert hole[12] == "\u5efa\u7b51\u9762\u79ef\u768410%\u53d6\u6574"

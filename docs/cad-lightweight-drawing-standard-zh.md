@@ -43,7 +43,7 @@
 | `QUOTE_EXT_REPAIR` | 外墙修补可选 | `LINE`、`LWPOLYLINE` | 画需要外墙批嵌以及修补的明确范围；闭合轮廓按面积，开放线按长度乘 `HEIGHT` | 外墙修补面积 |
 | `QUOTE_DEMO_WALL` | 拆改可选 | `LINE`、`LWPOLYLINE` | 画需要拆除的墙体计量线，可写 `HEIGHT` | 拆改及拆墙面积 |
 | `QUOTE_NEW_WALL` | 新砌墙可选 | `LINE`、`LWPOLYLINE` | 画新砌墙计量线，建议写 `THICKNESS`，可写 `HEIGHT`；缺少 `THICKNESS` 时按 240mm | 120/240 厚砖墙面积 |
-| `QUOTE_LINTEL` | 过梁可选 | `LINE`、`LWPOLYLINE` | 预留标识砖墙门窗洞过梁位置 | 当前报价仍由设计师人工填写 |
+| `QUOTE_LINTEL` | 过梁可选 | `LINE`、`LWPOLYLINE` | 标识需要计入砖墙门窗洞过梁的新增洞口位置 | 过梁数量 |
 | `QUOTE_LINTEL_HOLE` | 过梁孔可选 | `POINT`、`INSERT`、`LINE`、`LWPOLYLINE` | 预留标识混凝土过梁孔位置 | 当前默认报价按 `QuantityResult.building_area` 的 10% 取整数 |
 | `QUOTE_PIPE_INSULATION` | 管道可选 | `POINT`、`INSERT`、`LINE`、`LWPOLYLINE` | 标识需要排污管包隔音棉的立管，推荐点或块，可写 `HEIGHT` | 排污管隔音棉长度 |
 | `QUOTE_PIPE_WRAP` | 包管可选 | `POINT`、`INSERT`、`LINE`、`LWPOLYLINE` | 标识需要包上/下水管道的单管立管，推荐点或块，可写 `HEIGHT` | 单管包管长度 |
@@ -240,7 +240,7 @@
 - `QUOTE_DEMO_WALL` 只画明确需要拆除的墙体计量线，不要用普通 `QUOTE_WALL` 代替。
 - `QUOTE_NEW_WALL` 只画新砌墙计量线；建议在 `CAD_BUDGET` XDATA 或块属性中写 `THICKNESS`，支持 `120`、`120mm`、`0.12` 等写法；未填写 `THICKNESS` 时，报价默认按 240mm 厚砖墙归类。
 - `QUOTE_DEMO_WALL` / `QUOTE_NEW_WALL` 缺少 `HEIGHT` 时，系统使用楼层默认高度或项目默认高度，并在报价复核列标记默认推断。
-- `QUOTE_LINTEL` 目前仅作为预留标识；砖墙门窗洞过梁只有新增加的门洞需要，默认仍由设计师人工填写。
+- `QUOTE_LINTEL` 用于明确需要计入砖墙门窗洞过梁的新增门窗洞位置；每个标识按 1 支过梁计入报价。没有 `QUOTE_LINTEL` 时，砖墙门窗洞过梁仍保持模板默认，避免从普通门窗洞硬推。
 - `QUOTE_LINTEL_HOLE` 目前仅作为预留标识；打混凝土过梁孔默认按 `QuantityResult.building_area` 的 10% 取整数生成，没有闭合外墙轮廓或 `QUOTE_BUILDING_AREA` 时保持模板默认。
 - 没有 `QUOTE_DEMO_WALL` 时，拆改及拆墙默认按 0 生成，表示没有要拆的墙；没有 `QUOTE_NEW_WALL` 时，砌 120/240 厚砖墙仍按模板默认生成。
 
@@ -280,7 +280,7 @@
 - `厨房推拉门双包套` 默认按同一批推拉门门洞的套线长度汇总，单个门洞长度为门洞宽度加两侧有效门高。
 - `阳台推拉门` 和 `阳台推拉门双包套` 使用独立的阳台/露台空间关键词，不会放宽厨房推拉门的匹配范围；前者按门洞面积，后者按门洞宽度加两侧有效门高；没有匹配阳台/露台宽门洞时按 0 生成。
 - `外墙批嵌` 默认按选中的 `exterior_rows.net_area` 汇总，已扣除外墙洞口；`外墙批嵌以及修补` 默认按 `QUOTE_EXT_REPAIR` 明确标识的修补范围面积汇总，没有修补标识时按 0 生成并提示设计师手工输入，避免把修补范围等同于整面外墙。
-- `拆改及拆墙` 默认按 `QUOTE_DEMO_WALL` 面积汇总，没有拆墙标识时按 0 生成；`砌120厚砖墙` / `砌240厚砖墙` 默认按 `QUOTE_NEW_WALL` 面积并按 `THICKNESS` 匹配，未填 `THICKNESS` 的新砌墙按 240mm 归类；`砖墙门窗洞过梁` 默认仍由设计师人工填写；`打混凝土过梁孔` 默认按 `QuantityResult.building_area` 的 10% 取整数，没有建筑面积来源时保持模板默认。
+- `拆改及拆墙` 默认按 `QUOTE_DEMO_WALL` 面积汇总，没有拆墙标识时按 0 生成；`砌120厚砖墙` / `砌240厚砖墙` 默认按 `QUOTE_NEW_WALL` 面积并按 `THICKNESS` 匹配，未填 `THICKNESS` 的新砌墙按 240mm 归类；`砖墙门窗洞过梁` 默认按 `QUOTE_LINTEL` 标识数量汇总，没有标识时保持模板默认；`打混凝土过梁孔` 默认按 `QuantityResult.building_area` 的 10% 取整数，没有建筑面积来源时保持模板默认。
 - `厨房、卫生间排污管包隔音棉` 默认按 `QUOTE_PIPE_INSULATION` 立管长度汇总；`包上/下水管道(单管)` 默认按 `QUOTE_PIPE_WRAP` 立管长度汇总，缺少高度时按楼层/项目默认高度推断并提示复核；没有对应标识时按 0 生成并提示设计师手工输入。
 - `淋浴隔断` 默认按卫生间数量汇总；`玻璃淋浴房` 默认仍按模板生成，避免重复报价。
 - `全屋定制` 默认从 `QUOTE_CUSTOM` 投影面积汇总；缺少高度时按 2.6m 默认推断，高度低于 1m 的柜体不计入投影面积并提示按长度复核。

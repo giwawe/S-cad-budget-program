@@ -30,7 +30,9 @@
     "砌120厚砖墙": 0.12,
     "砌240厚砖墙": 0.24
   },
-  "lintel_count_items": [],
+  "lintel_count_items": [
+    "砖墙门窗洞过梁"
+  ],
   "lintel_hole_count_items": [],
   "pipe_insulation_length_items": [
     "厨房、卫生间排污管包隔音棉"
