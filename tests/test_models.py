@@ -102,6 +102,22 @@ def test_project_input_accepts_background_wall_markers():
     assert project.background_walls[0].kind is ConstructionKind.BACKGROUND_WALL
 
 
+def test_project_input_accepts_shower_glass_markers():
+    project = ProjectInput(
+        project_name="Shower Glass",
+        shower_glasses=[
+            ConstructionMarker(
+                id="shower-glass-1",
+                layer=LayerName.QUOTE_SHOWER_GLASS,
+                kind=ConstructionKind.SHOWER_GLASS,
+                points=[Point(x=1, y=1)],
+            )
+        ],
+    )
+
+    assert project.shower_glasses[0].kind is ConstructionKind.SHOWER_GLASS
+
+
 def test_project_input_accepts_wall_tile_markers():
     project = ProjectInput(
         project_name="Wall Tile",

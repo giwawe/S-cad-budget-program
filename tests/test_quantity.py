@@ -1480,6 +1480,36 @@ def test_background_wall_markers_calculate_area_and_keep_room_context():
     assert details["background-default"].area == 5.6
 
 
+def test_shower_glass_markers_calculate_counts():
+    project = ProjectInput(
+        project_name="Shower Glass Markers",
+        shower_glasses=[
+            ConstructionMarker(
+                id="shower-glass-point",
+                layer=LayerName.QUOTE_SHOWER_GLASS,
+                kind=ConstructionKind.SHOWER_GLASS,
+                points=[Point(x=1, y=1)],
+            ),
+            ConstructionMarker(
+                id="shower-glass-line",
+                layer=LayerName.QUOTE_SHOWER_GLASS,
+                kind=ConstructionKind.SHOWER_GLASS,
+                points=[Point(x=2, y=1), Point(x=3, y=1)],
+                length=1.0,
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    details = {detail.id: detail for detail in result.construction_details}
+    assert details["shower-glass-point"].kind is ConstructionKind.SHOWER_GLASS
+    assert details["shower-glass-point"].count == 1
+    assert details["shower-glass-point"].area == 0
+    assert details["shower-glass-line"].count == 1
+    assert details["shower-glass-line"].area == 0
+
+
 def test_exterior_repair_markers_calculate_closed_area_or_linear_area():
     project = ProjectInput(
         project_name="Exterior Repair",

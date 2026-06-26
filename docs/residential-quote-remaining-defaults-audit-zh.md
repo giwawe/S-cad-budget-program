@@ -1,10 +1,10 @@
 # 商品房整装报价剩余模板默认项审计
 
-审计基于真实样例 `scratch/cad-import-10-cabinet-footprint/quote.xlsx`。当前样例统计为：
+审计基于真实样例 `scratch/cad-import-10-shower-glass-default/quote.xlsx`。当前样例统计为：
 
 - 自动算量：47 行
-- 自动汇总：41 行
-- 模板默认：5 行
+- 自动汇总：42 行
+- 模板默认：4 行
 
 本文件只记录“现有算量结果是否足以继续自动化”。原则是：没有可靠 CAD / 算量来源的项目继续保留模板默认，不为了降低默认行数而硬推断。
 
@@ -13,12 +13,13 @@
 
 ## 当前样例仍为模板默认，但能力已具备
 
-这些项目已经有自动化规则；当前真实样例保持模板默认，是因为 `scratch/cad-import-10-cabinet-footprint/result.json` 中没有对应 CAD 标识。后续设计师按规范补图层后即可自动汇总。
+这些项目已经有自动化规则；当前真实样例保持模板默认，是因为 `scratch/cad-import-10-shower-glass-default/result.json` 中没有对应 CAD 标识。后续设计师按规范补图层后即可自动汇总。
 
 | 项目 | 当前样例状态 | 已支持的数据来源 | 当前样例默认原因 |
 | --- | --- | --- | --- |
 | 砖墙门窗洞过梁 | 模板默认 | `QUOTE_LINTEL` 数量 | 当前样例无过梁标识；只有新增门窗洞需要标识 |
 | 背景墙 | 模板默认 | `QUOTE_BACKGROUND_WALL` 面积 | 当前样例无背景墙范围标识；不从普通墙面面积硬推 |
+| 玻璃淋浴房 | 自动汇总为 0 | `QUOTE_SHOWER_GLASS` 数量 | 当前样例无玻璃淋浴房标识；未标识时按 0，避免和淋浴隔断重复报价 |
 
 ## 继续保留人工/模板默认
 
@@ -28,7 +29,6 @@
 | --- | --- | --- |
 | 入户门 | 模板默认 | 是否更换入户门属于套餐/主材选择，不是 CAD 算量结果 |
 | 蹲坑 | 模板默认 | 卫生间数量不能判断坐便/蹲坑配置，需洁具方案确认 |
-| 玻璃淋浴房 | 模板默认 | 已有 `淋浴隔断` 按卫生间数量自动汇总；玻璃淋浴房继续默认可避免重复报价 |
 
 ## 已具备标识后自动化能力
 
@@ -41,6 +41,7 @@
 | 砌240厚砖墙 | 有 `QUOTE_NEW_WALL` 且 `THICKNESS=240mm/0.24m` 时自动汇总；未填 `THICKNESS` 的新砌墙默认按 240mm | `construction_details` 中 `new_wall` 面积和厚度 | 按新砌墙线长度乘标识高度/默认高度汇总 |
 | 砖墙门窗洞过梁 | 有 `QUOTE_LINTEL` 时自动汇总；没有标识时仍按模板默认 | `construction_details` 中 `lintel` 数量 | 每个标识按 1 支过梁计；仅标新增门窗洞，避免把既有普通门洞误计入 |
 | 背景墙 | 有 `QUOTE_BACKGROUND_WALL` 时自动汇总；没有标识时仍按模板默认 | `construction_details` 中 `background_wall` 面积 | 按背景墙线长乘 `HEIGHT` 或默认高度汇总；缺高时提示复核 |
+| 玻璃淋浴房 | 有 `QUOTE_SHOWER_GLASS` 时按标识个数汇总；没有标识时按 0 | `construction_details` 中 `shower_glass` 数量 | 每个点、块、线或折线实体按 1 个计；不从卫生间数量推断，避免和 `淋浴隔断` 重复报价 |
 | 打混凝土过梁孔 | 按 `QuantityResult.building_area` 的 10% 取整数自动汇总；没有闭合外墙轮廓或 `QUOTE_BUILDING_AREA` 时仍按模板默认 | 闭合 `QUOTE_EXT_WALL` 面积汇总；没有闭合外墙轮廓时使用闭合 `QUOTE_BUILDING_AREA` 备用轮廓 | 不再使用室内空间面积相加作为建筑面积代理值；复核备注提示设计师确认建筑面积来源 |
 | 厨房、卫生间排污管包隔音棉 | 有 `QUOTE_PIPE_INSULATION` 时自动汇总；没有标识时按 0 | `construction_details` 中 `pipe_insulation` 立管长度 | 按标识 `HEIGHT` 汇总；缺高时按楼层/项目默认高度推断并提示复核；无标识提示设计师手工输入 |
 | 包上/下水管道(单管) | 有 `QUOTE_PIPE_WRAP` 时自动汇总；没有标识时按 0 | `construction_details` 中 `pipe_wrap` 立管长度 | 按标识 `HEIGHT` 汇总；缺高时按楼层/项目默认高度推断并提示复核；无标识提示设计师手工输入 |
@@ -51,6 +52,7 @@
 
 ## 下一阶段推荐
 
-1. 若目标是继续降低真实样例的 5 行模板默认，优先补 `QUOTE_LINTEL` 和 `QUOTE_BACKGROUND_WALL`，把砖墙门窗洞过梁、背景墙从模板默认转为自动汇总。
+1. 若目标是继续降低真实样例的模板默认，优先补 `QUOTE_LINTEL` 和 `QUOTE_BACKGROUND_WALL`，把砖墙门窗洞过梁、背景墙从模板默认转为自动汇总。
 2. 背景墙必须有明确范围标识，不应从现有墙面面积硬推。
-3. 入户门、蹲坑、玻璃淋浴房继续作为人工/模板默认项处理。
+3. 玻璃淋浴房可用 `QUOTE_SHOWER_GLASS` 显式标识；没有标识时系统按 0，不保留模板默认数量。
+4. 入户门、蹲坑继续作为人工/模板默认项处理。

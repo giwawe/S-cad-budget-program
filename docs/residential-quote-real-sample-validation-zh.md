@@ -4,8 +4,8 @@
 
 ## 样例来源
 
-- 真实样例报价：`scratch/cad-import-10-cabinet-footprint/quote.xlsx`
-- 真实样例算量：`scratch/cad-import-10-cabinet-footprint/result.json`
+- 真实样例报价：`scratch/cad-import-10-shower-glass-default/quote.xlsx`
+- 真实样例算量：`scratch/cad-import-10-shower-glass-default/result.json`
 - 对照样例生成命令：
 
 ```powershell
@@ -16,7 +16,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 | 样例 | 自动算量 | 自动汇总 | 模板默认 |
 | --- | ---: | ---: | ---: |
-| 真实样例 | 47 | 41 | 5 |
+| 真实样例 | 47 | 42 | 4 |
 | marker-rich 对照样例 | 0 | 16 | 1 |
 
 真实样例当前关键缺口：
@@ -38,7 +38,7 @@ marker-rich 对照样例证明以下数据源接通后可稳定生成：
 - `QUOTE_WALL_TILE` 非湿区局部墙砖面积进入墙面瓷砖片数和美缝面积
 - 阳台推拉门与双包套行可自动汇总
 
-## 真实样例仍为模板默认的 5 项
+## 真实样例仍为模板默认的 4 项
 
 ### 最新样例已自动汇总的能力
 
@@ -57,6 +57,7 @@ marker-rich 对照样例证明以下数据源接通后可稳定生成：
 | --- | ---: | --- | --- |
 | 砖墙门窗洞过梁 | 15 | `QUOTE_LINTEL` | 每个新增门窗洞过梁标识按 1 支过梁计；未标识时保持模板默认 |
 | 背景墙 | 60 | `QUOTE_BACKGROUND_WALL` | 按明确标识的背景墙面积汇总；未标识时保持模板默认，不从普通墙面硬推 |
+| 玻璃淋浴房 | 0 | `QUOTE_SHOWER_GLASS` | 按明确标识的玻璃淋浴房个数汇总；未标识时按 0，避免和淋浴隔断重复报价 |
 
 ### 继续保留人工/模板默认
 
@@ -64,7 +65,6 @@ marker-rich 对照样例证明以下数据源接通后可稳定生成：
 | --- | ---: | --- |
 | 入户门 | 1 | 是否更换属于主材/套餐选择，不是 CAD 算量结果 |
 | 蹲坑 | 1 | 卫生间数量不能判断坐便/蹲坑配置 |
-| 玻璃淋浴房 | 6 | 已有 `淋浴隔断` 按卫生间数量自动汇总，玻璃淋浴房默认保留以避免重复报价 |
 
 ## 验收步骤
 
@@ -76,5 +76,5 @@ marker-rich 对照样例证明以下数据源接通后可稳定生成：
    - `construction_details` 包含拆改、新砌墙、管道、外墙修补明细。
    - 房间行包含 `custom_details`、`cabinet_details` 和阳台/露台宽门洞明细。
 4. 重新生成报价 Excel。
-5. 最新样例 `模板默认` 为 5 行；如果补齐 `QUOTE_LINTEL` 和 `QUOTE_BACKGROUND_WALL`，剩余模板默认应主要是入户门、蹲坑、玻璃淋浴房等人工项。
+5. 重新生成报价后，未标识 `QUOTE_SHOWER_GLASS` 的 `玻璃淋浴房` 应按 0 自动汇总；如果补齐 `QUOTE_LINTEL` 和 `QUOTE_BACKGROUND_WALL`，剩余模板默认应主要是入户门、蹲坑等人工项。
 6. 抽查每个自动汇总行的 `数量来源`、`计量口径`、`复核状态` 和 `复核备注`。

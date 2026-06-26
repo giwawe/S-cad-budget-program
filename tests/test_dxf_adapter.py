@@ -888,6 +888,33 @@ def test_import_dxf_reads_background_wall_marker_layer_and_height(tmp_path: Path
     assert details[result.project.background_walls[0].id].room_name == "客厅"
 
 
+def test_import_dxf_reads_shower_glass_markers_as_counts(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_TEXT", "QUOTE_SHOWER_GLASS"]:
+        doc.layers.add(layer)
+
+    modelspace.add_lwpolyline(
+        [(-1000, -1000), (4000, -1000), (4000, 4000), (-1000, 4000), (-1000, -1000)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("主卫", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
+    modelspace.add_point((1000, 1000), dxfattribs={"layer": "QUOTE_SHOWER_GLASS"})
+    modelspace.add_lwpolyline([(1500, 1500), (2500, 1500)], dxfattribs={"layer": "QUOTE_SHOWER_GLASS"})
+    dxf_path = _save_doc(tmp_path / "shower_glass_markers.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path, confirmed_unit=CadUnit.MILLIMETER))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.shower_glasses) == 2
+    assert {marker.kind for marker in result.project.shower_glasses} == {ConstructionKind.SHOWER_GLASS}
+    quantity = calculate_quantities(result.project)
+    details = {detail.id: detail for detail in quantity.construction_details}
+    assert sum(details[marker.id].count for marker in result.project.shower_glasses) == 2
+
+
 def test_import_dxf_reads_pipe_marker_layers_and_heights(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4

@@ -540,6 +540,7 @@ def _assign_imported_marker_floors(
     exterior_repairs: list[ConstructionMarker],
     wall_tiles: list[ConstructionMarker],
     background_walls: list[ConstructionMarker],
+    shower_glasses: list[ConstructionMarker],
 ) -> None:
     for marker in [*windows, *doors, *heights]:
         if marker.floor is not None:
@@ -566,6 +567,7 @@ def _assign_imported_marker_floors(
         *exterior_repairs,
         *wall_tiles,
         *background_walls,
+        *shower_glasses,
     ]:
         if marker.floor is not None:
             continue
@@ -641,6 +643,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     exterior_repairs: list[ConstructionMarker] = []
     wall_tiles: list[ConstructionMarker] = []
     background_walls: list[ConstructionMarker] = []
+    shower_glasses: list[ConstructionMarker] = []
 
     for entity in _iter_modelspace(doc):
         layer = _layer(entity)
@@ -1008,6 +1011,24 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
             )
             if marker is not None and marker.length > 0:
                 background_walls.append(marker)
+        elif layer == LayerName.QUOTE_SHOWER_GLASS.value and entity.dxftype() in {"POINT", "INSERT", "LINE", "LWPOLYLINE"}:
+            if entity.dxftype() == "POINT":
+                point = entity.dxf.location
+                points = [_point(point.x, point.y, options.confirmed_unit)]
+            elif entity.dxftype() == "INSERT":
+                points = [_insert_point(entity, options.confirmed_unit)]
+            elif entity.dxftype() == "LINE":
+                points = _line_points(entity, options.confirmed_unit)
+            else:
+                points = _lwpolyline_points(entity, options.confirmed_unit)
+            marker = _construction_marker_from_points(
+                entity,
+                points,
+                LayerName.QUOTE_SHOWER_GLASS,
+                ConstructionKind.SHOWER_GLASS,
+            )
+            if marker is not None:
+                shower_glasses.append(marker)
         elif layer == LayerName.QUOTE_OPENING.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
@@ -1082,6 +1103,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         exterior_repairs,
         wall_tiles,
         background_walls,
+        shower_glasses,
     )
     project = ProjectInput(
         project_name=options.project_name,
@@ -1110,5 +1132,6 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         exterior_repairs=exterior_repairs,
         wall_tiles=wall_tiles,
         background_walls=background_walls,
+        shower_glasses=shower_glasses,
     )
     return CadImportResult(project=project, issues=issues, source_path=options.source_path, dxf_path=options.source_path)
