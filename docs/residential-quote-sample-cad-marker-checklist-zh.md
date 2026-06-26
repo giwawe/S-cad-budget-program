@@ -98,6 +98,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 - 新砌墙画 `QUOTE_NEW_WALL`。
 - 新砌墙建议写 `THICKNESS`，支持 `120`、`120mm`、`0.12`、`240`、`240mm`、`0.24`；缺少 `THICKNESS` 时默认按 240mm。
 - 可写 `HEIGHT`；缺少高度时按楼层/项目默认高度推断。
+- 有新砌墙标识但没有匹配到某个厚度时，该厚度报价按 0 自动汇总，并在复核备注提示检查 `THICKNESS`。
 
 复核点：
 

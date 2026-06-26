@@ -1003,7 +1003,15 @@ def _new_wall_area_aggregate(
     ]
     quantity = _round_quantity(sum(detail.area for detail in details))
     if not details or quantity <= 0:
-        return _zero_aggregate(f"\u65b0\u780c{thickness * 1000:g}mm\u7816\u5899\u9762\u79ef\u6c47\u603b")
+        thickness_label = f"{thickness * 1000:g}mm"
+        return _zero_aggregate(
+            f"\u65b0\u780c{thickness_label}\u7816\u5899\u9762\u79ef\u6c47\u603b",
+            (
+                f"\u6709QUOTE_NEW_WALL\u65b0\u780c\u5899\u6807\u8bc6\uff0c\u4f46\u672a\u8bc6\u522b{thickness_label}"
+                "\u65b0\u780c\u5899\uff0c\u9ed8\u8ba40\uff1b\u8bf7\u786e\u8ba4THICKNESS\u662f\u5426\u586b\u5199"
+                f"\u4e3a{thickness_label}/{thickness:g}m"
+            ),
+        )
     note = _construction_review_note(details)
     if abs(thickness - 0.24) <= 1e-6 and any(detail.thickness is None for detail in details):
         default_note = "\u672a\u586b\u5199\u539a\u5ea6\u7684\u65b0\u780c\u5899\u6309240mm\u8ba1\u7b97"

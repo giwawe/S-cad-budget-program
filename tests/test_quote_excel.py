@@ -2009,6 +2009,8 @@ def test_export_residential_quote_defaults_missing_new_wall_thickness_to_240(tmp
     wall_240 = _item_row_named(rows, "\u780c240\u539a\u7816\u5899")
     assert wall_120[3] == 0
     assert wall_120[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert wall_120[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert "\u672a\u8bc6\u522b120mm\u65b0\u780c\u5899" in wall_120[14]
     assert wall_240[3] == 6.0
     assert wall_240[9] == "\u81ea\u52a8\u6c47\u603b"
     assert "\u672a\u586b\u5199\u539a\u5ea6\u7684\u65b0\u780c\u5899\u6309240mm\u8ba1\u7b97" in wall_240[14]
