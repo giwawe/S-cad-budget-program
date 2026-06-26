@@ -1291,7 +1291,7 @@ def _review_note_for_rooms(rooms: list[QuantityRow], rules: ResidentialQuoteRule
     notes: list[str] = []
     for room in rooms:
         if room.status in {DataStatus.DEFAULT_INFERRED, DataStatus.NEEDS_REVIEW}:
-            notes.extend(room.exception_notes)
+            notes.extend(_translated_exception_notes_for_room(room))
         if any(window.height_defaulted for window in room.window_details):
             notes.append("\u7a97\u5e18\u6309\u540c\u623f\u95f4\u540c\u5899\u6bb5\u53bb\u91cd\uff0cL\u5f62\u7a97\u9700\u4eba\u5de5\u786e\u8ba4")
         if any(door.height_defaulted for door in room.door_details):
@@ -1364,12 +1364,9 @@ def _wall_tile_rooms_with_explicit_details(
 
 
 def _window_default_note_for_rooms(rooms: list[QuantityRow]) -> str | None:
-    notes: list[str] = []
-    for room in rooms:
-        notes.extend(note for note in room.exception_notes if "window_height_defaulted" in note)
-    if notes:
-        return "\uff1b".join(notes)
     if any(any(window.height_defaulted for window in room.window_details) for room in rooms):
+        return "\u5899\u7816\u9762\u79ef\u6263\u7a97\u4f7f\u7528\u9ed8\u8ba4\u7a97\u9ad8\uff0c\u9700\u590d\u6838\u7a97\u9ad8"
+    if any(any(_is_window_height_default_note(note) for note in room.exception_notes) for room in rooms):
         return "\u5899\u7816\u9762\u79ef\u6263\u7a97\u4f7f\u7528\u9ed8\u8ba4\u7a97\u9ad8\uff0c\u9700\u590d\u6838\u7a97\u9ad8"
     return None
 
@@ -1391,7 +1388,7 @@ def _window_area_default_note_for_rooms(rooms: list[QuantityRow]) -> str | None:
 def _has_defaulted_window_height(rooms: list[QuantityRow]) -> bool:
     return any(
         any(window.height_defaulted for window in room.window_details)
-        or any("window_height_defaulted" in note for note in room.exception_notes)
+        or any(_is_window_height_default_note(note) for note in room.exception_notes)
         for room in rooms
     )
 
@@ -1421,10 +1418,44 @@ def _review_status_for_room(room: QuantityRow) -> str:
 def _review_note_for_room(room: QuantityRow) -> str | None:
     if room.status not in {DataStatus.DEFAULT_INFERRED, DataStatus.NEEDS_REVIEW}:
         return None
-    notes = list(room.exception_notes)
+    notes = _translated_exception_notes_for_room(room)
     if not notes:
         return f"\u7b97\u91cf\u72b6\u6001\uff1a{room.status.value}"
     return "\uff1b".join(notes)
+
+
+def _translated_exception_notes_for_room(room: QuantityRow) -> list[str]:
+    notes = [note for note in room.exception_notes if not _is_window_height_default_note(note)]
+    window_note = _window_height_default_note_for_room(room)
+    if window_note is not None:
+        notes.insert(0, window_note)
+    return notes
+
+
+def _window_height_default_note_for_room(room: QuantityRow) -> str | None:
+    raw_notes = [note for note in room.exception_notes if _is_window_height_default_note(note)]
+    defaulted_windows = [window for window in room.window_details if window.height_defaulted]
+    count = len(defaulted_windows) or len(raw_notes)
+    if count == 0:
+        return None
+
+    heights = [window.height for window in defaulted_windows if window.height is not None]
+    for note in raw_notes:
+        match = re.search(r"default height ([0-9]+(?:\.[0-9]+)?)", note)
+        if match:
+            heights.append(float(match.group(1)))
+    unique_heights = sorted({round(height, 6) for height in heights})
+    if len(unique_heights) == 1:
+        height_label = f"{unique_heights[0]:g}m"
+    elif unique_heights:
+        height_label = "/".join(f"{height:g}m" for height in unique_heights)
+    else:
+        height_label = "\u9ed8\u8ba4\u503c"
+    return f"\u7a97\u9ad8\u7f3a\u5931{count}\u4e2a\uff0c\u5df2\u6309\u9ed8\u8ba4\u7a97\u9ad8{height_label}\u8ba1\u7b97"
+
+
+def _is_window_height_default_note(note: str) -> bool:
+    return "window_height_defaulted" in note or re.search(r"\bWindow\b.+\bused default height\b", note) is not None
 
 
 def _measure_basis_for_item(item_name: str, room: QuantityRow) -> str:

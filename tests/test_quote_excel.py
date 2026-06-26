@@ -2101,7 +2101,11 @@ def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(
                 floor_area=20.0,
                 net_wall_area=50.0,
                 status=DataStatus.DEFAULT_INFERRED,
-                exception_notes=["window_height_defaulted: Window w1 used default height 1.5"],
+                exception_notes=[
+                    "window_height_defaulted: Window w1 used default height 1.5",
+                    "window_height_defaulted: Window w2 used default height 1.5",
+                    "Window w3 used default height 1.5",
+                ],
             ),
         ],
         exceptions=[],
@@ -2113,8 +2117,7 @@ def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(
     rows = list(workbook.active.iter_rows(values_only=True))
     living_wall_paint = _row_containing(rows, "\u5899\u9762\u4e73\u80f6\u6f06")
     assert living_wall_paint[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
-    assert "window_height_defaulted" in living_wall_paint[14]
-    assert "default height 1.5" in living_wall_paint[14]
+    assert living_wall_paint[14] == "\u7a97\u9ad8\u7f3a\u59313\u4e2a\uff0c\u5df2\u6309\u9ed8\u8ba4\u7a97\u9ad81.5m\u8ba1\u7b97"
 
 
 def test_export_residential_quote_marks_needs_review_rows_as_auto_generated_with_issue_note(tmp_path: Path):
