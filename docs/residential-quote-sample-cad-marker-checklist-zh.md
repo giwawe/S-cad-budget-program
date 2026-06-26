@@ -19,14 +19,14 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 - 自动算量：47 行
 - 自动汇总：28 行
-- 模板默认：17 行
+- 模板默认：11 行
 
 其中 12 行已经有自动化规则，但当前 `scratch/cad-import-test/result-building-area.json` 缺少对应来源：
 
 - `building_area=None`
 - `exterior_rows=0`
 - `construction_details=0`
-- 无全屋定制、橱柜、管道、外墙修补等新增标识
+- 无全屋定制、橱柜等新增标识；拆墙、管道、外墙修补、阳台推拉门缺标识时已按 0 自动汇总并提示复核
 - 无匹配阳台/露台宽门洞
 
 ## 优先补齐顺序
@@ -34,11 +34,11 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 | 优先级 | 补齐内容 | 影响报价项 | 推荐原因 |
 | --- | --- | --- | --- |
 | 1 | `QUOTE_EXT_WALL` 或 `QUOTE_BUILDING_AREA` | 外墙批嵌、打混凝土过梁孔 | 既影响外墙面积，也影响建筑面积百分比项目 |
-| 2 | `QUOTE_DEMO_WALL` / `QUOTE_NEW_WALL` | 拆改及拆墙、砌120厚砖墙、砌240厚砖墙 | 拆改和新砌墙不能从房间面积推断，必须显式标识 |
-| 3 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 点位少、补图成本低，收益明确 |
+| 2 | `QUOTE_NEW_WALL` | 砌120厚砖墙、砌240厚砖墙 | 新砌墙不能从房间面积推断；缺少 `THICKNESS` 时按 240mm |
+| 3 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 缺标识时按 0 并提示手工输入；点位少、补图成本低 |
 | 4 | `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` | 全屋定制、橱柜 | 对主材金额影响较大，需要设计方案同步；旧图可继续用 `QUOTE_CABINET + TYPE` |
-| 5 | `QUOTE_EXT_REPAIR` | 外墙批嵌以及修补 | 必须由设计师确认修补范围 |
-| 6 | 阳台/露台门洞信息 | 阳台推拉门、阳台推拉门双包套 | 依赖阳台/露台空间和宽门洞匹配 |
+| 5 | `QUOTE_EXT_REPAIR` | 外墙批嵌以及修补 | 缺标识时按 0 并提示手工输入；必须由设计师确认修补范围 |
+| 6 | 阳台/露台门洞信息 | 阳台推拉门、阳台推拉门双包套 | 没有匹配阳台/露台宽门洞时按 0 |
 
 ## 逐项补图要求
 
@@ -92,7 +92,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 - 拆除墙体画 `QUOTE_DEMO_WALL`。
 - 新砌墙画 `QUOTE_NEW_WALL`。
-- 新砌墙必须写 `THICKNESS`，支持 `120`、`120mm`、`0.12`、`240`、`240mm`、`0.24`。
+- 新砌墙建议写 `THICKNESS`，支持 `120`、`120mm`、`0.12`、`240`、`240mm`、`0.24`；缺少 `THICKNESS` 时默认按 240mm。
 - 可写 `HEIGHT`；缺少高度时按楼层/项目默认高度推断。
 
 复核点：

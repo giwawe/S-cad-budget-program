@@ -669,12 +669,14 @@ def _aggregate_quantity_for_item(
             construction_details or [],
             ConstructionKind.EXTERIOR_REPAIR,
             "\u5916\u5899\u4fee\u8865\u8303\u56f4\u9762\u79ef\u6c47\u603b",
+            zero_note="\u672a\u8bc6\u522bQUOTE_EXT_REPAIR\u5916\u5899\u4fee\u8865\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u4fee\u8865\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165",
         )
     if item_name in rules.demo_wall_area_items:
         return _construction_area_aggregate(
             construction_details or [],
             ConstructionKind.DEMO_WALL,
             "\u62c6\u6539\u5899\u9762\u79ef\u6c47\u603b",
+            zero_note="\u672a\u8bc6\u522bQUOTE_DEMO_WALL\u62c6\u5899\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff0c\u8868\u793a\u6ca1\u6709\u8981\u62c6\u7684\u5899",
         )
     if item_name in rules.new_wall_area_items_by_thickness:
         return _new_wall_area_aggregate(
@@ -699,6 +701,7 @@ def _aggregate_quantity_for_item(
             ConstructionKind.PIPE_INSULATION,
             "\u6392\u6c61\u7ba1\u9694\u97f3\u68c9\u7acb\u7ba1\u957f\u5ea6\u6c47\u603b",
             "\u7ba1\u9053\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838",
+            zero_note="\u672a\u8bc6\u522bQUOTE_PIPE_INSULATION\u6392\u6c61\u7ba1\u9694\u97f3\u68c9\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u8ba1\u7b97\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165",
         )
     if item_name in rules.pipe_wrap_length_items:
         return _construction_length_aggregate(
@@ -706,6 +709,7 @@ def _aggregate_quantity_for_item(
             ConstructionKind.PIPE_WRAP,
             "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053\u7acb\u7ba1\u957f\u5ea6\u6c47\u603b",
             "\u7ba1\u9053\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838",
+            zero_note="\u672a\u8bc6\u522bQUOTE_PIPE_WRAP\u5305\u7ba1\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u8ba1\u7b97\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165",
         )
     if item_name in rules.building_area_percent_count_items:
         return _building_area_percent_count_aggregate(building_area, rules.building_area_percent_count_items[item_name])
@@ -778,6 +782,11 @@ def _aggregate_quantity_for_item(
     if item_name in rules.sliding_door_area_items:
         door_area, door_rooms = _sliding_door_area(rooms, rules, item_name)
         if door_area <= 0:
+            if _is_optional_zero_sliding_item(item_name, rules.sliding_door_room_keywords_by_item):
+                return _zero_aggregate(
+                    "\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u9762\u79ef\u6c47\u603b",
+                    "\u672a\u8bc6\u522b\u9633\u53f0/\u9732\u53f0\u63a8\u62c9\u95e8\u5bbd\u95e8\u6d1e\uff0c\u9ed8\u8ba40\uff1b\u5982\u6709\u9633\u53f0\u63a8\u62c9\u95e8\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165",
+                )
             return None
         return QuoteAggregateQuantity(
             quantity=door_area,
@@ -789,6 +798,11 @@ def _aggregate_quantity_for_item(
     if item_name in rules.sliding_door_trim_length_items:
         trim_length, door_rooms = _sliding_door_trim_length(rooms, rules, item_name)
         if trim_length <= 0:
+            if _is_optional_zero_sliding_item(item_name, rules.sliding_door_trim_room_keywords_by_item):
+                return _zero_aggregate(
+                    "\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u5957\u7ebf\u957f\u5ea6\u6c47\u603b",
+                    "\u672a\u8bc6\u522b\u9633\u53f0/\u9732\u53f0\u63a8\u62c9\u95e8\u5bbd\u95e8\u6d1e\uff0c\u9ed8\u8ba40\uff1b\u5982\u6709\u9633\u53f0\u63a8\u62c9\u95e8\u53cc\u5305\u5957\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165",
+                )
             return None
         return QuoteAggregateQuantity(
             quantity=trim_length,
@@ -913,10 +927,13 @@ def _construction_area_aggregate(
     construction_details: list[ConstructionQuantityDetail],
     kind: ConstructionKind,
     basis: str,
+    zero_note: str | None = None,
 ) -> QuoteAggregateQuantity | None:
     details = [detail for detail in construction_details if detail.kind is kind]
     quantity = _round_quantity(sum(detail.area for detail in details))
     if not details or quantity <= 0:
+        if zero_note is not None:
+            return _zero_aggregate(basis, zero_note)
         return None
     return QuoteAggregateQuantity(
         quantity=quantity,
@@ -931,22 +948,28 @@ def _new_wall_area_aggregate(
     construction_details: list[ConstructionQuantityDetail],
     thickness: float,
 ) -> QuoteAggregateQuantity | None:
+    new_wall_details = [detail for detail in construction_details if detail.kind is ConstructionKind.NEW_WALL]
+    if not new_wall_details:
+        return None
     details = [
         detail
-        for detail in construction_details
-        if detail.kind is ConstructionKind.NEW_WALL
-        and detail.thickness is not None
-        and abs(detail.thickness - thickness) <= 1e-6
+        for detail in new_wall_details
+        if (detail.thickness is not None and abs(detail.thickness - thickness) <= 1e-6)
+        or (detail.thickness is None and abs(thickness - 0.24) <= 1e-6)
     ]
     quantity = _round_quantity(sum(detail.area for detail in details))
     if not details or quantity <= 0:
-        return None
+        return _zero_aggregate(f"\u65b0\u780c{thickness * 1000:g}mm\u7816\u5899\u9762\u79ef\u6c47\u603b")
+    note = _construction_review_note(details)
+    if abs(thickness - 0.24) <= 1e-6 and any(detail.thickness is None for detail in details):
+        default_note = "\u672a\u586b\u5199\u539a\u5ea6\u7684\u65b0\u780c\u5899\u6309240mm\u8ba1\u7b97"
+        note = f"{note}\uff1b{default_note}" if note else default_note
     return QuoteAggregateQuantity(
         quantity=quantity,
         basis=f"\u65b0\u780c{thickness * 1000:g}mm\u7816\u5899\u9762\u79ef\u6c47\u603b",
         rooms=[],
         review_status=_construction_review_status(details),
-        review_note=_construction_review_note(details),
+        review_note=note,
     )
 
 
@@ -972,10 +995,13 @@ def _construction_length_aggregate(
     kind: ConstructionKind,
     basis: str,
     default_height_note: str,
+    zero_note: str | None = None,
 ) -> QuoteAggregateQuantity | None:
     details = [detail for detail in construction_details if detail.kind is kind]
     quantity = _round_quantity(sum(detail.length for detail in details))
     if not details or quantity <= 0:
+        if zero_note is not None:
+            return _zero_aggregate(basis, zero_note)
         return None
     return QuoteAggregateQuantity(
         quantity=quantity,
@@ -998,6 +1024,16 @@ def _building_area_percent_count_aggregate(building_area: float | None, percent:
         rooms=[],
         review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
         review_note="\u5efa\u7b51\u9762\u79ef\u6765\u81ea\u95ed\u5408\u5916\u5899\u8f6e\u5ed3\u6216\u5efa\u7b51\u9762\u79ef\u8f6e\u5ed3\uff0c\u9700\u8bbe\u8ba1\u5e08\u590d\u6838",
+    )
+
+
+def _zero_aggregate(basis: str, note: str | None = None) -> QuoteAggregateQuantity:
+    return QuoteAggregateQuantity(
+        quantity=0,
+        basis=basis,
+        rooms=[],
+        review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad" if note else "\u81ea\u52a8\u751f\u6210",
+        review_note=note,
     )
 
 
@@ -1403,6 +1439,11 @@ def _sliding_door_keywords_for_item(
     rules: ResidentialQuoteRules,
 ) -> set[str]:
     return keywords_by_item.get(item_name) or rules.sliding_door_room_keywords
+
+
+def _is_optional_zero_sliding_item(item_name: str, keywords_by_item: dict[str, set[str]]) -> bool:
+    keywords = keywords_by_item.get(item_name, set())
+    return any(keyword in {"\u9633\u53f0", "\u9732\u53f0"} for keyword in keywords)
 
 
 def _door_quote_area(door, rules: ResidentialQuoteRules) -> float:

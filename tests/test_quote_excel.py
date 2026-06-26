@@ -1501,8 +1501,9 @@ def test_export_residential_quote_auto_fills_exterior_plaster_from_included_net_
     assert exterior_plaster[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
     assert "\u6263\u9664\u5916\u5899\u6d1e\u53e3" in exterior_plaster[14]
     assert "\u786e\u8ba4\u5916\u5899\u6279\u5d4c\u65bd\u5de5\u9762" in exterior_plaster[14]
-    assert exterior_repair[3] == 88
-    assert exterior_repair[9] == "\u6a21\u677f\u9ed8\u8ba4"
+    assert exterior_repair[3] == 0
+    assert exterior_repair[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert "\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165" in exterior_repair[14]
 
 
 def test_export_residential_quote_auto_fills_exterior_repair_from_marked_area(tmp_path: Path):
@@ -1544,7 +1545,7 @@ def test_export_residential_quote_auto_fills_exterior_repair_from_marked_area(tm
     assert exterior_repair[13] == "\u81ea\u52a8\u751f\u6210"
 
 
-def test_export_residential_quote_keeps_exterior_and_balcony_defaults_without_matching_details(tmp_path: Path):
+def test_export_residential_quote_uses_zero_for_optional_missing_exterior_repair_and_balcony_doors(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
     _create_quote_template(
@@ -1582,8 +1583,16 @@ def test_export_residential_quote_keeps_exterior_and_balcony_defaults_without_ma
     workbook = load_workbook(output_path, data_only=False)
     rows = list(workbook.active.iter_rows(values_only=True))
     assert _item_row_named(rows, "\u5916\u5899\u6279\u5d4c")[3] == 77
-    assert _item_row_named(rows, "\u9633\u53f0\u63a8\u62c9\u95e8")[3] == 66
-    assert _item_row_named(rows, "\u9633\u53f0\u63a8\u62c9\u95e8\u53cc\u5305\u5957")[3] == 55
+    exterior_repair = _item_row_named(rows, "\u5916\u5899\u6279\u5d4c\u4ee5\u53ca\u4fee\u8865")
+    balcony_door = _item_row_named(rows, "\u9633\u53f0\u63a8\u62c9\u95e8")
+    balcony_trim = _item_row_named(rows, "\u9633\u53f0\u63a8\u62c9\u95e8\u53cc\u5305\u5957")
+    assert exterior_repair[3] == 0
+    assert exterior_repair[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert "\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165" in exterior_repair[14]
+    assert balcony_door[3] == 0
+    assert balcony_door[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert balcony_trim[3] == 0
+    assert balcony_trim[9] == "\u81ea\u52a8\u6c47\u603b"
 
 
 def test_export_residential_quote_auto_fills_construction_marker_items(tmp_path: Path):
@@ -1719,7 +1728,7 @@ def test_export_residential_quote_keeps_percent_count_default_without_building_a
     assert hole[13] == "\u6309\u6a21\u677f\u751f\u6210"
 
 
-def test_export_residential_quote_keeps_construction_items_template_default_without_markers(tmp_path: Path):
+def test_export_residential_quote_uses_zero_for_missing_demo_wall_markers(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
     _create_quote_template(template_path, include_construction_items=True)
@@ -1730,14 +1739,15 @@ def test_export_residential_quote_keeps_construction_items_template_default_with
     rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
     demo = _item_row_named(rows, "\u62c6\u6539\u53ca\u62c6\u5899")
     hole = _item_row_named(rows, "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54")
-    assert demo[3] == 93
-    assert demo[9] == "\u6a21\u677f\u9ed8\u8ba4"
-    assert demo[13] == "\u6309\u6a21\u677f\u751f\u6210"
+    assert demo[3] == 0
+    assert demo[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert demo[12] == "\u62c6\u6539\u5899\u9762\u79ef\u6c47\u603b"
+    assert "\u6ca1\u6709\u8981\u62c6\u7684\u5899" in demo[14]
     assert hole[3] == 108
     assert hole[9] == "\u6a21\u677f\u9ed8\u8ba4"
 
 
-def test_export_residential_quote_requires_exact_new_wall_thickness_match(tmp_path: Path):
+def test_export_residential_quote_defaults_missing_new_wall_thickness_to_240(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
     _create_quote_template(template_path, include_construction_items=True)
@@ -1769,10 +1779,30 @@ def test_export_residential_quote_requires_exact_new_wall_thickness_match(tmp_pa
     rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
     wall_120 = _item_row_named(rows, "\u780c120\u539a\u7816\u5899")
     wall_240 = _item_row_named(rows, "\u780c240\u539a\u7816\u5899")
-    assert wall_120[3] == 44.8
-    assert wall_120[9] == "\u6a21\u677f\u9ed8\u8ba4"
-    assert wall_240[3] == 64.56
-    assert wall_240[9] == "\u6a21\u677f\u9ed8\u8ba4"
+    assert wall_120[3] == 0
+    assert wall_120[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert wall_240[3] == 6.0
+    assert wall_240[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert "\u672a\u586b\u5199\u539a\u5ea6\u7684\u65b0\u780c\u5899\u6309240mm\u8ba1\u7b97" in wall_240[14]
+
+
+def test_export_residential_quote_uses_zero_for_missing_pipe_markers(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_pipe_items=True)
+    result = QuantityResult(project_name="No Pipes", rows=[], construction_details=[], exceptions=[])
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    insulation = _item_row_named(rows, "\u53a8\u623f\u3001\u536b\u751f\u95f4\u6392\u6c61\u7ba1\u5305\u9694\u97f3\u68c9")
+    pipe_wrap = _item_row_named(rows, "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053(\u5355\u7ba1)")
+    assert insulation[3] == 0
+    assert insulation[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert "\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165" in insulation[14]
+    assert pipe_wrap[3] == 0
+    assert pipe_wrap[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert "\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165" in pipe_wrap[14]
 
 
 def test_export_residential_quote_keeps_kitchen_and_balcony_sliding_doors_separate(tmp_path: Path):

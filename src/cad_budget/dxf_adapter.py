@@ -3,7 +3,7 @@ from math import ceil, cos, hypot, pi, sin
 
 import ezdxf
 from ezdxf.math import Vec2, bulge_to_arc
-from shapely.geometry import LineString
+from shapely.geometry import LineString, MultiPoint
 from shapely.geometry import Point as ShapelyPoint
 from shapely.geometry import Polygon
 
@@ -158,6 +158,21 @@ def _outline_width(polygon: Polygon) -> float:
     )
 
 
+def _outline_width_from_points(points: list[Point]) -> float:
+    hull = MultiPoint([(point.x, point.y) for point in points]).convex_hull
+    rectangle = hull.minimum_rotated_rectangle
+    if not hasattr(rectangle, "exterior"):
+        return 0.0
+    rectangle_points = list(rectangle.exterior.coords)
+    return round(
+        max(
+            hypot(following[0] - current[0], following[1] - current[1])
+            for current, following in zip(rectangle_points, rectangle_points[1:])
+        ),
+        10,
+    )
+
+
 def _outline_polygon(points: list[Point]) -> Polygon | None:
     polygon = Polygon((point.x, point.y) for point in points)
     if polygon.is_empty or polygon.area <= 0:
@@ -174,9 +189,8 @@ def _fixture_marker_from_points(
 ) -> FixtureMarker | None:
     if len(points) < 2:
         return None
-    if len(points) >= 4 and points[0] == points[-1]:
-        polygon = _outline_polygon(points)
-        length = _outline_width(polygon) if polygon is not None else 0.0
+    if len(points) >= 4 and _points_within_tolerance(points[0], points[-1], 0.01):
+        length = _outline_width_from_points(points)
     else:
         length = _polyline_length(points)
     if length <= 0:

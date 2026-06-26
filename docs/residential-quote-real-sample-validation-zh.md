@@ -4,8 +4,8 @@
 
 ## 样例来源
 
-- 真实样例报价：`scratch/cad-import-test/quote-current-audit.xlsx`
-- 真实样例算量：`scratch/cad-import-test/result-current-audit.json`
+- 真实样例报价：`scratch/cad-import-test/quote-rule-updates.xlsx`
+- 真实样例算量：`scratch/cad-import-test/result-rule-updates.json`
 - 对照样例生成命令：
 
 ```powershell
@@ -16,7 +16,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 | 样例 | 自动算量 | 自动汇总 | 模板默认 |
 | --- | ---: | ---: | ---: |
-| 真实样例 | 47 | 28 | 17 |
+| 真实样例 | 47 | 34 | 11 |
 | marker-rich 对照样例 | 0 | 17 | 1 |
 
 真实样例当前关键缺口：
@@ -38,25 +38,19 @@ marker-rich 对照样例证明以下数据源接通后可稳定生成：
 - `QUOTE_WALL_TILE` 非湿区局部墙砖面积进入墙面瓷砖片数和美缝面积
 - 阳台推拉门与双包套行可自动汇总
 
-## 真实样例仍为模板默认的 17 项
+## 真实样例仍为模板默认的 11 项
 
 ### 补 CAD 标识后可自动汇总
 
 | 报价项 | 当前模板数量 | 需要补齐的数据源 | 补齐后口径 |
 | --- | ---: | --- | --- |
-| 拆改及拆墙 | 93 | `QUOTE_DEMO_WALL`，建议写 `HEIGHT` | 拆改墙线长度乘高度汇总 |
 | 砌120厚砖墙 | 44.8 | `QUOTE_NEW_WALL`，`THICKNESS=120`，建议写 `HEIGHT` | 新砌 120mm 墙面积汇总 |
 | 砌240厚砖墙 | 64.56 | `QUOTE_NEW_WALL`，`THICKNESS=240`，建议写 `HEIGHT` | 新砌 240mm 墙面积汇总 |
 | 外墙批嵌 | 235 | `QUOTE_EXT_WALL`、`QUOTE_EXT_OPENING`，相邻户外墙用 `QUOTE_INCLUDE=false` 排除 | 选定外墙净面积汇总，扣除外墙洞口 |
-| 外墙批嵌以及修补 | 25.3 | `QUOTE_EXT_REPAIR` | 明确修补范围面积汇总 |
 | 打混凝土过梁孔 | 108 | 闭合 `QUOTE_EXT_WALL` 或闭合 `QUOTE_BUILDING_AREA` | 建筑面积的 10% 取整 |
-| 厨房、卫生间排污管包隔音棉 | 50 | `QUOTE_PIPE_INSULATION`，建议写 `HEIGHT` | 排污管隔音棉立管长度汇总 |
-| 包上/下水管道(单管) | 36 | `QUOTE_PIPE_WRAP`，建议写 `HEIGHT` | 包管立管长度汇总 |
 | 全屋定制 | 66 | `QUOTE_CUSTOM` | 投影面积汇总，缺高默认 2.6m；低于 1m 的柜体提示按长度复核 |
 | 橱柜 / 地柜 / 吊柜 | 22 / 18 / 16 | `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET`，旧图可用 `QUOTE_CABINET + TYPE` | 橱柜可按总长度汇总，也可按地柜、吊柜分项汇总；重叠画线不去重 |
 | 非湿区局部墙砖 | 模板瓷砖/美缝项 | `QUOTE_WALL_TILE`，建议写 `HEIGHT` | 局部墙砖面积并入 `墙面瓷砖` 片数和 `美缝` 面积；湿区不重复叠加 |
-| 阳台推拉门 | 4.6 | 阳台/露台空间内宽度大于等于 1.4m 的 `QUOTE_DOOR` | 宽门洞面积汇总，缺高默认 2.1m |
-| 阳台推拉门双包套 | 6 | 与阳台推拉门同源的宽门洞 | 门洞宽度加两侧有效门高汇总 |
 
 ### 继续保留人工/模板默认
 
@@ -78,5 +72,5 @@ marker-rich 对照样例证明以下数据源接通后可稳定生成：
    - `construction_details` 包含拆改、新砌墙、管道、外墙修补明细。
    - 房间行包含 `custom_details`、`cabinet_details` 和阳台/露台宽门洞明细。
 4. 重新生成报价 Excel。
-5. 期望 `模板默认` 至少减少 17 行；如果补齐所有上述标识，剩余模板默认应主要是人工项。
+5. 期望 `模板默认` 至少减少到 11 行；如果补齐所有上述标识，剩余模板默认应主要是人工项。
 6. 抽查每个自动汇总行的 `数量来源`、`计量口径`、`复核状态` 和 `复核备注`。

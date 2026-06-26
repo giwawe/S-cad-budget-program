@@ -432,6 +432,41 @@ def test_imports_closed_custom_outline_using_longest_rectangle_edge(tmp_path: Pa
     assert result.project.custom_items[0].length == 2.0
 
 
+def test_imports_closed_cabinet_outline_using_projection_length_not_perimeter(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    for layer in ["QUOTE_ROOM", "QUOTE_TEXT", "QUOTE_BASE_CABINET"]:
+        doc.layers.add(layer)
+    modelspace.add_lwpolyline(
+        [(0, 0), (5000, 0), (5000, 4000), (0, 4000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_text("Kitchen", dxfattribs={"layer": "QUOTE_TEXT", "height": 250}).set_placement((1500, 1200))
+    modelspace.add_lwpolyline(
+        [
+            (51130.446397, -2997.506228),
+            (51130.446397, -3597.506229),
+            (52206.446397, -3597.506229),
+            (52206.446397, -5354.506229),
+            (51130.446397, -5354.583743),
+            (51130.446397, -5954.506229),
+            (52806.446397, -5954.506229),
+            (52806.446397, -2997.506229),
+            (51130.446397, -2997.506229),
+        ],
+        dxfattribs={"layer": "QUOTE_BASE_CABINET"},
+    )
+    dxf_path = _save_doc(tmp_path / "cabinet-outline.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path, confirmed_unit=CadUnit.MILLIMETER))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.cabinet_items) == 1
+    assert result.project.cabinet_items[0].length == pytest.approx(2.957, abs=0.001)
+
+
 def test_import_dxf_reads_insert_door_width_from_block_scale(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4
