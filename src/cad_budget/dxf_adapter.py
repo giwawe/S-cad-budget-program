@@ -418,13 +418,7 @@ def _text_value(entity) -> str:
 
 
 def _parse_float_text(value: str) -> float | None:
-    cleaned = value.strip()
-    if cleaned.lower().endswith("m"):
-        cleaned = cleaned[:-1].strip()
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
+    return _parse_window_dimension(value)
 
 
 def _polygon_from_room(room: RoomBoundary) -> Polygon:

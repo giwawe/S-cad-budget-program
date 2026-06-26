@@ -35,7 +35,7 @@
 | `QUOTE_WALL` | 推荐 | `LINE`、`LWPOLYLINE` | 画实际墙体或可施工墙面线 | 墙面计量周长 |
 | `QUOTE_OPENING` | 推荐 | `LWPOLYLINE` | 标出开放边界、非墙边界 | 从墙面计量周长中扣除 |
 | `QUOTE_FLOOR` | 多层项目推荐 | `TEXT` / `MTEXT` | 楼层文字放在空间边界内 | 楼层归属、楼层默认层高 |
-| `QUOTE_HEIGHT` | 可选 | `TEXT` / `MTEXT` | 文本写米值，如 `2.8`、`3.2m` | 单空间层高覆盖 |
+| `QUOTE_HEIGHT` | 可选 | `TEXT` / `MTEXT` | 文本写层高，如 `2.8`、`3.2m`、`2800mm` | 单空间层高覆盖 |
 | `QUOTE_VOID` | 特殊项目可选 | `LWPOLYLINE` | 标出挑空区域或楼板洞口 | 挑空高度和洞口复核 |
 | `QUOTE_EXT_WALL` | 外墙可选 | `LWPOLYLINE` | 画外墙计量线 | 外墙表计量长度 |
 | `QUOTE_EXT_OPENING` | 外墙可选 | `LWPOLYLINE` | 画外墙洞口线 | 外墙表洞口扣减 |
@@ -192,8 +192,8 @@
 ### 层高标记 `QUOTE_HEIGHT`
 
 - 使用 `TEXT` 或 `MTEXT`。
-- 文本必须是米值，例如 `2.8`、`3.2`、`3.6m`。
-- 不要写 `2800` 表示层高；当前层高文本按米值解析。
+- 文本支持米值和毫米值，例如 `2.8`、`3.2`、`3.6m`、`2800mm`。
+- 裸数字大于 20 时会按毫米转米处理，例如 `2800` 会解析为 `2.8m`；为了减少歧义，推荐写 `2.8m` 或 `2800mm`。
 - 非数字文本会被忽略，并产生 `HEIGHT_TEXT_INVALID`。
 
 ### 层高优先级
@@ -305,7 +305,7 @@
 - 需要自动报价排污管隔音棉或包管时，已使用 `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` 标识立管点位，并尽量填写 `HEIGHT`。
 - 需要自动报价阳台、露台等非湿区局部墙砖时，已使用 `QUOTE_WALL_TILE` 标识贴砖范围，并尽量填写 `HEIGHT`。
 - 多层项目每个空间楼层标记唯一，且楼层默认层高配置完整。
-- `QUOTE_HEIGHT` 使用米值文本。
+- `QUOTE_HEIGHT` 使用明确层高文本，推荐 `2.8m` 或 `2800mm`。
 - 挑空、阳台、露台、楼梯、电梯井等特殊空间已经准备好人工复核口径。
 - 外墙线和外墙洞口使用 `QUOTE_EXT_WALL` / `QUOTE_EXT_OPENING`，不要混入室内墙线；需要自动建筑面积时，优先把外墙画成闭合 `QUOTE_EXT_WALL` 轮廓，或另画闭合 `QUOTE_BUILDING_AREA`。
 - 需要自动报价外墙批嵌以及修补时，已使用 `QUOTE_EXT_REPAIR` 标识明确修补范围；开放修补线尽量填写 `HEIGHT`。
@@ -323,7 +323,7 @@
 | 窗洞轮廓未闭合 | 不生成该窗，产生 `WINDOW_OUTLINE_NOT_CLOSED` |
 | 窗洞轮廓无有效面积 | 不生成该窗，产生 `WINDOW_OUTLINE_INVALID` |
 | 门洞闭合轮廓无有效面积 | 不生成该门，产生 `DOOR_OUTLINE_INVALID` |
-| `QUOTE_HEIGHT` 不是数字米值 | 忽略该高度，产生 `HEIGHT_TEXT_INVALID` |
+| `QUOTE_HEIGHT` 不是可解析层高文本 | 忽略该高度，产生 `HEIGHT_TEXT_INVALID` |
 | 一个房间内有多个 `QUOTE_FLOOR` | 不分配该房间楼层，产生 `ROOM_FLOOR_AMBIGUOUS` |
 | 窗高缺失 | 使用默认窗高，产生 `window_height_defaulted` |
 | 窗面积大于墙面毛面积 | 净墙面面积置 0，产生 `window_area_exceeds_wall_area` |
