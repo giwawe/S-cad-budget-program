@@ -60,11 +60,15 @@ def test_marker_rich_dxf_turns_quote_defaults_into_automatic_aggregates(tmp_path
         assert row[9] == "自动汇总"
     assert not _has_item_row(rows, "橱柜")
 
-    assert _row_containing(rows, "砖墙门窗洞过梁")[3] == 15
-    assert _row_containing(rows, "砖墙门窗洞过梁")[9] == "模板默认"
+    lintel = _row_containing(rows, "砖墙门窗洞过梁")
+    assert lintel[3] == 0
+    assert lintel[9] == "自动汇总"
+    assert lintel[12] == "砖墙门窗洞过梁标识数量汇总"
+    assert lintel[13] == "自动生成-默认推断"
+    assert "QUOTE_LINTEL" in lintel[14]
     assert _row_containing(rows, "美缝")[12] == "地砖面积+2.5m以下墙面贴砖面积+QUOTE_WALL_TILE显式墙砖面积"
-    assert _summary_value(rows, "自动汇总") == 16
-    assert _summary_value(rows, "模板默认") == 1
+    assert _summary_value(rows, "自动汇总") == 17
+    assert _summary_value(rows, "模板默认") == 0
 
 
 def test_marker_rich_quote_sample_script_writes_reusable_outputs(tmp_path: Path):
@@ -105,11 +109,11 @@ def test_marker_rich_quote_sample_script_writes_reusable_outputs(tmp_path: Path)
     assert not _has_item_row(rows, "橱柜")
     assert _row_containing(rows, "墙面瓷砖")[3] == 55
     assert _row_containing(rows, "美缝")[3] == 55.4
-    assert _summary_value(rows, "自动汇总") == 16
-    assert _summary_value(rows, "模板默认") == 1
+    assert _summary_value(rows, "自动汇总") == 17
+    assert _summary_value(rows, "模板默认") == 0
     readme = (output_dir / "README.md").read_text(encoding="utf-8")
     assert "QUOTE_EXT_WALL" in readme
-    assert "自动汇总: 16" in readme
+    assert "自动汇总: 17" in readme
 
 
 def _build_marker_rich_dxf(path: Path) -> None:

@@ -82,6 +82,7 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert rules.new_wall_area_items_by_thickness["\u780c240\u539a\u7816\u5899"] == 0.24
     assert "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881" in rules.lintel_count_items
     assert "\u80cc\u666f\u5899" in rules.background_wall_area_items
+    assert "\u5165\u6237\u95e8" in rules.entry_door_count_items
     assert "\u73bb\u7483\u6dcb\u6d74\u623f" in rules.shower_glass_count_items
     assert "\u8e72\u5751" in rules.squat_toilet_count_items
     assert "\u53a8\u623f\u3001\u536b\u751f\u95f4\u6392\u6c61\u7ba1\u5305\u9694\u97f3\u68c9" in rules.pipe_insulation_length_items
@@ -1756,6 +1757,57 @@ def test_export_residential_quote_auto_fills_background_wall_items(tmp_path: Pat
     assert background[14] == "\u80cc\u666f\u5899\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838"
 
 
+def test_export_residential_quote_defaults_missing_lintel_markers_to_zero(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_construction_items=True)
+    result = QuantityResult(project_name="No Lintels", rows=[], construction_details=[], exceptions=[])
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    lintel = _item_row_named(rows, "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881")
+    assert lintel[3] == 0
+    assert lintel[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert lintel[12] == "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881\u6807\u8bc6\u6570\u91cf\u6c47\u603b"
+    assert lintel[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert lintel[14] == "\u672a\u8bc6\u522bQUOTE_LINTEL\u8fc7\u6881\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u8fc7\u6881\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199"
+
+
+def test_export_residential_quote_defaults_missing_background_wall_markers_to_zero(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_background_wall_items=True)
+    result = QuantityResult(project_name="No Background Wall", rows=[], construction_details=[], exceptions=[])
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    background = _item_row_named(rows, "\u80cc\u666f\u5899")
+    assert background[3] == 0
+    assert background[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert background[12] == "\u80cc\u666f\u5899\u9762\u79ef\u6c47\u603b"
+    assert background[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert background[14] == "\u672a\u8bc6\u522bQUOTE_BACKGROUND_WALL\u80cc\u666f\u5899\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u80cc\u666f\u5899\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199"
+
+
+def test_export_residential_quote_defaults_entry_door_to_zero(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_entry_door_items=True)
+    result = QuantityResult(project_name="No Entry Door", rows=[], construction_details=[], exceptions=[])
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    entry_door = _item_row_named(rows, "\u5165\u6237\u95e8")
+    assert entry_door[3] == 0
+    assert entry_door[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert entry_door[12] == "\u5165\u6237\u95e8\u9ed8\u8ba40"
+    assert entry_door[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert entry_door[14] == "\u5165\u6237\u95e8\u7ecf\u5e38\u4e0d\u5728\u62a5\u4ef7\u8303\u56f4\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u66f4\u6362\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199"
+
+
 def test_export_residential_quote_counts_shower_glass_markers(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
@@ -2162,6 +2214,7 @@ def _create_quote_template(
     include_background_wall_items: bool = False,
     include_shower_glass_items: bool = False,
     include_squat_toilet_items: bool = False,
+    include_entry_door_items: bool = False,
 ) -> None:
     workbook = Workbook()
     half = workbook.active
@@ -2204,6 +2257,8 @@ def _create_quote_template(
         fitout.append([9, "\u73bb\u7483\u6dcb\u6d74\u623f", "\u4e2a", 6, 0, 0, 10, None, "\u73bb\u7483\u6dcb\u6d74\u623f"])
     if include_squat_toilet_items:
         fitout.append([10, "\u8e72\u5751", "\u4e2a", 1, 0, 0, 10, None, "\u8e72\u5751"])
+    if include_entry_door_items:
+        fitout.append([11, "\u5165\u6237\u95e8", "\u6a18", 1, 0, 0, 10, None, "\u5165\u6237\u95e8"])
     if include_split_cabinet_items:
         fitout.append([6, "\u5730\u67dc", "M", 99, 0, 0, 10, None, "\u5730\u67dc"])
         fitout.append([7, "\u540a\u67dc", "M", 99, 0, 0, 10, None, "\u540a\u67dc"])

@@ -37,6 +37,9 @@
   "background_wall_area_items": [
     "背景墙"
   ],
+  "entry_door_count_items": [
+    "\u5165\u6237\u95e8"
+  ],
   "shower_glass_count_items": [
     "\u73bb\u7483\u6dcb\u6d74\u623f"
   ],

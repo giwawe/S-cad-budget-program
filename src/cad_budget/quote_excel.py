@@ -188,6 +188,7 @@ class ResidentialQuoteRules:
     lintel_count_items: set[str]
     lintel_hole_count_items: set[str]
     background_wall_area_items: set[str]
+    entry_door_count_items: set[str]
     shower_glass_count_items: set[str]
     squat_toilet_count_items: set[str]
     pipe_insulation_length_items: set[str]
@@ -268,6 +269,7 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         lintel_count_items=_optional_item_set(data, "lintel_count_items"),
         lintel_hole_count_items=_optional_item_set(data, "lintel_hole_count_items"),
         background_wall_area_items=_optional_item_set(data, "background_wall_area_items"),
+        entry_door_count_items=_optional_item_set(data, "entry_door_count_items"),
         shower_glass_count_items=_optional_item_set(data, "shower_glass_count_items"),
         squat_toilet_count_items=_optional_item_set(data, "squat_toilet_count_items"),
         pipe_insulation_length_items=_optional_item_set(data, "pipe_insulation_length_items"),
@@ -718,6 +720,7 @@ def _aggregate_quantity_for_item(
             construction_details or [],
             ConstructionKind.LINTEL,
             "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
+            zero_note="\u672a\u8bc6\u522bQUOTE_LINTEL\u8fc7\u6881\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u8fc7\u6881\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199",
         )
     if item_name in rules.lintel_hole_count_items:
         return _construction_count_aggregate(
@@ -727,6 +730,11 @@ def _aggregate_quantity_for_item(
         )
     if item_name in rules.background_wall_area_items:
         return _background_wall_area_aggregate(construction_details or [])
+    if item_name in rules.entry_door_count_items:
+        return _zero_aggregate(
+            "\u5165\u6237\u95e8\u9ed8\u8ba40",
+            "\u5165\u6237\u95e8\u7ecf\u5e38\u4e0d\u5728\u62a5\u4ef7\u8303\u56f4\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u66f4\u6362\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199",
+        )
     if item_name in rules.shower_glass_count_items:
         return _shower_glass_count_aggregate(construction_details or [])
     if item_name in rules.squat_toilet_count_items:
@@ -1013,10 +1021,13 @@ def _construction_count_aggregate(
     construction_details: list[ConstructionQuantityDetail],
     kind: ConstructionKind,
     basis: str,
+    zero_note: str | None = None,
 ) -> QuoteAggregateQuantity | None:
     details = [detail for detail in construction_details if detail.kind is kind]
     quantity = sum(detail.count for detail in details)
     if not details or quantity <= 0:
+        if zero_note is not None:
+            return _zero_aggregate(basis, zero_note)
         return None
     return QuoteAggregateQuantity(
         quantity=quantity,
@@ -1032,7 +1043,10 @@ def _background_wall_area_aggregate(
     details = [detail for detail in construction_details if detail.kind is ConstructionKind.BACKGROUND_WALL]
     quantity = _round_quantity(sum(detail.area for detail in details))
     if not details or quantity <= 0:
-        return None
+        return _zero_aggregate(
+            "\u80cc\u666f\u5899\u9762\u79ef\u6c47\u603b",
+            "\u672a\u8bc6\u522bQUOTE_BACKGROUND_WALL\u80cc\u666f\u5899\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u80cc\u666f\u5899\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199",
+        )
     return QuoteAggregateQuantity(
         quantity=quantity,
         basis="\u80cc\u666f\u5899\u9762\u79ef\u6c47\u603b",

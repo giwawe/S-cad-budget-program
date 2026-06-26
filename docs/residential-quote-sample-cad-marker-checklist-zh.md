@@ -1,8 +1,8 @@
 # 商品房样例 CAD 标识补齐清单
 
-本文面向设计师和预算复核人员，用于把当前真实样例中仍为模板默认、但系统已经具备自动化能力的项目补齐 CAD 数据源。
+本文面向设计师和预算复核人员，用于把当前真实样例中按 0 等待设计师确认、且系统已经具备自动化能力的项目补齐 CAD 数据源。
 
-完整 CAD 出图规范见 `docs/cad-lightweight-drawing-standard-zh.md`。本文只列商品房整装报价样例中最能减少模板默认行的补图动作。
+完整 CAD 出图规范见 `docs/cad-lightweight-drawing-standard-zh.md`。本文只列商品房整装报价样例中最适合按需补齐、从 0 变为实际自动汇总量的补图动作。
 当前真实样例与 marker-rich 对照样例的验收记录见 `docs/residential-quote-real-sample-validation-zh.md`。
 
 可先生成一套最小对照样例：
@@ -15,13 +15,13 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 ## 当前样例缺口
 
-基于 `scratch/cad-import-10-squat-toilet-default/quote.xlsx`：
+基于 `scratch/cad-import-10-zero-optional-defaults/quote.xlsx`：
 
 - 自动算量：47 行
-- 自动汇总：43 行
-- 模板默认：3 行
+- 自动汇总：46 行
+- 模板默认：0 行
 
-当前最新 `scratch/cad-import-10-squat-toilet-default/result.json` 已接通建筑面积、外墙、新砌墙、全屋定制、地柜/吊柜和局部墙砖来源；剩余模板默认主要集中在人工项、未补的过梁标识和未补的背景墙范围标识；玻璃淋浴房和蹲坑未标识时按 0 自动汇总，避免和淋浴隔断、马桶重复报价：
+当前最新 `scratch/cad-import-10-zero-optional-defaults/result.json` 已接通建筑面积、外墙、新砌墙、全屋定制、地柜/吊柜和局部墙砖来源；过梁、背景墙、玻璃淋浴房、蹲坑和入户门未标识/未选择时按 0 自动汇总，避免按模板数量重复或误报价：
 
 - `building_area=136.237652`
 - `exterior_rows=1`
@@ -33,8 +33,8 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 | 优先级 | 补齐内容 | 影响报价项 | 推荐原因 |
 | --- | --- | --- | --- |
-| 1 | `QUOTE_LINTEL` | 砖墙门窗洞过梁 | 只需标新增门窗洞，能把剩余默认项中唯一已有可靠 CAD 口径的项目转为自动汇总 |
-| 2 | `QUOTE_BACKGROUND_WALL` | 背景墙 | 只在有明确背景墙方案时自动汇总，避免从普通墙面面积硬推 |
+| 1 | `QUOTE_LINTEL` | 砖墙门窗洞过梁 | 只需标新增门窗洞；未标识时按 0，由设计师按需填写 |
+| 2 | `QUOTE_BACKGROUND_WALL` | 背景墙 | 只在有明确背景墙方案时自动汇总；未标识时按 0，避免从普通墙面面积硬推 |
 | 3 | `QUOTE_SHOWER_GLASS` | 玻璃淋浴房 | 每个标识按 1 个计；无标识时按 0，避免和淋浴隔断重复报价 |
 | 4 | `QUOTE_SQUAT_TOILET` | 蹲坑 | 每个标识按 1 个计；无标识时按 0，避免和马桶重复报价 |
 | 5 | `QUOTE_EXT_WALL` 或 `QUOTE_BUILDING_AREA` | 外墙批嵌、打混凝土过梁孔 | 既影响外墙面积，也影响建筑面积百分比项目；最新 `10.dxf` 样例已补齐，可作为参考 |
@@ -102,7 +102,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 复核点：
 
 - 只标实际拆除或新增的墙，不要使用普通 `QUOTE_WALL` 代替。
-- 砖墙门窗洞过梁需要用 `QUOTE_LINTEL` 单独标新增门窗洞；每个标识按 1 支过梁计，未标识时保持模板默认。
+- 砖墙门窗洞过梁需要用 `QUOTE_LINTEL` 单独标新增门窗洞；每个标识按 1 支过梁计，未标识时按 0，由设计师手工填写。
 
 ### 管道与包管
 
@@ -202,6 +202,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 - 不从普通墙面净面积自动推断背景墙。
 - 只标实际有背景墙方案的局部墙面；造型、材料和单价仍由预算员按模板复核。
+- 没有 `QUOTE_BACKGROUND_WALL` 时，系统按 0 自动汇总，由设计师按客户方案手工填写。
 
 ### 玻璃淋浴房
 
@@ -237,11 +238,11 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 ## 不建议通过补图自动化的项目
 
-以下项目继续人工/模板默认，除非后续单独确认业务口径：
+以下项目继续由设计师按业务选择手工填写，不通过 CAD 硬推：
 
 | 项目 | 原因 |
 | --- | --- |
-| 入户门 | 是否更换属于套餐/主材选择 |
+| 入户门 | 默认按 0 自动汇总；是否更换属于套餐/主材选择，且经常不在报价范围 |
 
 ## 补图后验证建议
 
@@ -253,5 +254,5 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
    - `construction_details` 是否包含拆改、新砌墙、管道、外墙修补等明细
    - 房间行中是否有 `custom_details`、`cabinet_details`、阳台/露台 `door_details`
 4. 重新生成报价 Excel。
-5. 核对自动化统计区中 `自动汇总` 是否增加、`模板默认` 是否减少。
+5. 核对自动化统计区中按需项目是否按 0 或标识实际量自动汇总，`模板默认` 是否保持为 0。
 6. 抽查对应行的数量来源、计量口径、复核状态和备注。
