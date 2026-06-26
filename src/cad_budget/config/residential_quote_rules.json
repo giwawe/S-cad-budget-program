@@ -34,6 +34,9 @@
     "砖墙门窗洞过梁"
   ],
   "lintel_hole_count_items": [],
+  "background_wall_area_items": [
+    "背景墙"
+  ],
   "pipe_insulation_length_items": [
     "厨房、卫生间排污管包隔音棉"
   ],

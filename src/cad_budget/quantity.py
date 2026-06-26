@@ -977,6 +977,16 @@ def _calculate_construction_details(project: ProjectInput, room_names: dict[str,
                 room_name=room_names.get(room.id) if room is not None else None,
             )
         )
+    for marker in project.background_walls:
+        room = _room_for_construction_marker(project, marker)
+        details.append(
+            _construction_detail_for_linear_marker(
+                project,
+                marker,
+                room_id=room.id if room is not None else None,
+                room_name=room_names.get(room.id) if room is not None else None,
+            )
+        )
     return details
 
 

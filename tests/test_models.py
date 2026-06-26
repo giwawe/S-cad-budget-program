@@ -84,6 +84,24 @@ def test_layer_name_includes_explicit_cabinet_type_layers():
     assert LayerName.QUOTE_WALL_CABINET.value == "QUOTE_WALL_CABINET"
 
 
+def test_project_input_accepts_background_wall_markers():
+    project = ProjectInput(
+        project_name="Background Wall",
+        background_walls=[
+            ConstructionMarker(
+                id="background-1",
+                layer=LayerName.QUOTE_BACKGROUND_WALL,
+                kind=ConstructionKind.BACKGROUND_WALL,
+                points=[Point(x=0, y=0), Point(x=3, y=0)],
+                length=3.0,
+                height=2.4,
+            )
+        ],
+    )
+
+    assert project.background_walls[0].kind is ConstructionKind.BACKGROUND_WALL
+
+
 def test_project_input_accepts_wall_tile_markers():
     project = ProjectInput(
         project_name="Wall Tile",

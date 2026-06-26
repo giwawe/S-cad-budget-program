@@ -21,11 +21,11 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 - 自动汇总：41 行
 - 模板默认：5 行
 
-当前最新 `scratch/cad-import-10-cabinet-footprint/result.json` 已接通建筑面积、外墙、新砌墙、全屋定制、地柜/吊柜和局部墙砖来源；剩余模板默认主要集中在人工项和未补的过梁标识：
+当前最新 `scratch/cad-import-10-cabinet-footprint/result.json` 已接通建筑面积、外墙、新砌墙、全屋定制、地柜/吊柜和局部墙砖来源；剩余模板默认主要集中在人工项、未补的过梁标识和未补的背景墙范围标识：
 
 - `building_area=136.237652`
 - `exterior_rows=1`
-- `construction_details=4`，包含新砌墙和 `QUOTE_WALL_TILE`，暂无 `QUOTE_LINTEL`、拆墙、管道或外墙修补标识
+- `construction_details=4`，包含新砌墙和 `QUOTE_WALL_TILE`，暂无 `QUOTE_LINTEL`、`QUOTE_BACKGROUND_WALL`、拆墙、管道或外墙修补标识
 - 已有全屋定制、地柜/吊柜标识；拆墙、管道、外墙修补、阳台推拉门缺标识时已按 0 自动汇总并提示复核
 - 无匹配阳台/露台宽门洞
 
@@ -34,12 +34,13 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 | 优先级 | 补齐内容 | 影响报价项 | 推荐原因 |
 | --- | --- | --- | --- |
 | 1 | `QUOTE_LINTEL` | 砖墙门窗洞过梁 | 只需标新增门窗洞，能把剩余默认项中唯一已有可靠 CAD 口径的项目转为自动汇总 |
-| 2 | `QUOTE_EXT_WALL` 或 `QUOTE_BUILDING_AREA` | 外墙批嵌、打混凝土过梁孔 | 既影响外墙面积，也影响建筑面积百分比项目；最新 `10.dxf` 样例已补齐，可作为参考 |
-| 3 | `QUOTE_NEW_WALL` | 砌120厚砖墙、砌240厚砖墙 | 新砌墙不能从房间面积推断；缺少 `THICKNESS` 时按 240mm；最新 `10.dxf` 样例已补齐 |
-| 4 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 缺标识时按 0 并提示手工输入；点位少、补图成本低 |
-| 5 | `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` | 全屋定制、地柜、吊柜 | 对主材金额影响较大，需要设计方案同步；旧图可继续用 `QUOTE_CABINET + TYPE`；最新 `10.dxf` 样例已补齐 |
-| 6 | `QUOTE_EXT_REPAIR` | 外墙批嵌以及修补 | 缺标识时按 0 并提示手工输入；必须由设计师确认修补范围 |
-| 7 | 阳台/露台门洞信息 | 阳台推拉门、阳台推拉门双包套 | 没有匹配阳台/露台宽门洞时按 0 |
+| 2 | `QUOTE_BACKGROUND_WALL` | 背景墙 | 只在有明确背景墙方案时自动汇总，避免从普通墙面面积硬推 |
+| 3 | `QUOTE_EXT_WALL` 或 `QUOTE_BUILDING_AREA` | 外墙批嵌、打混凝土过梁孔 | 既影响外墙面积，也影响建筑面积百分比项目；最新 `10.dxf` 样例已补齐，可作为参考 |
+| 4 | `QUOTE_NEW_WALL` | 砌120厚砖墙、砌240厚砖墙 | 新砌墙不能从房间面积推断；缺少 `THICKNESS` 时按 240mm；最新 `10.dxf` 样例已补齐 |
+| 5 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 缺标识时按 0 并提示手工输入；点位少、补图成本低 |
+| 6 | `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` | 全屋定制、地柜、吊柜 | 对主材金额影响较大，需要设计方案同步；旧图可继续用 `QUOTE_CABINET + TYPE`；最新 `10.dxf` 样例已补齐 |
+| 7 | `QUOTE_EXT_REPAIR` | 外墙批嵌以及修补 | 缺标识时按 0 并提示手工输入；必须由设计师确认修补范围 |
+| 8 | 阳台/露台门洞信息 | 阳台推拉门、阳台推拉门双包套 | 没有匹配阳台/露台宽门洞时按 0 |
 
 ## 逐项补图要求
 
@@ -182,13 +183,30 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 - `阳台推拉门双包套` 按门洞宽度加两侧有效门高汇总。
 - 阳台/露台推拉门使用独立空间关键词，不影响厨房推拉门。
 
+### 背景墙
+
+目标报价项：
+
+- `背景墙`
+
+补图方式：
+
+- 使用 `QUOTE_BACKGROUND_WALL` 标识明确需要按背景墙报价的墙面范围。
+- 开放 `LINE` / `LWPOLYLINE`：按线长乘 `HEIGHT` 计算。
+- 建议填写 `HEIGHT`，如 `2400`、`2400mm`、`2.4`、`2.4m`。
+- 缺少 `HEIGHT` 时按匹配空间当前层高或项目默认层高推断，并提示复核。
+
+复核点：
+
+- 不从普通墙面净面积自动推断背景墙。
+- 只标实际有背景墙方案的局部墙面；造型、材料和单价仍由预算员按模板复核。
+
 ## 不建议通过补图自动化的项目
 
 以下项目继续人工/模板默认，除非后续单独确认业务口径：
 
 | 项目 | 原因 |
 | --- | --- |
-| 背景墙 | 需要背景墙范围、造型或装饰类型口径，当前待定 |
 | 入户门 | 是否更换属于套餐/主材选择 |
 | 蹲坑 | 卫生间数量不能判断坐便/蹲坑配置 |
 | 玻璃淋浴房 | 已有 `淋浴隔断` 自动汇总，默认玻璃淋浴房可避免重复报价 |

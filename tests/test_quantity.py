@@ -1436,6 +1436,50 @@ def test_wall_tile_markers_calculate_area_and_default_missing_height():
     assert details["wall-tile-default"].area == 5.6
 
 
+def test_background_wall_markers_calculate_area_and_keep_room_context():
+    project = ProjectInput(
+        project_name="Background Wall Markers",
+        default_height=2.8,
+        rooms=[
+            RoomBoundary(
+                id="living",
+                points=rect(0, 0, 5, 4),
+                name="客厅",
+            )
+        ],
+        background_walls=[
+            ConstructionMarker(
+                id="background-explicit",
+                layer=LayerName.QUOTE_BACKGROUND_WALL,
+                kind=ConstructionKind.BACKGROUND_WALL,
+                points=[Point(x=0.5, y=0.5), Point(x=3.5, y=0.5)],
+                height=1.8,
+            ),
+            ConstructionMarker(
+                id="background-default",
+                layer=LayerName.QUOTE_BACKGROUND_WALL,
+                kind=ConstructionKind.BACKGROUND_WALL,
+                points=[Point(x=0.5, y=1.0), Point(x=2.5, y=1.0)],
+            ),
+        ],
+    )
+
+    result = calculate_quantities(project)
+
+    details = {detail.id: detail for detail in result.construction_details}
+    assert details["background-explicit"].kind is ConstructionKind.BACKGROUND_WALL
+    assert details["background-explicit"].length == 3.0
+    assert details["background-explicit"].effective_height == 1.8
+    assert details["background-explicit"].height_defaulted is False
+    assert details["background-explicit"].area == 5.4
+    assert details["background-explicit"].room_id == "living"
+    assert details["background-explicit"].room_name == "客厅"
+    assert details["background-default"].length == 2.0
+    assert details["background-default"].effective_height == 2.8
+    assert details["background-default"].height_defaulted is True
+    assert details["background-default"].area == 5.6
+
+
 def test_exterior_repair_markers_calculate_closed_area_or_linear_area():
     project = ProjectInput(
         project_name="Exterior Repair",
