@@ -509,16 +509,18 @@ def test_export_residential_quote_auto_fills_custom_and_cabinet_items(tmp_path: 
     workbook = load_workbook(output_path, data_only=False)
     rows = list(workbook.active.iter_rows(values_only=True))
     custom = _item_row_named(rows, "\u5168\u5c4b\u5b9a\u5236")
-    cabinet = _item_row_named(rows, "\u6a71\u67dc")
+    base = _item_row_named(rows, "\u5730\u67dc")
+    wall = _item_row_named(rows, "\u540a\u67dc")
     assert custom[3] == 5.2
     assert custom[12] == "\u5168\u5c4b\u5b9a\u5236\u6295\u5f71\u9762\u79ef\u6c47\u603b"
     assert custom[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
     assert "\u9ed8\u8ba42.6m" in custom[14]
     assert "\u9ad8\u5ea6\u5c0f\u4e8e1m" in custom[14]
-    assert cabinet[3] == 6.0
-    assert cabinet[12] == "\u6a71\u67dc\u957f\u5ea6\u6c47\u603b"
-    assert cabinet[13] == "\u81ea\u52a8\u751f\u6210"
-    assert "\u5730\u67dc/\u540a\u67dc\u9700\u786e\u8ba4" in cabinet[14]
+    assert _item_row_named(rows, "\u6a71\u67dc") is None
+    assert base[3] == 3.0
+    assert base[12] == "\u5730\u67dc\u957f\u5ea6\u6c47\u603b"
+    assert wall[3] == 3.0
+    assert wall[12] == "\u540a\u67dc\u957f\u5ea6\u6c47\u603b"
 
 
 def test_export_residential_quote_auto_fills_split_base_and_wall_cabinet_items(tmp_path: Path):
@@ -573,7 +575,6 @@ def test_export_residential_quote_auto_fills_split_base_and_wall_cabinet_items(t
     rows = list(workbook.active.iter_rows(values_only=True))
     base = _item_row_named(rows, "\u5730\u67dc")
     wall = _item_row_named(rows, "\u540a\u67dc")
-    cabinet = _item_row_named(rows, "\u6a71\u67dc")
     assert base[3] == 3.2
     assert base[12] == "\u5730\u67dc\u957f\u5ea6\u6c47\u603b"
     assert base[13] == "\u81ea\u52a8\u751f\u6210"
@@ -581,8 +582,56 @@ def test_export_residential_quote_auto_fills_split_base_and_wall_cabinet_items(t
     assert wall[3] == 2.1
     assert wall[12] == "\u540a\u67dc\u957f\u5ea6\u6c47\u603b"
     assert wall[13] == "\u81ea\u52a8\u751f\u6210"
-    assert cabinet[3] == 6.3
-    assert cabinet[12] == "\u6a71\u67dc\u957f\u5ea6\u6c47\u603b"
+    assert _item_row_named(rows, "\u6a71\u67dc") is None
+
+
+def test_export_residential_quote_splits_generic_cabinet_item_by_base_and_wall_lengths(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_custom_cabinet_items=True)
+    result = QuantityResult(
+        project_name="Generic Cabinet Split Demo",
+        rows=[
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                cabinet_details=[
+                    FixtureQuantityDetail(
+                        id="base",
+                        room_id="kitchen",
+                        room_name="\u53a8\u623f",
+                        kind=FixtureKind.CABINET,
+                        length=3.2,
+                        pricing_mode=FixturePricingMode.LENGTH,
+                        fixture_type="\u5730\u67dc",
+                    ),
+                    FixtureQuantityDetail(
+                        id="wall",
+                        room_id="kitchen",
+                        room_name="\u53a8\u623f",
+                        kind=FixtureKind.CABINET,
+                        length=2.1,
+                        pricing_mode=FixturePricingMode.LENGTH,
+                        fixture_type="\u540a\u67dc",
+                    ),
+                ],
+            )
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    assert _item_row_named(rows, "\u6a71\u67dc") is None
+    base = _item_row_named(rows, "\u5730\u67dc")
+    wall = _item_row_named(rows, "\u540a\u67dc")
+    assert base[3] == 3.2
+    assert base[12] == "\u5730\u67dc\u957f\u5ea6\u6c47\u603b"
+    assert wall[3] == 2.1
+    assert wall[12] == "\u540a\u67dc\u957f\u5ea6\u6c47\u603b"
 
 
 def test_export_residential_quote_excludes_low_height_projected_custom_details(tmp_path: Path):

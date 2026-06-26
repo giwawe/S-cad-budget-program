@@ -48,7 +48,6 @@ def test_marker_rich_dxf_turns_quote_defaults_into_automatic_aggregates(tmp_path
         "全屋定制": 5.2,
         "地柜": 3.0,
         "吊柜": 2.0,
-        "橱柜": 5.0,
         "地面瓷砖": 17,
         "墙面瓷砖": 55,
         "美缝": 55.4,
@@ -59,11 +58,12 @@ def test_marker_rich_dxf_turns_quote_defaults_into_automatic_aggregates(tmp_path
         row = _row_containing(rows, item_name)
         assert row[3] == expected_quantity
         assert row[9] == "自动汇总"
+    assert not _has_item_row(rows, "橱柜")
 
     assert _row_containing(rows, "砖墙门窗洞过梁")[3] == 15
     assert _row_containing(rows, "砖墙门窗洞过梁")[9] == "模板默认"
     assert _row_containing(rows, "美缝")[12] == "地砖面积+2.5m以下墙面贴砖面积+QUOTE_WALL_TILE显式墙砖面积"
-    assert _summary_value(rows, "自动汇总") == 17
+    assert _summary_value(rows, "自动汇总") == 16
     assert _summary_value(rows, "模板默认") == 1
 
 
@@ -102,14 +102,14 @@ def test_marker_rich_quote_sample_script_writes_reusable_outputs(tmp_path: Path)
     assert _row_containing(rows, "阳台推拉门双包套")[3] == 6.2
     assert _row_containing(rows, "地柜")[3] == 3.0
     assert _row_containing(rows, "吊柜")[3] == 2.0
-    assert _row_containing(rows, "橱柜")[3] == 5.0
+    assert not _has_item_row(rows, "橱柜")
     assert _row_containing(rows, "墙面瓷砖")[3] == 55
     assert _row_containing(rows, "美缝")[3] == 55.4
-    assert _summary_value(rows, "自动汇总") == 17
+    assert _summary_value(rows, "自动汇总") == 16
     assert _summary_value(rows, "模板默认") == 1
     readme = (output_dir / "README.md").read_text(encoding="utf-8")
     assert "QUOTE_EXT_WALL" in readme
-    assert "自动汇总: 17" in readme
+    assert "自动汇总: 16" in readme
 
 
 def _build_marker_rich_dxf(path: Path) -> None:
@@ -242,6 +242,10 @@ def _row_containing(rows, item_name: str):
         if row[1] == item_name:
             return row
     raise AssertionError(f"Missing quote row for {item_name}")
+
+
+def _has_item_row(rows, item_name: str) -> bool:
+    return any(row[1] == item_name for row in rows)
 
 
 def _summary_value(rows, label: str):

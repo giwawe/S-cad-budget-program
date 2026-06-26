@@ -26,7 +26,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 - `building_area=None`
 - `exterior_rows=0`
 - `construction_details=0`
-- 无全屋定制、橱柜等新增标识；拆墙、管道、外墙修补、阳台推拉门缺标识时已按 0 自动汇总并提示复核
+- 无全屋定制、地柜/吊柜等新增标识；拆墙、管道、外墙修补、阳台推拉门缺标识时已按 0 自动汇总并提示复核
 - 无匹配阳台/露台宽门洞
 
 ## 优先补齐顺序
@@ -36,7 +36,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 | 1 | `QUOTE_EXT_WALL` 或 `QUOTE_BUILDING_AREA` | 外墙批嵌、打混凝土过梁孔 | 既影响外墙面积，也影响建筑面积百分比项目 |
 | 2 | `QUOTE_NEW_WALL` | 砌120厚砖墙、砌240厚砖墙 | 新砌墙不能从房间面积推断；缺少 `THICKNESS` 时按 240mm |
 | 3 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 缺标识时按 0 并提示手工输入；点位少、补图成本低 |
-| 4 | `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` | 全屋定制、橱柜 | 对主材金额影响较大，需要设计方案同步；旧图可继续用 `QUOTE_CABINET + TYPE` |
+| 4 | `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` | 全屋定制、地柜、吊柜 | 对主材金额影响较大，需要设计方案同步；旧图可继续用 `QUOTE_CABINET + TYPE` |
 | 5 | `QUOTE_EXT_REPAIR` | 外墙批嵌以及修补 | 缺标识时按 0 并提示手工输入；必须由设计师确认修补范围 |
 | 6 | 阳台/露台门洞信息 | 阳台推拉门、阳台推拉门双包套 | 没有匹配阳台/露台宽门洞时按 0 |
 
@@ -142,11 +142,12 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 - 现阶段全屋定制按投影面积汇总，不细分主卧衣柜、鞋柜、餐边柜等报价项。
 - 后续若要分空间/分柜种报价，需要进一步扩展规则和模板匹配。
 
-### 橱柜
+### 地柜 / 吊柜
 
 目标报价项：
 
-- `橱柜`
+- `地柜`
+- `吊柜`
 
 补图方式：
 
@@ -154,11 +155,12 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 - 旧图可继续使用 `QUOTE_CABINET`，并填写 `TYPE` / `类型`，例如地柜、吊柜。
 - 可填写 `ROOM` / `空间`，例如厨房。
 - 地柜和吊柜在 CAD 平面中可以重叠画线，系统不自动去重。
+- 封闭或近似闭合的柜体轮廓按投影主长度计，不按轮廓周长计。
 
 复核点：
 
-- 报价默认按长度汇总。
-- 复核备注会提示地柜/吊柜需确认。
+- 报价按地柜、吊柜分别汇总投影长度；模板只有通用 `橱柜` 行时会自动拆成两行。
+- 复核备注会提示地柜/吊柜口径需确认。
 
 ### 阳台推拉门与双包套
 

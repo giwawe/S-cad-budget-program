@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 import math
 from importlib import resources
@@ -464,6 +464,9 @@ def _append_section(
         cell.fill = _SECTION_FILL
         cell.font = _BOLD_FONT
 
+    if room is None:
+        items = _expand_generic_cabinet_items(items, included_rooms or [], rules)
+
     first_item_row = sheet.max_row + 1
     for item_number, item in enumerate(items, start=1):
         row_index = sheet.max_row + 1
@@ -507,6 +510,27 @@ def _append_section(
     sheet.cell(row=subtotal_row, column=2).font = _BOLD_FONT
     sheet.cell(row=subtotal_row, column=8).font = _BOLD_FONT
     return subtotal_row
+
+
+def _expand_generic_cabinet_items(
+    items: list[QuoteTemplateItem],
+    rooms: list[QuantityRow],
+    rules: ResidentialQuoteRules,
+) -> list[QuoteTemplateItem]:
+    if not any(room.cabinet_details for room in rooms):
+        return items
+    has_base_item = any(item.name in rules.base_cabinet_length_items for item in items)
+    has_wall_item = any(item.name in rules.wall_cabinet_length_items for item in items)
+    expanded: list[QuoteTemplateItem] = []
+    for item in items:
+        if item.name not in rules.cabinet_length_items:
+            expanded.append(item)
+            continue
+        if has_base_item or has_wall_item:
+            continue
+        expanded.append(replace(item, name="\u5730\u67dc"))
+        expanded.append(replace(item, name="\u540a\u67dc"))
+    return expanded
 
 
 def _append_summary_rows(sheet, subtotal_rows: list[int]) -> None:

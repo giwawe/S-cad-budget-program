@@ -22,7 +22,7 @@
 | 砌240厚砖墙 | 模板默认 | `QUOTE_NEW_WALL` 面积，且 `THICKNESS=240mm/0.24m` | 当前样例无新砌墙标识 |
 | 打混凝土过梁孔 | 模板默认 | `QuantityResult.building_area` 的 10% 取整数 | 当前样例 `building_area=None`，没有闭合 `QUOTE_EXT_WALL` 或闭合 `QUOTE_BUILDING_AREA` |
 | 全屋定制 | 模板默认 | `QUOTE_CUSTOM` 投影面积；缺高默认 2.6m；低于 1m 的柜体按长度复核 | 当前样例无全屋定制标识 |
-| 橱柜 | 模板默认 | `QUOTE_CABINET` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` 长度 | 当前样例无橱柜标识 |
+| 地柜 / 吊柜 | 模板默认 | `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` 长度，旧图可用 `QUOTE_CABINET + TYPE` | 当前样例无橱柜标识 |
 
 ## 继续保留人工/模板默认
 
@@ -51,7 +51,7 @@
 | 阳台推拉门 | 有阳台/露台空间宽门洞时自动汇总；没有匹配门洞时按 0 | 阳台/露台 `QuantityRow.door_details` 宽度大于等于 1.4m 的唯一门洞 | 按门洞面积汇总，使用独立空间关键词，不影响厨房推拉门 |
 | 阳台推拉门双包套 | 有阳台/露台空间宽门洞时自动汇总；没有匹配门洞时按 0 | 与阳台推拉门同源门洞 | 按门洞宽度加两侧有效门高汇总，门高缺失时使用默认门高并提示复核 |
 | 全屋定制 | 有 `QUOTE_CUSTOM` 时自动汇总；样例未画标识时仍按模板默认 | `QUOTE_CUSTOM` 线/闭合轮廓、`HEIGHT`/`高`、`TYPE`/`类型`、`ROOM`/`空间` | 按投影面积汇总；缺高默认 2.6m；高度低于 1m 的柜体不计投影面积，复核备注提示按长度确认 |
-| 橱柜 / 地柜 / 吊柜 | 有橱柜标识时自动汇总；样例未画标识时仍按模板默认 | 新图优先用 `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET`，旧图可用 `QUOTE_CABINET` 线/闭合轮廓加 `TYPE`/`类型`、`ROOM`/`空间` | `橱柜` 按总长度汇总；`地柜` / `吊柜` 按类型分别汇总；地柜和吊柜可重叠画线，不自动去重 |
+| 地柜 / 吊柜 | 有橱柜标识时自动汇总；样例未画标识时仍按模板默认 | 新图优先用 `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET`，旧图可用 `QUOTE_CABINET` 线/闭合轮廓加 `TYPE`/`类型`、`ROOM`/`空间` | `地柜` / `吊柜` 按类型分别汇总投影长度；模板只有通用橱柜行时自动拆成两行；地柜和吊柜可重叠画线，不自动去重 |
 
 ## 下一阶段推荐
 
