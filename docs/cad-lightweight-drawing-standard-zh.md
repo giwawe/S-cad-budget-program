@@ -27,7 +27,7 @@
 | `QUOTE_ROOM` | 必需 | 闭合 `LWPOLYLINE` | 每个空间一条闭合边界 | 地面面积、地面周长、空间归属 |
 | `QUOTE_TEXT` | 推荐 | `TEXT` / `MTEXT` | 文字点放在对应空间边界内 | 空间名称 |
 | `QUOTE_WINDOW` | 推荐 | `INSERT`、闭合 `LWPOLYLINE` | 窗块带宽高属性，或画闭合窗洞轮廓；闭合轮廓可写 `HEIGHT` | 窗数量、窗面积、墙面扣减 |
-| `QUOTE_DOOR` | 推荐 | `INSERT`、`LWPOLYLINE` | 门块带宽高属性，或画门洞线段/闭合轮廓 | 门洞数量、门洞面积 |
+| `QUOTE_DOOR` | 推荐 | `INSERT`、`LWPOLYLINE` | 门块带宽高属性，或画门洞线段/闭合轮廓；几何门洞可写 `HEIGHT` | 门洞数量、门洞面积 |
 | `QUOTE_CUSTOM` | 可选 | `LINE`、`LWPOLYLINE` | 画全屋定制、固定柜等柜体投影长度 | 定制柜长度、投影面积复核 |
 | `QUOTE_CABINET` | 兼容旧图可选 | `LINE`、`LWPOLYLINE` | 画橱柜投影长度，可用 `TYPE` 区分地柜/吊柜；转角柜建议画折线或闭合轮廓 | 橱柜长度明细复核 |
 | `QUOTE_BASE_CABINET` | 橱柜推荐 | `LINE`、`LWPOLYLINE` | 画地柜投影长度；转角柜建议画折线或闭合轮廓 | 地柜长度明细复核 |
@@ -152,12 +152,13 @@
 - 门洞线段可以用 `LWPOLYLINE` 表示，系统用线段长度推断门宽。
 - 闭合门洞轮廓可以用闭合 `LWPOLYLINE` 表示，系统用轮廓主尺寸推断门宽。
 - 闭合轮廓必须有非零面积。
+- 可在 `CAD_BUDGET` XDATA 中写 `HEIGHT`，支持 `2200`、`2200mm`、`2.2`、`2.2m` 等写法；推拉门可按项目实际门高填写，例如 `2400`。
 
 ### 系统如何处理
 
 - 门块优先读取宽高属性。
 - 如果没有宽度属性，系统使用块缩放推断宽度。
-- 如果是几何画法，系统从线段或闭合轮廓推断宽度。
+- 如果是几何画法，系统从线段或闭合轮廓推断宽度，并读取 `CAD_BUDGET` XDATA 中的 `HEIGHT`。
 - 有宽度和高度时，系统记录门洞面积。
 - `QuantityResult` 会保留 `door_details`，记录每个门洞的宽、高、报价有效高度、是否默认门高、面积和关联空间。
 - 门洞缺少高度时，原有 `door_opening_area` 仍不计该门洞面积；报价明细中普通门洞/门套默认按 2.2m，推拉门面积默认按 2.4m，并标记默认推断，设计师可在 Excel 中修改。
@@ -331,7 +332,7 @@
 - 开放空间已用 `QUOTE_OPENING` 标记开放边界。
 - 需要精确墙面计量的空间已画 `QUOTE_WALL`。
 - 窗块已填写可解析宽度和高度；如果用窗洞轮廓，轮廓已闭合且有面积，并尽量在 `CAD_BUDGET` XDATA 中填写 `HEIGHT`。
-- 门块已尽量填写宽度和高度；如果没有属性，门洞几何能表达宽度。
+- 门块已尽量填写宽度和高度；如果没有属性，门洞几何能表达宽度，并尽量在 `CAD_BUDGET` XDATA 中填写 `HEIGHT`。
 - 需要复核全屋定制或橱柜时，已使用 `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` 画柜体投影长度；旧图可继续使用 `QUOTE_CABINET + TYPE`，并确认楼层和空间归属。
 - 需要自动报价拆改、新砌墙或过梁时，已使用 `QUOTE_DEMO_WALL` / `QUOTE_NEW_WALL` / `QUOTE_LINTEL` / `QUOTE_LINTEL_HOLE` 标识；新砌墙建议填写 `THICKNESS`，未填写时按 240mm。
 - 需要自动报价排污管隔音棉或包管时，已使用 `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` 标识立管点位，并尽量填写 `HEIGHT`。

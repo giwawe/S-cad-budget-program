@@ -819,6 +819,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
         elif layer == LayerName.QUOTE_DOOR.value and entity.dxftype() == "LWPOLYLINE":
             points = _lwpolyline_points(entity, options.confirmed_unit)
             if len(points) >= 2:
+                attrs = _xdata_key_value_attributes(entity, _FIXTURE_XDATA_APPIDS)
                 if entity.closed and len(points) >= 4:
                     polygon = _outline_polygon(points)
                     if polygon is None:
@@ -841,7 +842,8 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                         id=_entity_id(entity),
                         point=point,
                         width=width,
-                        attributes={"source": "geometry"},
+                        height=_dimension_from_attributes(attrs, _DOOR_HEIGHT_ATTRIBUTE_KEYS),
+                        attributes={**attrs, "source": "geometry"},
                     )
                 )
         elif layer == LayerName.QUOTE_WALL.value and entity.dxftype() == "LWPOLYLINE":

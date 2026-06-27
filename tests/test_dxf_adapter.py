@@ -579,6 +579,36 @@ def test_import_dxf_reads_chinese_insert_door_attributes(tmp_path: Path):
     assert result.project.doors[0].height == 2.1
 
 
+def test_import_dxf_reads_door_line_height_xdata(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.appids.new("CAD_BUDGET")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_DOOR")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    door = modelspace.add_lwpolyline(
+        [(1000, 0), (1900, 0)],
+        dxfattribs={"layer": "QUOTE_DOOR"},
+    )
+    door.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=2200")])
+    dxf_path = _save_doc(tmp_path / "door_line_height_xdata.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.doors) == 1
+    assert result.project.doors[0].width == 0.9
+    assert result.project.doors[0].height == 2.2
+    quantity = calculate_quantities(result.project)
+    assert quantity.rows[0].door_opening_area == 1.98
+    assert quantity.rows[0].door_details[0].height_defaulted is False
+
+
 def test_import_dxf_accepts_window_outline_when_first_and_last_points_match_without_closed_flag(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4
@@ -1289,6 +1319,36 @@ def test_import_dxf_infers_closed_door_outline_width_and_centroid(tmp_path: Path
     assert result.project.doors[0].width == pytest.approx(0.9)
     assert result.project.doors[0].point.x == pytest.approx(1.45)
     assert result.project.doors[0].point.y == pytest.approx(0.0)
+
+
+def test_import_dxf_reads_closed_door_outline_height_xdata(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.appids.new("CAD_BUDGET")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_DOOR")
+    modelspace.add_lwpolyline(
+        [(0, 0), (6000, 0), (6000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    door = modelspace.add_lwpolyline(
+        [(1000, -100), (1900, -100), (1900, 100), (1000, 100), (1000, -100)],
+        dxfattribs={"layer": "QUOTE_DOOR", "closed": True},
+    )
+    door.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=2400")])
+    dxf_path = _save_doc(tmp_path / "door_outline_height_xdata.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.doors) == 1
+    assert result.project.doors[0].width == pytest.approx(0.9)
+    assert result.project.doors[0].height == 2.4
+    quantity = calculate_quantities(result.project)
+    assert quantity.rows[0].door_opening_area == 2.16
+    assert quantity.rows[0].door_details[0].height_defaulted is False
 
 
 def test_import_dxf_infers_rotated_window_width_from_outline_major_dimension(tmp_path: Path):
