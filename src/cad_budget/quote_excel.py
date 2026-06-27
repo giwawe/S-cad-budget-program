@@ -1269,7 +1269,7 @@ def _review_values_for_item(
         room.room_name,
         room.room_id,
         _measure_basis_for_item(item_name, room),
-        _review_status_for_room(room),
+        _review_status_for_room(item_name, room),
         _review_note_for_room(item_name, room),
     ]
 
@@ -1407,8 +1407,10 @@ def _door_default_note_for_rooms(rooms: list[QuantityRow], rules: ResidentialQuo
     return f"\u95e8\u6d1e\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u9ed8\u8ba4\u95e8\u9ad8{rules.default_door_height:g}m"
 
 
-def _review_status_for_room(room: QuantityRow) -> str:
+def _review_status_for_room(item_name: str, room: QuantityRow) -> str:
     if room.status == DataStatus.DEFAULT_INFERRED:
+        if _only_window_height_defaulted(room) and not _room_item_uses_window_height(item_name):
+            return "\u81ea\u52a8\u751f\u6210"
         return "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
     if room.status == DataStatus.NEEDS_REVIEW:
         return "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
@@ -1448,6 +1450,12 @@ def _room_item_uses_window_height(item_name: str) -> bool:
         "\u5899\u9762\u4e73\u80f6\u6f06",
         "\u5899\u9762\u8d34\u74f7\u7816(600x1200)",
     }
+
+
+def _only_window_height_defaulted(room: QuantityRow) -> bool:
+    if not room.exception_notes:
+        return False
+    return all(_is_window_height_default_note(note) for note in room.exception_notes)
 
 
 def _window_height_default_note_for_room(room: QuantityRow) -> str | None:
