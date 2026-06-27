@@ -47,6 +47,7 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert rules.wall_tile_height == 2.5
     assert "\u5783\u573e\u6e05\u8fd0\u8d39" in rules.floor_area_aggregate_items
     assert "\u7f8e\u7f1d" in rules.tile_area_aggregate_items
+    assert "\u623f\u95f4\u6210\u54c1\u4fdd\u62a4" in rules.room_count_aggregate_items
     assert "\u6d74\u5ba4\u67dc" in rules.bathroom_count_aggregate_items
     assert "\u536b\u751f\u95f4\u95e8" in rules.bathroom_count_aggregate_items
     assert "\u7a97\u53f0\u77f3" in rules.window_count_aggregate_items

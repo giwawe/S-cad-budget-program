@@ -55,7 +55,9 @@
   "building_area_percent_count_items": {
     "打混凝土过梁孔": 0.1
   },
-  "room_count_aggregate_items": [],
+  "room_count_aggregate_items": [
+    "房间成品保护"
+  ],
   "wet_room_count_aggregate_items": [],
   "kitchen_count_aggregate_items": [],
   "bathroom_count_aggregate_items": [
