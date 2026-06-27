@@ -787,13 +787,16 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                         )
                     )
                     continue
+                attrs = _xdata_key_value_attributes(entity, _FIXTURE_XDATA_APPIDS)
+                marker_attrs = dict(attrs)
+                marker_attrs["source"] = "closed_outline"
                 windows.append(
                     WindowMarker(
                         id=_entity_id(entity),
                         point=_outline_centroid(points),
                         width=_outline_width(polygon),
-                        height=None,
-                        attributes={"source": "closed_outline"},
+                        height=_dimension_from_attributes(attrs, _WINDOW_HEIGHT_ATTRIBUTE_KEYS),
+                        attributes=marker_attrs,
                     )
                 )
         elif layer == LayerName.QUOTE_DOOR.value and entity.dxftype() == "INSERT":

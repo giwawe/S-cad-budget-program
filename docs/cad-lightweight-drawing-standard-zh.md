@@ -26,7 +26,7 @@
 | --- | --- | --- | --- | --- |
 | `QUOTE_ROOM` | 必需 | 闭合 `LWPOLYLINE` | 每个空间一条闭合边界 | 地面面积、地面周长、空间归属 |
 | `QUOTE_TEXT` | 推荐 | `TEXT` / `MTEXT` | 文字点放在对应空间边界内 | 空间名称 |
-| `QUOTE_WINDOW` | 推荐 | `INSERT`、闭合 `LWPOLYLINE` | 窗块带宽高属性，或画闭合窗洞轮廓 | 窗数量、窗面积、墙面扣减 |
+| `QUOTE_WINDOW` | 推荐 | `INSERT`、闭合 `LWPOLYLINE` | 窗块带宽高属性，或画闭合窗洞轮廓；闭合轮廓可写 `HEIGHT` | 窗数量、窗面积、墙面扣减 |
 | `QUOTE_DOOR` | 推荐 | `INSERT`、`LWPOLYLINE` | 门块带宽高属性，或画门洞线段/闭合轮廓 | 门洞数量、门洞面积 |
 | `QUOTE_CUSTOM` | 可选 | `LINE`、`LWPOLYLINE` | 画全屋定制、固定柜等柜体投影长度 | 定制柜长度、投影面积复核 |
 | `QUOTE_CABINET` | 兼容旧图可选 | `LINE`、`LWPOLYLINE` | 画橱柜投影长度，可用 `TYPE` 区分地柜/吊柜；转角柜建议画折线或闭合轮廓 | 橱柜长度明细复核 |
@@ -123,6 +123,7 @@
 - 使用闭合 `LWPOLYLINE` 放在 `QUOTE_WINDOW` 图层。
 - 支持矩形、多边形和带 bulge 弧线的闭合轮廓。
 - 轮廓必须有非零面积。
+- 可在 `CAD_BUDGET` XDATA 中写 `HEIGHT`，支持 `1800`、`1800mm`、`1.8`、`1.8m` 等写法。
 - 内部辅助线可以保留，系统只读取闭合轮廓。
 
 ### 系统如何处理
@@ -130,7 +131,8 @@
 - 窗块优先读取宽高属性。
 - 窗块没有可解析宽度时，不生成窗，并产生 `WINDOW_WIDTH_ATTRIBUTE_INVALID`。
 - 闭合窗洞轮廓会从最小旋转矩形的主尺寸推断窗宽。
-- 闭合窗洞轮廓不会推断窗高，窗高保持为空，算量时使用 `default_window_height`；默认窗高为 1.8m，并产生 `window_height_defaulted`。
+- 闭合窗洞轮廓填写 `HEIGHT` 后，按该高度计算窗面积，不产生默认窗高提示。
+- 未填写 `HEIGHT` 的闭合窗洞轮廓不会推断窗高，窗高保持为空，算量时使用 `default_window_height`；默认窗高为 1.8m，并产生 `window_height_defaulted`。
 - 窗面积会从墙面毛面积中扣除。
 - `QuantityResult` 会保留 `window_details`，记录每个窗的宽、高、面积、是否默认窗高，以及最接近的房间墙段和墙段长度；报价中的窗帘会使用该墙段长度汇总，报价复核状态和备注会把默认窗高异常汇总为中文数量提示，并只在墙面净面积、墙砖等受窗面积影响的空间项目上显示。
 - 如果窗落在共享边界上并无法唯一归属空间，会标记歧义并不计入空间窗面积。
@@ -328,7 +330,7 @@
 - 每个有效空间都有一个清晰的 `QUOTE_TEXT`，文字点在空间内。
 - 开放空间已用 `QUOTE_OPENING` 标记开放边界。
 - 需要精确墙面计量的空间已画 `QUOTE_WALL`。
-- 窗块已填写可解析宽度；如果用窗洞轮廓，轮廓已闭合且有面积。
+- 窗块已填写可解析宽度和高度；如果用窗洞轮廓，轮廓已闭合且有面积，并尽量在 `CAD_BUDGET` XDATA 中填写 `HEIGHT`。
 - 门块已尽量填写宽度和高度；如果没有属性，门洞几何能表达宽度。
 - 需要复核全屋定制或橱柜时，已使用 `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` 画柜体投影长度；旧图可继续使用 `QUOTE_CABINET + TYPE`，并确认楼层和空间归属。
 - 需要自动报价拆改、新砌墙或过梁时，已使用 `QUOTE_DEMO_WALL` / `QUOTE_NEW_WALL` / `QUOTE_LINTEL` / `QUOTE_LINTEL_HOLE` 标识；新砌墙建议填写 `THICKNESS`，未填写时按 240mm。

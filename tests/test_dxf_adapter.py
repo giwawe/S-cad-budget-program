@@ -603,6 +603,36 @@ def test_import_dxf_accepts_window_outline_when_first_and_last_points_match_with
     assert result.project.windows[0].width == 1.5
 
 
+def test_import_dxf_reads_window_outline_height_xdata(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    doc.appids.new("CAD_BUDGET")
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    window = modelspace.add_lwpolyline(
+        [(1000, -100), (2500, -100), (2500, 100), (1000, 100), (1000, -100)],
+        dxfattribs={"layer": "QUOTE_WINDOW"},
+    )
+    window.set_xdata("CAD_BUDGET", [(1000, "HEIGHT=1800")])
+    dxf_path = _save_doc(tmp_path / "window_outline_height_xdata.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.windows) == 1
+    assert result.project.windows[0].width == 1.5
+    assert result.project.windows[0].height == 1.8
+    quantity = calculate_quantities(result.project)
+    assert quantity.rows[0].window_area == 2.7
+    assert not any(exception.code == "window_height_defaulted" for exception in quantity.exceptions)
+
+
 def test_import_dxf_reads_window_insert_width_and_height_attributes(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4
