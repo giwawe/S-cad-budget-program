@@ -64,7 +64,7 @@ def test_marker_rich_dxf_turns_quote_defaults_into_automatic_aggregates(tmp_path
     assert lintel[3] == 0
     assert lintel[9] == "自动汇总"
     assert lintel[12] == "砖墙门窗洞过梁标识数量汇总"
-    assert lintel[13] == "自动生成-默认推断"
+    assert lintel[13] == "自动生成"
     assert "QUOTE_LINTEL" in lintel[14]
     assert _row_containing(rows, "美缝")[12] == "地砖面积+2.5m以下墙面贴砖面积+QUOTE_WALL_TILE显式墙砖面积"
     assert _summary_value(rows, "自动汇总") == 17

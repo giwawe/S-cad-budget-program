@@ -721,6 +721,7 @@ def _aggregate_quantity_for_item(
             ConstructionKind.LINTEL,
             "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
             zero_note="\u672a\u8bc6\u522bQUOTE_LINTEL\u8fc7\u6881\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u8fc7\u6881\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199",
+            zero_status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.lintel_hole_count_items:
         return _construction_count_aggregate(
@@ -734,6 +735,7 @@ def _aggregate_quantity_for_item(
         return _zero_aggregate(
             "\u5165\u6237\u95e8\u9ed8\u8ba40",
             "\u5165\u6237\u95e8\u7ecf\u5e38\u4e0d\u5728\u62a5\u4ef7\u8303\u56f4\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u66f4\u6362\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199",
+            status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.shower_glass_count_items:
         return _shower_glass_count_aggregate(construction_details or [])
@@ -1030,12 +1032,13 @@ def _construction_count_aggregate(
     kind: ConstructionKind,
     basis: str,
     zero_note: str | None = None,
+    zero_status: str | None = None,
 ) -> QuoteAggregateQuantity | None:
     details = [detail for detail in construction_details if detail.kind is kind]
     quantity = sum(detail.count for detail in details)
     if not details or quantity <= 0:
         if zero_note is not None:
-            return _zero_aggregate(basis, zero_note)
+            return _zero_aggregate(basis, zero_note, status=zero_status)
         return None
     return QuoteAggregateQuantity(
         quantity=quantity,
@@ -1054,6 +1057,7 @@ def _background_wall_area_aggregate(
         return _zero_aggregate(
             "\u80cc\u666f\u5899\u9762\u79ef\u6c47\u603b",
             "\u672a\u8bc6\u522bQUOTE_BACKGROUND_WALL\u80cc\u666f\u5899\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u80cc\u666f\u5899\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199",
+            status="\u81ea\u52a8\u751f\u6210",
         )
     return QuoteAggregateQuantity(
         quantity=quantity,
@@ -1077,6 +1081,7 @@ def _shower_glass_count_aggregate(
         return _zero_aggregate(
             "\u6dcb\u6d74\u623f\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
             "\u672a\u8bc6\u522bQUOTE_SHOWER_GLASS\u6dcb\u6d74\u623f\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff0c\u907f\u514d\u4e0e\u6dcb\u6d74\u9694\u65ad\u91cd\u590d\u62a5\u4ef7",
+            status="\u81ea\u52a8\u751f\u6210",
         )
     return QuoteAggregateQuantity(
         quantity=quantity,
@@ -1095,6 +1100,7 @@ def _squat_toilet_count_aggregate(
         return _zero_aggregate(
             "\u8e72\u5751\u6807\u8bc6\u6570\u91cf\u6c47\u603b",
             "\u672a\u8bc6\u522bQUOTE_SQUAT_TOILET\u8e72\u5751\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff0c\u907f\u514d\u4e0e\u9a6c\u6876\u91cd\u590d\u62a5\u4ef7",
+            status="\u81ea\u52a8\u751f\u6210",
         )
     return QuoteAggregateQuantity(
         quantity=quantity,
@@ -1141,12 +1147,12 @@ def _building_area_percent_count_aggregate(building_area: float | None, percent:
     )
 
 
-def _zero_aggregate(basis: str, note: str | None = None) -> QuoteAggregateQuantity:
+def _zero_aggregate(basis: str, note: str | None = None, *, status: str | None = None) -> QuoteAggregateQuantity:
     return QuoteAggregateQuantity(
         quantity=0,
         basis=basis,
         rooms=[],
-        review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad" if note else "\u81ea\u52a8\u751f\u6210",
+        review_status=status or ("\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad" if note else "\u81ea\u52a8\u751f\u6210"),
         review_note=note,
     )
 

@@ -1771,7 +1771,7 @@ def test_export_residential_quote_defaults_missing_lintel_markers_to_zero(tmp_pa
     assert lintel[3] == 0
     assert lintel[9] == "\u81ea\u52a8\u6c47\u603b"
     assert lintel[12] == "\u7816\u5899\u95e8\u7a97\u6d1e\u8fc7\u6881\u6807\u8bc6\u6570\u91cf\u6c47\u603b"
-    assert lintel[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert lintel[13] == "\u81ea\u52a8\u751f\u6210"
     assert lintel[14] == "\u672a\u8bc6\u522bQUOTE_LINTEL\u8fc7\u6881\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u8fc7\u6881\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199"
 
 
@@ -1788,7 +1788,7 @@ def test_export_residential_quote_defaults_missing_background_wall_markers_to_ze
     assert background[3] == 0
     assert background[9] == "\u81ea\u52a8\u6c47\u603b"
     assert background[12] == "\u80cc\u666f\u5899\u9762\u79ef\u6c47\u603b"
-    assert background[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert background[13] == "\u81ea\u52a8\u751f\u6210"
     assert background[14] == "\u672a\u8bc6\u522bQUOTE_BACKGROUND_WALL\u80cc\u666f\u5899\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u80cc\u666f\u5899\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199"
 
 
@@ -1805,7 +1805,7 @@ def test_export_residential_quote_defaults_entry_door_to_zero(tmp_path: Path):
     assert entry_door[3] == 0
     assert entry_door[9] == "\u81ea\u52a8\u6c47\u603b"
     assert entry_door[12] == "\u5165\u6237\u95e8\u9ed8\u8ba40"
-    assert entry_door[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert entry_door[13] == "\u81ea\u52a8\u751f\u6210"
     assert entry_door[14] == "\u5165\u6237\u95e8\u7ecf\u5e38\u4e0d\u5728\u62a5\u4ef7\u8303\u56f4\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u66f4\u6362\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u586b\u5199"
 
 
@@ -1846,7 +1846,7 @@ def test_export_residential_quote_defaults_missing_shower_glass_markers_to_zero(
     assert shower_glass[3] == 0
     assert shower_glass[9] == "\u81ea\u52a8\u6c47\u603b"
     assert shower_glass[12] == "\u6dcb\u6d74\u623f\u6807\u8bc6\u6570\u91cf\u6c47\u603b"
-    assert shower_glass[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert shower_glass[13] == "\u81ea\u52a8\u751f\u6210"
     assert shower_glass[14] == "\u672a\u8bc6\u522bQUOTE_SHOWER_GLASS\u6dcb\u6d74\u623f\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff0c\u907f\u514d\u4e0e\u6dcb\u6d74\u9694\u65ad\u91cd\u590d\u62a5\u4ef7"
 
 
@@ -1887,7 +1887,7 @@ def test_export_residential_quote_defaults_missing_squat_toilet_markers_to_zero(
     assert squat_toilet[3] == 0
     assert squat_toilet[9] == "\u81ea\u52a8\u6c47\u603b"
     assert squat_toilet[12] == "\u8e72\u5751\u6807\u8bc6\u6570\u91cf\u6c47\u603b"
-    assert squat_toilet[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert squat_toilet[13] == "\u81ea\u52a8\u751f\u6210"
     assert squat_toilet[14] == "\u672a\u8bc6\u522bQUOTE_SQUAT_TOILET\u8e72\u5751\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff0c\u907f\u514d\u4e0e\u9a6c\u6876\u91cd\u590d\u62a5\u4ef7"
 
 
