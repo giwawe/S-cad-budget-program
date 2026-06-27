@@ -1270,7 +1270,7 @@ def _review_values_for_item(
         room.room_id,
         _measure_basis_for_item(item_name, room),
         _review_status_for_room(room),
-        _review_note_for_room(room),
+        _review_note_for_room(item_name, room),
     ]
 
 
@@ -1415,21 +1415,39 @@ def _review_status_for_room(room: QuantityRow) -> str:
     return "\u81ea\u52a8\u751f\u6210"
 
 
-def _review_note_for_room(room: QuantityRow) -> str | None:
+def _review_note_for_room(item_name: str, room: QuantityRow) -> str | None:
     if room.status not in {DataStatus.DEFAULT_INFERRED, DataStatus.NEEDS_REVIEW}:
         return None
-    notes = _translated_exception_notes_for_room(room)
+    notes = _translated_exception_notes_for_room(
+        room,
+        include_window_height_note=_room_item_uses_window_height(item_name),
+    )
     if not notes:
+        if room.exception_notes:
+            return None
         return f"\u7b97\u91cf\u72b6\u6001\uff1a{room.status.value}"
     return "\uff1b".join(notes)
 
 
-def _translated_exception_notes_for_room(room: QuantityRow) -> list[str]:
+def _translated_exception_notes_for_room(
+    room: QuantityRow,
+    *,
+    include_window_height_note: bool = True,
+) -> list[str]:
     notes = [note for note in room.exception_notes if not _is_window_height_default_note(note)]
-    window_note = _window_height_default_note_for_room(room)
+    window_note = _window_height_default_note_for_room(room) if include_window_height_note else None
     if window_note is not None:
         notes.insert(0, window_note)
     return notes
+
+
+def _room_item_uses_window_height(item_name: str) -> bool:
+    return item_name in {
+        "\u5899\u9762\u754c\u9762\u5242\u5904\u7406",
+        "\u5899\u9762\u6279\u5d4c",
+        "\u5899\u9762\u4e73\u80f6\u6f06",
+        "\u5899\u9762\u8d34\u74f7\u7816(600x1200)",
+    }
 
 
 def _window_height_default_note_for_room(room: QuantityRow) -> str | None:

@@ -2116,8 +2116,10 @@ def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(
     workbook = load_workbook(output_path, data_only=False)
     rows = list(workbook.active.iter_rows(values_only=True))
     living_wall_paint = _row_containing(rows, "\u5899\u9762\u4e73\u80f6\u6f06")
+    floor_tile = _item_row_named(rows, "\u5730\u9762\u7816\u94fa\u8d34(750X1500)")
     assert living_wall_paint[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
     assert living_wall_paint[14] == "\u7a97\u9ad8\u7f3a\u59313\u4e2a\uff0c\u5df2\u6309\u9ed8\u8ba4\u7a97\u9ad81.5m\u8ba1\u7b97"
+    assert floor_tile[14] is None
 
 
 def test_export_residential_quote_marks_needs_review_rows_as_auto_generated_with_issue_note(tmp_path: Path):
