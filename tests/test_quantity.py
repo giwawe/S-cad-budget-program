@@ -419,8 +419,8 @@ def test_window_details_include_wall_segment_length_for_curtain_takeoff():
     assert details[0].height_defaulted is False
     assert details[0].wall_segment_key == "living:0"
     assert details[0].wall_segment_length == 4.0
-    assert details[1].area == 1.2
-    assert details[1].height == 1.5
+    assert details[1].area == 1.44
+    assert details[1].height == 1.8
     assert details[1].height_defaulted is True
     assert details[1].wall_segment_key == "living:0"
     assert details[1].wall_segment_length == 4.0
@@ -446,9 +446,9 @@ def test_door_details_use_default_effective_height_without_changing_existing_are
     assert wide.room_id == "kitchen"
     assert wide.width == 1.6
     assert wide.height is None
-    assert wide.effective_height == 2.1
+    assert wide.effective_height == 2.2
     assert wide.height_defaulted is True
-    assert wide.area == 3.36
+    assert wide.area == 3.52
     assert normal.id == "normal"
     assert normal.effective_height == 2.0
     assert normal.height_defaulted is False

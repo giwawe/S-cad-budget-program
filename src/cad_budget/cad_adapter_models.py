@@ -30,7 +30,7 @@ class CadImportOptions(BaseModel):
     confirmed_unit: CadUnit = CadUnit.MILLIMETER
     project_name_override: str | None = None
     default_height: float = 2.8
-    default_window_height: float = 1.5
+    default_window_height: float = 1.8
     floor_heights: dict[str, float] = Field(default_factory=dict)
     dwg_converter_command: list[str] | None = None
 

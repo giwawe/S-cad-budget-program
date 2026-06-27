@@ -37,7 +37,7 @@ def test_marker_rich_dxf_turns_quote_defaults_into_automatic_aggregates(tmp_path
 
     rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
     expected_quantities = {
-        "外墙批嵌": 70.0,
+        "外墙批嵌": 72.8,
         "外墙批嵌以及修补": 6.0,
         "拆改及拆墙": 7.8,
         "砌120厚砖墙": 5.6,
@@ -51,8 +51,8 @@ def test_marker_rich_dxf_turns_quote_defaults_into_automatic_aggregates(tmp_path
         "地面瓷砖": 17,
         "墙面瓷砖": 55,
         "美缝": 55.4,
-        "阳台推拉门": 4.2,
-        "阳台推拉门双包套": 6.2,
+        "阳台推拉门": 4.8,
+        "阳台推拉门双包套": 6.4,
     }
     for item_name, expected_quantity in expected_quantities.items():
         row = _row_containing(rows, item_name)
@@ -102,8 +102,8 @@ def test_marker_rich_quote_sample_script_writes_reusable_outputs(tmp_path: Path)
     assert {path.name for path in output_dir.iterdir()} == expected_files
 
     rows = list(load_workbook(output_dir / "quote.xlsx", data_only=False).active.iter_rows(values_only=True))
-    assert _row_containing(rows, "外墙批嵌")[3] == 70.0
-    assert _row_containing(rows, "阳台推拉门双包套")[3] == 6.2
+    assert _row_containing(rows, "外墙批嵌")[3] == 72.8
+    assert _row_containing(rows, "阳台推拉门双包套")[3] == 6.4
     assert _row_containing(rows, "地柜")[3] == 3.0
     assert _row_containing(rows, "吊柜")[3] == 2.0
     assert not _has_item_row(rows, "橱柜")

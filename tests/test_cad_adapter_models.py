@@ -22,4 +22,4 @@ def test_cad_import_options_defaults_for_millimeter_project():
     assert options.project_name == "sample"
     assert options.confirmed_unit == CadUnit.MILLIMETER
     assert options.default_height == 2.8
-    assert options.default_window_height == 1.5
+    assert options.default_window_height == 1.8

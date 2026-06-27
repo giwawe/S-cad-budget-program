@@ -26,7 +26,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 - `building_area=136.237652`
 - `exterior_rows=1`
 - `construction_details=4`，包含新砌墙和 `QUOTE_WALL_TILE`，暂无 `QUOTE_LINTEL`、`QUOTE_BACKGROUND_WALL`、`QUOTE_SHOWER_GLASS`、`QUOTE_SQUAT_TOILET`、拆墙、管道或外墙修补标识
-- 已有全屋定制、地柜/吊柜标识；拆墙、管道、外墙修补、阳台推拉门缺标识时已按 0 自动汇总并提示复核
+- 已有全屋定制、地柜/吊柜标识；拆墙、外墙修补、阳台推拉门缺标识时已按 0 自动汇总并提示复核；管道/包管缺标识时按厨房和卫生间层高合计乘以 1.5 默认生成
 - 无匹配阳台/露台宽门洞
 
 ## 优先补齐顺序
@@ -39,7 +39,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 | 4 | `QUOTE_SQUAT_TOILET` | 蹲坑 | 每个标识按 1 个计；无标识时按 0，避免和马桶重复报价 |
 | 5 | `QUOTE_EXT_WALL` 或 `QUOTE_BUILDING_AREA` | 外墙批嵌、打混凝土过梁孔 | 既影响外墙面积，也影响建筑面积百分比项目；最新 `10.dxf` 样例已补齐，可作为参考 |
 | 6 | `QUOTE_NEW_WALL` | 砌120厚砖墙、砌240厚砖墙 | 新砌墙不能从房间面积推断；缺少 `THICKNESS` 时按 240mm；最新 `10.dxf` 样例已补齐 |
-| 7 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 缺标识时按 0 并提示手工输入；点位少、补图成本低 |
+| 7 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 缺标识时按厨房和卫生间层高合计乘以 1.5 默认生成；点位少、补图成本低 |
 | 8 | `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` | 全屋定制、地柜、吊柜 | 对主材金额影响较大，需要设计方案同步；旧图可继续用 `QUOTE_CABINET + TYPE`；最新 `10.dxf` 样例已补齐 |
 | 9 | `QUOTE_EXT_REPAIR` | 外墙批嵌以及修补 | 缺标识时按 0 并提示手工输入；必须由设计师确认修补范围 |
 | 10 | 阳台/露台门洞信息 | 阳台推拉门、阳台推拉门双包套 | 没有匹配阳台/露台宽门洞时按 0 |
@@ -58,11 +58,11 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 - 优先把完整建筑外轮廓画成闭合 `QUOTE_EXT_WALL`。
 - 相邻户不施工的外墙面，可在 `CAD_BUDGET` XDATA 中写 `QUOTE_INCLUDE=false` 或 `INCLUDE=false`，用于排除外墙批嵌报价；该标记不会排除建筑面积计算。
 - 如果外墙不能画成完整闭合轮廓，另画闭合 `QUOTE_BUILDING_AREA` 作为建筑面积来源。
-- 外墙洞口使用 `QUOTE_EXT_OPENING` 标识，用于扣减外墙批嵌面积。
+- 外墙洞口使用 `QUOTE_EXT_OPENING` 标识，用于外墙表净面积复核；当前 `外墙批嵌` 报价按外墙长度乘层高的毛面积汇总，不扣外墙洞口。
 
 复核点：
 
-- `外墙批嵌` 只汇总参与报价的 `exterior_rows.net_area`。
+- `外墙批嵌` 只汇总参与报价的 `exterior_rows.gross_area`。
 - `打混凝土过梁孔` 按 `QuantityResult.building_area * 10%` 四舍五入取整数。
 - 不要用室内空间面积相加代替建筑面积。
 
@@ -123,7 +123,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 复核点：
 
 - 缺少 `HEIGHT` 时，系统按楼层/项目默认高度推断并提示复核。
-- 不从厨房或卫生间数量推断管道数量。
+- 缺少 `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` 时，报价默认按厨房和卫生间层高合计乘以 1.5 生成，设计师可在 Excel 中修改。
 
 ### 全屋定制
 
@@ -178,7 +178,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 
 - 阳台或露台空间需要有清晰 `QUOTE_ROOM` 和空间名称，如 `阳台`、`露台`。
 - 阳台/露台门洞使用 `QUOTE_DOOR`，门洞宽度大于等于 `1.4m`。
-- 尽量填写门洞高度 `HEIGHT`；缺少高度时按默认门高 `2.1m` 推断。
+- 尽量填写门洞高度 `HEIGHT`；缺少高度时，推拉门面积按默认推拉门高度 `2.4m` 推断，门洞套线按默认门洞高度 `2.2m` 推断。
 
 复核点：
 

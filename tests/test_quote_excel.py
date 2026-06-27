@@ -55,7 +55,8 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert rules.fixed_quantity_aggregate_items["\u5168\u5c4b\u4fdd\u6d01"] == 1
     assert rules.tile_piece_loss_rate == 0.05
     assert rules.wide_door_width_threshold == 1.4
-    assert rules.default_door_height == 2.1
+    assert rules.default_door_height == 2.2
+    assert rules.default_sliding_door_height == 2.4
     assert "\u7a97\u5e18" in rules.curtain_wall_length_items
     assert "\u5730\u9762\u74f7\u7816" in rules.floor_tile_piece_items
     assert "\u5899\u9762\u74f7\u7816" in rules.wall_tile_piece_items
@@ -1223,6 +1224,7 @@ def test_export_residential_quote_auto_fills_tile_processing_by_house_area(tmp_p
     _create_quote_template(template_path, include_advanced_summary_items=True)
     result = QuantityResult(
         project_name="Tile Processing Demo",
+        building_area=88.6,
         rows=[
             _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
             _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0),
@@ -1236,14 +1238,14 @@ def test_export_residential_quote_auto_fills_tile_processing_by_house_area(tmp_p
     workbook = load_workbook(output_path, data_only=False)
     rows = list(workbook.active.iter_rows(values_only=True))
     processing = _item_row_named(rows, "\u74f7\u7816\u52a0\u5de5\u8d39")
-    assert processing[3] == 26.0
+    assert processing[3] == 88.6
     assert processing[9:15] == (
         "\u81ea\u52a8\u6c47\u603b",
         "\u5168\u5c4b",
         None,
-        "\u623f\u5b50\u9762\u79ef\u6c47\u603b",
-        "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
-        "\u74f7\u7816\u52a0\u5de5\u8d39\u6309\u623f\u5b50\u9762\u79ef\u8ba1\u7b97\uff0c\u9700\u8bbe\u8ba1\u5e08\u4fee\u6539\u786e\u8ba4",
+        "QUOTE_EXT_WALL\u56f4\u5408\u5efa\u7b51\u9762\u79ef",
+        "\u81ea\u52a8\u751f\u6210",
+        None,
     )
 
 
@@ -1390,9 +1392,9 @@ def test_export_residential_quote_auto_fills_doors_and_shower_items(tmp_path: Pa
     glass_shower = _item_row_named(rows, "\u73bb\u7483\u6dcb\u6d74\u623f")
     assert interior_door[3] == 1
     assert interior_door[12] == "\u666e\u901a\u5ba4\u5185\u95e8\u6d1e\u6570\u91cf\u6c47\u603b"
-    assert sliding_door[3] == 3.36
+    assert sliding_door[3] == 3.84
     assert sliding_door[12] == "\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u9762\u79ef\u6c47\u603b"
-    assert "\u9ed8\u8ba4\u95e8\u9ad82.1m" in sliding_door[14]
+    assert "\u9ed8\u8ba4\u63a8\u62c9\u95e8\u9ad8\u5ea62.4m" in sliding_door[14]
     assert shower_partition[3] == 1
     assert shower_partition[12] == "\u536b\u751f\u95f4\u6570\u91cf\u6c47\u603b"
     assert glass_shower[3] == 0
@@ -1450,10 +1452,10 @@ def test_export_residential_quote_auto_fills_sliding_door_trim_length(tmp_path: 
     workbook = load_workbook(output_path, data_only=False)
     rows = list(workbook.active.iter_rows(values_only=True))
     trim = _item_row_named(rows, "\u53a8\u623f\u63a8\u62c9\u95e8\u53cc\u5305\u5957")
-    assert trim[3] == 5.8
+    assert trim[3] == 6.0
     assert trim[12] == "\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u5957\u7ebf\u957f\u5ea6\u6c47\u603b"
     assert trim[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
-    assert "\u9ed8\u8ba4\u95e8\u9ad82.1m" in trim[14]
+    assert "\u9ed8\u8ba4\u95e8\u6d1e\u9ad8\u5ea62.2m" in trim[14]
 
 
 def test_export_residential_quote_uses_custom_default_door_height_for_sliding_doors(tmp_path: Path):
@@ -1473,7 +1475,7 @@ def test_export_residential_quote_uses_custom_default_door_height_for_sliding_do
                 "tile_area_aggregate_items": [],
                 "sliding_door_area_items": ["\u53a8\u623f\u63a8\u62c9\u95e8"],
                 "wide_door_width_threshold": 1.4,
-                "default_door_height": 2.4,
+                "default_sliding_door_height": 2.5,
                 "sliding_door_room_keywords": ["\u53a8\u623f"],
             },
             ensure_ascii=False,
@@ -1509,11 +1511,11 @@ def test_export_residential_quote_uses_custom_default_door_height_for_sliding_do
     workbook = load_workbook(output_path, data_only=False)
     rows = list(workbook.active.iter_rows(values_only=True))
     sliding_door = _item_row_named(rows, "\u53a8\u623f\u63a8\u62c9\u95e8")
-    assert sliding_door[3] == 3.84
-    assert "\u9ed8\u8ba4\u95e8\u9ad82.4m" in sliding_door[14]
+    assert sliding_door[3] == 4.0
+    assert "\u9ed8\u8ba4\u63a8\u62c9\u95e8\u9ad8\u5ea62.5m" in sliding_door[14]
 
 
-def test_export_residential_quote_auto_fills_exterior_plaster_from_included_net_area(tmp_path: Path):
+def test_export_residential_quote_auto_fills_exterior_plaster_from_included_gross_area(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
     _create_quote_template(template_path, include_exterior_summary_items=True)
@@ -1551,12 +1553,11 @@ def test_export_residential_quote_auto_fills_exterior_plaster_from_included_net_
     rows = list(workbook.active.iter_rows(values_only=True))
     exterior_plaster = _item_row_named(rows, "\u5916\u5899\u6279\u5d4c")
     exterior_repair = _item_row_named(rows, "\u5916\u5899\u6279\u5d4c\u4ee5\u53ca\u4fee\u8865")
-    assert exterior_plaster[3] == 9.0
+    assert exterior_plaster[3] == 12.0
     assert exterior_plaster[9] == "\u81ea\u52a8\u6c47\u603b"
-    assert exterior_plaster[12] == "\u9009\u5b9a\u5916\u5899\u51c0\u9762\u79ef\u6c47\u603b"
-    assert exterior_plaster[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
-    assert "\u6263\u9664\u5916\u5899\u6d1e\u53e3" in exterior_plaster[14]
-    assert "\u786e\u8ba4\u5916\u5899\u6279\u5d4c\u65bd\u5de5\u9762" in exterior_plaster[14]
+    assert exterior_plaster[12] == "\u5916\u5899\u957f\u5ea6*\u5c42\u9ad8\u9762\u79ef\u6c47\u603b"
+    assert exterior_plaster[13] == "\u81ea\u52a8\u751f\u6210"
+    assert exterior_plaster[14] is None
     assert exterior_repair[3] == 0
     assert exterior_repair[9] == "\u81ea\u52a8\u6c47\u603b"
     assert "\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165" in exterior_repair[14]
@@ -1716,7 +1717,7 @@ def test_export_residential_quote_auto_fills_construction_marker_items(tmp_path:
     assert hole[3] == 12
     assert hole[9] == "\u81ea\u52a8\u6c47\u603b"
     assert hole[12] == "\u5efa\u7b51\u9762\u79ef\u768410%\u53d6\u6574"
-    assert hole[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
+    assert hole[13] == "\u81ea\u52a8\u751f\u6210"
 
 
 def test_export_residential_quote_auto_fills_background_wall_items(tmp_path: Path):
@@ -1957,6 +1958,22 @@ def test_export_residential_quote_keeps_percent_count_default_without_building_a
     assert hole[13] == "\u6309\u6a21\u677f\u751f\u6210"
 
 
+def test_export_residential_quote_uses_building_area_for_percent_count(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_construction_items=True)
+    result = QuantityResult(project_name="Building Area", rows=[], building_area=136.2, exceptions=[])
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    hole = _item_row_named(rows, "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54")
+    assert hole[3] == 14
+    assert hole[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert hole[13] == "\u81ea\u52a8\u751f\u6210"
+    assert hole[14] is None
+
+
 def test_export_residential_quote_uses_zero_for_missing_demo_wall_markers(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
@@ -2017,23 +2034,33 @@ def test_export_residential_quote_defaults_missing_new_wall_thickness_to_240(tmp
     assert "\u672a\u586b\u5199\u539a\u5ea6\u7684\u65b0\u780c\u5899\u6309240mm\u8ba1\u7b97" in wall_240[14]
 
 
-def test_export_residential_quote_uses_zero_for_missing_pipe_markers(tmp_path: Path):
+def test_export_residential_quote_defaults_missing_pipe_markers_from_wet_room_count_and_height(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"
     _create_quote_template(template_path, include_pipe_items=True)
-    result = QuantityResult(project_name="No Pipes", rows=[], construction_details=[], exceptions=[])
+    result = QuantityResult(
+        project_name="No Pipes",
+        rows=[
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0, height=2.8),
+            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=12.0, height=2.7),
+            _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=40.0, height=2.8),
+        ],
+        construction_details=[],
+        exceptions=[],
+    )
 
     export_residential_quote(result, template_path, output_path)
 
     rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
     insulation = _item_row_named(rows, "\u53a8\u623f\u3001\u536b\u751f\u95f4\u6392\u6c61\u7ba1\u5305\u9694\u97f3\u68c9")
     pipe_wrap = _item_row_named(rows, "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053(\u5355\u7ba1)")
-    assert insulation[3] == 0
+    assert insulation[3] == 8.25
     assert insulation[9] == "\u81ea\u52a8\u6c47\u603b"
-    assert "\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165" in insulation[14]
-    assert pipe_wrap[3] == 0
+    assert insulation[12] == "\u53a8\u623f/\u536b\u751f\u95f4\u6570\u91cf*\u5c42\u9ad8*1.5\u9ed8\u8ba4\u957f\u5ea6"
+    assert "\u6309\u53a8\u623f/\u536b\u751f\u95f4\u5c42\u9ad8\u5408\u8ba1*1.5\u9ed8\u8ba4\u8ba1\u7b97" in insulation[14]
+    assert pipe_wrap[3] == 8.25
     assert pipe_wrap[9] == "\u81ea\u52a8\u6c47\u603b"
-    assert "\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165" in pipe_wrap[14]
+    assert pipe_wrap[12] == "\u53a8\u623f/\u536b\u751f\u95f4\u6570\u91cf*\u5c42\u9ad8*1.5\u9ed8\u8ba4\u957f\u5ea6"
 
 
 def test_export_residential_quote_keeps_kitchen_and_balcony_sliding_doors_separate(tmp_path: Path):
@@ -2103,9 +2130,9 @@ def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(
                 net_wall_area=50.0,
                 status=DataStatus.DEFAULT_INFERRED,
                 exception_notes=[
-                    "window_height_defaulted: Window w1 used default height 1.5",
-                    "window_height_defaulted: Window w2 used default height 1.5",
-                    "Window w3 used default height 1.5",
+                    "window_height_defaulted: Window w1 used default height 1.8",
+                    "window_height_defaulted: Window w2 used default height 1.8",
+                    "Window w3 used default height 1.8",
                 ],
             ),
         ],
@@ -2119,7 +2146,7 @@ def test_export_residential_quote_marks_default_inferred_rows_as_auto_generated(
     living_wall_paint = _row_containing(rows, "\u5899\u9762\u4e73\u80f6\u6f06")
     floor_tile = _item_row_named(rows, "\u5730\u9762\u7816\u94fa\u8d34(750X1500)")
     assert living_wall_paint[13] == "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
-    assert living_wall_paint[14] == "\u7a97\u9ad8\u7f3a\u59313\u4e2a\uff0c\u5df2\u6309\u9ed8\u8ba4\u7a97\u9ad81.5m\u8ba1\u7b97"
+    assert living_wall_paint[14] == "\u7a97\u9ad8\u7f3a\u59313\u4e2a\uff0c\u5df2\u6309\u9ed8\u8ba4\u7a97\u9ad81.8m\u8ba1\u7b97"
     assert floor_tile[13] == "\u81ea\u52a8\u751f\u6210"
     assert floor_tile[14] is None
 
@@ -2389,6 +2416,7 @@ def _quantity_row(
     door_details: list[DoorQuantityDetail] | None = None,
     custom_details: list[FixtureQuantityDetail] | None = None,
     cabinet_details: list[FixtureQuantityDetail] | None = None,
+    height: float = 2.8,
     status: DataStatus = DataStatus.CONFIRMED,
     exception_notes: list[str] | None = None,
 ) -> QuantityRow:
@@ -2397,7 +2425,7 @@ def _quantity_row(
         floor=None,
         room_name=name,
         space_type=SpaceType.NORMAL,
-        height=2.8,
+        height=height,
         height_mode=HeightMode.PROJECT_DEFAULT,
         floor_area=floor_area,
         floor_perimeter=0,

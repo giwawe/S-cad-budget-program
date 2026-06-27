@@ -201,6 +201,7 @@ class ResidentialQuoteRules:
     tile_piece_loss_rate: float
     wide_door_width_threshold: float
     default_door_height: float
+    default_sliding_door_height: float
     default_custom_height: float
     low_custom_height_threshold: float
     sliding_door_room_keywords: set[str]
@@ -281,7 +282,12 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         wall_cabinet_length_items=_optional_item_set(data, "wall_cabinet_length_items"),
         tile_piece_loss_rate=_optional_float(data, "tile_piece_loss_rate", 0.05),
         wide_door_width_threshold=_optional_float(data, "wide_door_width_threshold", 1.4),
-        default_door_height=_optional_float(data, "default_door_height", 2.1),
+        default_door_height=_optional_float(data, "default_door_height", 2.2),
+        default_sliding_door_height=_optional_float(
+            data,
+            "default_sliding_door_height",
+            _optional_float(data, "default_door_height", 2.4) if "default_door_height" in data else 2.4,
+        ),
         default_custom_height=_optional_float(data, "default_custom_height", 2.6),
         low_custom_height_threshold=_optional_float(data, "low_custom_height_threshold", 1.0),
         sliding_door_room_keywords=_optional_item_set(data, "sliding_door_room_keywords"),
@@ -742,20 +748,22 @@ def _aggregate_quantity_for_item(
     if item_name in rules.squat_toilet_count_items:
         return _squat_toilet_count_aggregate(construction_details or [])
     if item_name in rules.pipe_insulation_length_items:
-        return _construction_length_aggregate(
+        return _pipe_length_aggregate(
             construction_details or [],
             ConstructionKind.PIPE_INSULATION,
             "\u6392\u6c61\u7ba1\u9694\u97f3\u68c9\u7acb\u7ba1\u957f\u5ea6\u6c47\u603b",
             "\u7ba1\u9053\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838",
             zero_note="\u672a\u8bc6\u522bQUOTE_PIPE_INSULATION\u6392\u6c61\u7ba1\u9694\u97f3\u68c9\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u8ba1\u7b97\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165",
+            rooms=rooms,
         )
     if item_name in rules.pipe_wrap_length_items:
-        return _construction_length_aggregate(
+        return _pipe_length_aggregate(
             construction_details or [],
             ConstructionKind.PIPE_WRAP,
             "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053\u7acb\u7ba1\u957f\u5ea6\u6c47\u603b",
             "\u7ba1\u9053\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838",
             zero_note="\u672a\u8bc6\u522bQUOTE_PIPE_WRAP\u5305\u7ba1\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u8ba1\u7b97\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165",
+            rooms=rooms,
         )
     if item_name in rules.building_area_percent_count_items:
         return _building_area_percent_count_aggregate(building_area, rules.building_area_percent_count_items[item_name])
@@ -807,13 +815,13 @@ def _aggregate_quantity_for_item(
             review_note=_wall_tile_review_note(wall_tile_rooms, explicit_wall_tile_details),
         )
     if item_name in rules.tile_processing_area_items:
-        floor_rooms = [room for room in rooms if room.include_in_floor_quantity]
+        if building_area is None or building_area <= 0:
+            return None
         return QuoteAggregateQuantity(
-            quantity=_round_quantity(sum(room.floor_area for room in floor_rooms)),
-            basis="\u623f\u5b50\u9762\u79ef\u6c47\u603b",
-            rooms=floor_rooms,
-            review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
-            review_note="\u74f7\u7816\u52a0\u5de5\u8d39\u6309\u623f\u5b50\u9762\u79ef\u8ba1\u7b97\uff0c\u9700\u8bbe\u8ba1\u5e08\u4fee\u6539\u786e\u8ba4",
+            quantity=_round_quantity(building_area),
+            basis="QUOTE_EXT_WALL\u56f4\u5408\u5efa\u7b51\u9762\u79ef",
+            rooms=[],
+            review_status="\u81ea\u52a8\u751f\u6210",
         )
     if item_name in rules.interior_door_count_items:
         door_count, door_rooms = _ordinary_interior_door_count(rooms, rules)
@@ -839,7 +847,7 @@ def _aggregate_quantity_for_item(
             basis="\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u9762\u79ef\u6c47\u603b",
             rooms=door_rooms,
             review_status=_door_area_review_status(door_rooms),
-            review_note=_door_default_note_for_rooms(door_rooms, rules),
+            review_note=_door_default_note_for_rooms(door_rooms, rules, default_kind="sliding"),
         )
     if item_name in rules.sliding_door_trim_length_items:
         trim_length, door_rooms = _sliding_door_trim_length(rooms, rules, item_name)
@@ -855,7 +863,7 @@ def _aggregate_quantity_for_item(
             basis="\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u5957\u7ebf\u957f\u5ea6\u6c47\u603b",
             rooms=door_rooms,
             review_status=_door_area_review_status(door_rooms),
-            review_note=_door_default_note_for_rooms(door_rooms, rules),
+            review_note=_door_default_note_for_rooms(door_rooms, rules, default_kind="door_opening"),
         )
     if item_name in rules.room_count_aggregate_items:
         return QuoteAggregateQuantity(
@@ -957,15 +965,14 @@ def _aggregate_quantity_for_item(
 
 def _exterior_net_area_aggregate(exterior_rows: list[ExteriorQuantityRow]) -> QuoteAggregateQuantity | None:
     included_rows = [row for row in exterior_rows if row.include_in_quote]
-    quantity = _round_quantity(sum(row.net_area for row in included_rows))
+    quantity = _round_quantity(sum(row.gross_area for row in included_rows))
     if not included_rows or quantity <= 0:
         return None
     return QuoteAggregateQuantity(
         quantity=quantity,
-        basis="\u9009\u5b9a\u5916\u5899\u51c0\u9762\u79ef\u6c47\u603b",
+        basis="\u5916\u5899\u957f\u5ea6*\u5c42\u9ad8\u9762\u79ef\u6c47\u603b",
         rooms=[],
-        review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
-        review_note="\u4f7f\u7528\u9009\u5b9a\u5916\u5899\u51c0\u9762\u79ef\uff0c\u5df2\u6263\u9664\u5916\u5899\u6d1e\u53e3\uff0c\u9700\u786e\u8ba4\u5916\u5899\u6279\u5d4c\u65bd\u5de5\u9762",
+        review_status="\u81ea\u52a8\u751f\u6210",
     )
 
 
@@ -1132,6 +1139,42 @@ def _construction_length_aggregate(
     )
 
 
+def _pipe_length_aggregate(
+    construction_details: list[ConstructionQuantityDetail],
+    kind: ConstructionKind,
+    basis: str,
+    default_height_note: str,
+    zero_note: str | None = None,
+    rooms: list[QuantityRow] | None = None,
+) -> QuoteAggregateQuantity | None:
+    details = [detail for detail in construction_details if detail.kind is kind]
+    quantity = _round_quantity(sum(detail.length for detail in details))
+    if details and quantity > 0:
+        return QuoteAggregateQuantity(
+            quantity=quantity,
+            basis=basis,
+            rooms=[],
+            review_status=_construction_review_status(details),
+            review_note=default_height_note if any(detail.height_defaulted for detail in details) else None,
+        )
+
+    wet_rooms = [room for room in rooms or [] if _is_wet_room(room)]
+    default_quantity = _round_quantity(sum(room.height for room in wet_rooms) * 1.5)
+    if wet_rooms and default_quantity > 0:
+        marker_note = zero_note or "\u672a\u8bc6\u522b\u7ba1\u9053/\u5305\u7ba1\u6807\u8bc6"
+        return QuoteAggregateQuantity(
+            quantity=default_quantity,
+            basis="\u53a8\u623f/\u536b\u751f\u95f4\u6570\u91cf*\u5c42\u9ad8*1.5\u9ed8\u8ba4\u957f\u5ea6",
+            rooms=wet_rooms,
+            review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
+            review_note=f"{marker_note}\uff1b\u6309\u53a8\u623f/\u536b\u751f\u95f4\u5c42\u9ad8\u5408\u8ba1*1.5\u9ed8\u8ba4\u8ba1\u7b97\uff0c\u8bbe\u8ba1\u5e08\u53ef\u4fee\u6539",
+        )
+
+    if zero_note is not None:
+        return _zero_aggregate(basis, zero_note)
+    return None
+
+
 def _building_area_percent_count_aggregate(building_area: float | None, percent: float) -> QuoteAggregateQuantity | None:
     if building_area is None or building_area <= 0:
         return None
@@ -1142,8 +1185,7 @@ def _building_area_percent_count_aggregate(building_area: float | None, percent:
         quantity=quantity,
         basis=f"\u5efa\u7b51\u9762\u79ef\u7684{percent * 100:g}%\u53d6\u6574",
         rooms=[],
-        review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
-        review_note="\u5efa\u7b51\u9762\u79ef\u6765\u81ea\u95ed\u5408\u5916\u5899\u8f6e\u5ed3\u6216\u5efa\u7b51\u9762\u79ef\u8f6e\u5ed3\uff0c\u9700\u8bbe\u8ba1\u5e08\u590d\u6838",
+        review_status="\u81ea\u52a8\u751f\u6210",
     )
 
 
@@ -1301,8 +1343,8 @@ def _review_note_for_rooms(rooms: list[QuantityRow], rules: ResidentialQuoteRule
         if any(window.height_defaulted for window in room.window_details):
             notes.append("\u7a97\u5e18\u6309\u540c\u623f\u95f4\u540c\u5899\u6bb5\u53bb\u91cd\uff0cL\u5f62\u7a97\u9700\u4eba\u5de5\u786e\u8ba4")
         if any(door.height_defaulted for door in room.door_details):
-            default_height = rules.default_door_height if rules is not None else 2.1
-            notes.append(f"\u95e8\u6d1e\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u9ed8\u8ba4\u95e8\u9ad8{default_height:g}m")
+            default_height = rules.default_door_height if rules is not None else 2.2
+            notes.append(f"\u95e8\u6d1e\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u9ed8\u8ba4\u95e8\u6d1e\u9ad8\u5ea6{default_height:g}m")
     return "\uff1b".join(notes) if notes else None
 
 
@@ -1407,10 +1449,17 @@ def _door_area_review_status(rooms: list[QuantityRow]) -> str:
     return "\u81ea\u52a8\u751f\u6210"
 
 
-def _door_default_note_for_rooms(rooms: list[QuantityRow], rules: ResidentialQuoteRules) -> str | None:
+def _door_default_note_for_rooms(
+    rooms: list[QuantityRow],
+    rules: ResidentialQuoteRules,
+    *,
+    default_kind: str,
+) -> str | None:
     if not any(any(door.height_defaulted for door in room.door_details) for room in rooms):
         return None
-    return f"\u95e8\u6d1e\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u9ed8\u8ba4\u95e8\u9ad8{rules.default_door_height:g}m"
+    if default_kind == "sliding":
+        return f"\u63a8\u62c9\u95e8\u95e8\u9ad8\u7f3a\u5c11\u65f6\u9ed8\u8ba4\u63a8\u62c9\u95e8\u9ad8\u5ea6{rules.default_sliding_door_height:g}m"
+    return f"\u95e8\u6d1e\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u9ed8\u8ba4\u95e8\u6d1e\u9ad8\u5ea6{rules.default_door_height:g}m"
 
 
 def _review_status_for_room(item_name: str, room: QuantityRow) -> str:
@@ -1625,7 +1674,7 @@ def _is_optional_zero_sliding_item(item_name: str, keywords_by_item: dict[str, s
 
 def _door_quote_area(door, rules: ResidentialQuoteRules) -> float:
     if door.width is not None and door.height_defaulted:
-        return door.width * rules.default_door_height
+        return door.width * rules.default_sliding_door_height
     return door.area
 
 

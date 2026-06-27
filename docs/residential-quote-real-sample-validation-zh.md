@@ -45,7 +45,7 @@ marker-rich 对照样例证明以下数据源接通后可稳定生成：
 | 报价项 | 数据源 | 当前口径 |
 | --- | --- | --- |
 | 砌120厚砖墙 / 砌240厚砖墙 | `QUOTE_NEW_WALL`，`THICKNESS=120/240` | 新砌墙面积按厚度归类汇总，未填厚度按 240mm |
-| 外墙批嵌 | `QUOTE_EXT_WALL`、`QUOTE_EXT_OPENING` | 选定外墙净面积汇总，扣除外墙洞口 |
+| 外墙批嵌 | `QUOTE_EXT_WALL` | 选定外墙长度乘层高面积汇总，不扣外墙洞口 |
 | 打混凝土过梁孔 | 闭合 `QUOTE_EXT_WALL` 或闭合 `QUOTE_BUILDING_AREA` | 建筑面积的 10% 取整 |
 | 全屋定制 | `QUOTE_CUSTOM` | 投影面积汇总，缺高默认 2.6m；低于 1m 的柜体提示按长度复核 |
 | 地柜 / 吊柜 | `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET`，旧图可用 `QUOTE_CABINET + TYPE` | 按地柜、吊柜分别汇总长度；闭合轮廓按占地面积除以推断柜深折算 |

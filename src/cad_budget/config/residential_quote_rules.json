@@ -118,7 +118,8 @@
   ],
   "tile_piece_loss_rate": 0.05,
   "wide_door_width_threshold": 1.4,
-  "default_door_height": 2.1,
+  "default_door_height": 2.2,
+  "default_sliding_door_height": 2.4,
   "default_custom_height": 2.6,
   "low_custom_height_threshold": 1.0,
   "sliding_door_room_keywords": [
