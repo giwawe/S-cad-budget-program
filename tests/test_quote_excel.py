@@ -2034,6 +2034,40 @@ def test_export_residential_quote_defaults_missing_new_wall_thickness_to_240(tmp
     assert "\u672a\u586b\u5199\u539a\u5ea6\u7684\u65b0\u780c\u5899\u6309240mm\u8ba1\u7b97" in wall_240[14]
 
 
+def test_export_residential_quote_uses_confirmed_zero_for_unmatched_new_wall_thickness(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_construction_items=True)
+    result = QuantityResult(
+        project_name="Only 240 New Wall",
+        rows=[],
+        construction_details=[
+            ConstructionQuantityDetail(
+                id="new-240",
+                kind=ConstructionKind.NEW_WALL,
+                length=2.0,
+                effective_height=3.0,
+                thickness=0.24,
+                area=6.0,
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    wall_120 = _item_row_named(rows, "\u780c120\u539a\u7816\u5899")
+    wall_240 = _item_row_named(rows, "\u780c240\u539a\u7816\u5899")
+    assert wall_120[3] == 0
+    assert wall_120[9] == "\u81ea\u52a8\u6c47\u603b"
+    assert wall_120[12] == "\u65b0\u780c120mm\u7816\u5899\u9762\u79ef\u6c47\u603b"
+    assert wall_120[13] == "\u81ea\u52a8\u751f\u6210"
+    assert wall_120[14] is None
+    assert wall_240[3] == 6.0
+    assert wall_240[13] == "\u81ea\u52a8\u751f\u6210"
+
+
 def test_export_residential_quote_defaults_missing_pipe_markers_from_wet_room_count_and_height(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"

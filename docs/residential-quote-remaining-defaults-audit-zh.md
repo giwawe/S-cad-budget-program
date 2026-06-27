@@ -31,7 +31,7 @@
 | 外墙批嵌 | 有 `QUOTE_EXT_WALL` 且参与报价的外墙行时自动汇总；没有外墙行或全部排除时仍按模板默认 | `exterior_rows.gross_area` | 按选定外墙长度乘层高面积汇总，不扣外墙洞口 |
 | 外墙批嵌以及修补 | 有 `QUOTE_EXT_REPAIR` 时自动汇总；没有修补标识时按 0 | `construction_details` 中 `exterior_repair` 面积 | 闭合修补轮廓按实际面积；开放修补线按长度乘 `HEIGHT` 或默认高度，缺高时标记默认推断；无标识提示设计师手工输入 |
 | 拆改及拆墙 | 有 `QUOTE_DEMO_WALL` 时自动汇总；没有标识时按 0 | `construction_details` 中 `demo_wall` 面积 | 按拆墙线长度乘标识高度/默认高度汇总，缺高时标记默认推断；无标识表示没有要拆的墙 |
-| 砌120厚砖墙 | 有 `QUOTE_NEW_WALL` 且 `THICKNESS=120mm/0.12m` 时自动汇总；有新砌墙但没有 120 标识时按 0 并提示确认厚度 | `construction_details` 中 `new_wall` 面积和厚度 | 按新砌墙线长度乘标识高度/默认高度汇总 |
+| 砌120厚砖墙 | 有 `QUOTE_NEW_WALL` 且 `THICKNESS=120mm/0.12m` 时自动汇总；明确只有其他厚度时按 0 自动生成；疑似接近厚度写错时提示确认 | `construction_details` 中 `new_wall` 面积和厚度 | 按新砌墙线长度乘标识高度/默认高度汇总 |
 | 砌240厚砖墙 | 有 `QUOTE_NEW_WALL` 且 `THICKNESS=240mm/0.24m` 时自动汇总；未填 `THICKNESS` 的新砌墙默认按 240mm | `construction_details` 中 `new_wall` 面积和厚度 | 按新砌墙线长度乘标识高度/默认高度汇总 |
 | 砖墙门窗洞过梁 | 有 `QUOTE_LINTEL` 时自动汇总；没有标识时按 0 | `construction_details` 中 `lintel` 数量 | 每个标识按 1 支过梁计；仅标新增门窗洞，避免把既有普通门洞误计入 |
 | 背景墙 | 有 `QUOTE_BACKGROUND_WALL` 时自动汇总；没有标识时按 0 | `construction_details` 中 `background_wall` 面积 | 按背景墙线长乘 `HEIGHT` 或默认高度汇总；缺高时提示复核；没有客户方案时不硬推 |

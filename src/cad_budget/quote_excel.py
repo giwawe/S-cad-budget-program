@@ -1013,6 +1013,11 @@ def _new_wall_area_aggregate(
     quantity = _round_quantity(sum(detail.area for detail in details))
     if not details or quantity <= 0:
         thickness_label = f"{thickness * 1000:g}mm"
+        if not _has_near_miss_new_wall_thickness(new_wall_details, thickness):
+            return _zero_aggregate(
+                f"\u65b0\u780c{thickness_label}\u7816\u5899\u9762\u79ef\u6c47\u603b",
+                status="\u81ea\u52a8\u751f\u6210",
+            )
         return _zero_aggregate(
             f"\u65b0\u780c{thickness_label}\u7816\u5899\u9762\u79ef\u6c47\u603b",
             (
@@ -1031,6 +1036,18 @@ def _new_wall_area_aggregate(
         rooms=[],
         review_status=_construction_review_status(details),
         review_note=note,
+    )
+
+
+def _has_near_miss_new_wall_thickness(
+    new_wall_details: list[ConstructionQuantityDetail],
+    thickness: float,
+) -> bool:
+    return any(
+        detail.thickness is not None
+        and abs(detail.thickness - thickness) > 1e-6
+        and abs(detail.thickness - thickness) <= 0.02
+        for detail in new_wall_details
     )
 
 
