@@ -11,6 +11,7 @@ from cad_budget.models import ProjectInput, QuantityResult
 from cad_budget.export_excel import export_quantity_result
 from cad_budget.import_excel import import_quantity_result
 from cad_budget.quote_excel import default_quote_rules_text, export_residential_quote
+from cad_budget.quote_report import generate_quote_review_report
 from cad_budget.quantity import calculate_quantities
 
 app = typer.Typer(help="CAD renovation quantity takeoff tools.")
@@ -182,6 +183,21 @@ def quote(
         raise typer.Exit(code=1)
 
     typer.echo(f"Wrote {excel_output}")
+
+
+@app.command("quote-report")
+def quote_report(
+    input_excel: Path,
+    markdown_output: Path = typer.Option(..., "--markdown-output", help="Path for generated quote review Markdown."),
+) -> None:
+    try:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        generate_quote_review_report(input_excel, markdown_output)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Failed to generate quote review report '{markdown_output}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Wrote {markdown_output}")
 
 
 @app.command("init-rules")

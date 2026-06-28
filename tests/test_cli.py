@@ -434,6 +434,33 @@ def test_cli_quote_writes_residential_fitout_excel(tmp_path: Path):
     assert "Wrote" in result.output
 
 
+def test_cli_quote_report_writes_markdown_review_report(tmp_path: Path):
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    quote_output = tmp_path / "quote.xlsx"
+    report_output = tmp_path / "quote-review.md"
+    input_json.write_text(json.dumps(_quantity_result_payload()), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True)
+    quote_result = runner.invoke(
+        app,
+        ["quote", str(input_json), "--template", str(template), "--excel-output", str(quote_output)],
+    )
+    assert quote_result.exit_code == 0
+
+    result = runner.invoke(
+        app,
+        ["quote-report", str(quote_output), "--markdown-output", str(report_output)],
+    )
+
+    assert result.exit_code == 0
+    assert report_output.exists()
+    report_text = report_output.read_text(encoding="utf-8")
+    assert "# 报价复核报告" in report_text
+    assert "按模板生成" in report_text
+    assert "Wrote" in result.output
+
+
 def test_cli_init_rules_writes_default_rules_json(tmp_path: Path):
     runner = CliRunner()
     output = tmp_path / "rules.json"
