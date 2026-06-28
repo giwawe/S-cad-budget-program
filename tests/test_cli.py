@@ -450,7 +450,14 @@ def test_cli_quote_report_writes_markdown_review_report(tmp_path: Path):
 
     result = runner.invoke(
         app,
-        ["quote-report", str(quote_output), "--markdown-output", str(report_output)],
+        [
+            "quote-report",
+            str(quote_output),
+            "--quantity-json",
+            str(input_json),
+            "--markdown-output",
+            str(report_output),
+        ],
     )
 
     assert result.exit_code == 0

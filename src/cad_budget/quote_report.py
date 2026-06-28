@@ -6,6 +6,8 @@ from typing import Any
 
 from openpyxl import load_workbook
 
+from cad_budget.models import ConstructionKind, QuantityResult
+
 
 _HEADER_ROW = 3
 _FIRST_DATA_ROW = 4
@@ -37,20 +39,26 @@ class QuoteReviewRow:
     review_note: str | None
 
 
-def generate_quote_review_report(input_excel: Path, markdown_output: Path) -> str:
-    report_text = build_quote_review_report(input_excel)
+def generate_quote_review_report(
+    input_excel: Path,
+    markdown_output: Path,
+    *,
+    quantity_result: QuantityResult | None = None,
+) -> str:
+    report_text = build_quote_review_report(input_excel, quantity_result=quantity_result)
     markdown_output.parent.mkdir(parents=True, exist_ok=True)
     markdown_output.write_text(report_text, encoding="utf-8")
     return report_text
 
 
-def build_quote_review_report(input_excel: Path) -> str:
+def build_quote_review_report(input_excel: Path, *, quantity_result: QuantityResult | None = None) -> str:
     workbook = load_workbook(input_excel, data_only=False)
     sheet = workbook.active
     headers = _header_columns(sheet)
     rows = _review_rows(sheet, headers)
+    action_contexts = _quantity_action_contexts(quantity_result)
     lines = ["# 报价复核报告", ""]
-    lines.extend(_action_summary(rows))
+    lines.extend(_action_summary(rows, action_contexts))
     lines.append("")
     lines.extend(_status_summary(rows))
     lines.append("")
@@ -131,7 +139,7 @@ def _status_summary(rows: list[QuoteReviewRow]) -> list[str]:
     return lines
 
 
-def _action_summary(rows: list[QuoteReviewRow]) -> list[str]:
+def _action_summary(rows: list[QuoteReviewRow], action_contexts: dict[str, str]) -> list[str]:
     actions: dict[str, list[QuoteReviewRow]] = {label: [] for label, _ in _ACTION_RULES}
     for row in rows:
         searchable_text = " ".join(
@@ -150,8 +158,64 @@ def _action_summary(rows: list[QuoteReviewRow]) -> list[str]:
     for label, action_rows in actionable:
         item_names = _format_item_names(action_rows)
         excel_rows = _format_excel_rows([row.excel_row for row in action_rows])
-        lines.append(f"- {label}：影响 {len(action_rows)} 个报价行，涉及项目：{item_names}；Excel 行 {excel_rows}")
+        context = action_contexts.get(label)
+        context_text = f"；涉及对象：{context}" if context else ""
+        lines.append(
+            f"- {label}：影响 {len(action_rows)} 个报价行，涉及项目：{item_names}；"
+            f"Excel 行 {excel_rows}{context_text}"
+        )
     return lines
+
+
+def _quantity_action_contexts(quantity_result: QuantityResult | None) -> dict[str, str]:
+    if quantity_result is None:
+        return {}
+
+    contexts: dict[str, str] = {}
+    window_parts = [
+        f"{row.room_name}窗高 {count} 个"
+        for row in quantity_result.rows
+        if (count := sum(1 for window in row.window_details if window.height_defaulted)) > 0
+    ]
+    if window_parts:
+        contexts["补窗高"] = "、".join(window_parts)
+
+    door_parts = [
+        f"{row.room_name}门洞/推拉门高度 {count} 个"
+        for row in quantity_result.rows
+        if (count := sum(1 for door in row.door_details if door.height_defaulted)) > 0
+    ]
+    if door_parts:
+        contexts["补门洞/推拉门高度"] = "、".join(door_parts)
+
+    custom_parts = [
+        f"{row.room_name}全屋定制高度/类型 {count} 处"
+        for row in quantity_result.rows
+        if (
+            count := sum(
+                1
+                for custom in row.custom_details
+                if custom.height_defaulted or custom.fixture_type is None
+            )
+        )
+        > 0
+    ]
+    if custom_parts:
+        contexts["补全屋定制高度/类型"] = "、".join(custom_parts)
+
+    new_wall_count = sum(
+        1
+        for detail in quantity_result.construction_details
+        if detail.kind is ConstructionKind.NEW_WALL and (detail.height_defaulted or detail.thickness is None)
+    )
+    if new_wall_count:
+        contexts["补新砌墙高度/厚度"] = f"新砌墙标识 {new_wall_count} 处"
+
+    wet_room_names = [row.room_name for row in quantity_result.rows if "厨房" in row.room_name or "卫" in row.room_name]
+    if wet_room_names:
+        contexts["补管道/包管标识"] = f"{'、'.join(wet_room_names)}湿区空间"
+
+    return contexts
 
 
 def _source_summary(rows: list[QuoteReviewRow]) -> list[str]:

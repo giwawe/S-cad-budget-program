@@ -188,11 +188,26 @@ def quote(
 @app.command("quote-report")
 def quote_report(
     input_excel: Path,
+    quantity_json: Path | None = typer.Option(None, "--quantity-json", help="Optional QuantityResult JSON for room/object context."),
     markdown_output: Path = typer.Option(..., "--markdown-output", help="Path for generated quote review Markdown."),
 ) -> None:
+    quantity_result: QuantityResult | None = None
+    if quantity_json is not None:
+        try:
+            raw_json = quantity_json.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            typer.echo(f"Failed to read quantity result JSON '{quantity_json}': {exc}", err=True)
+            raise typer.Exit(code=1)
+        try:
+            quantity_result = QuantityResult.model_validate_json(raw_json)
+        except (json.JSONDecodeError, ValidationError) as exc:
+            error_message = str(exc).splitlines()[0] if str(exc).splitlines() else str(exc)
+            typer.echo(f"Invalid quantity result JSON in '{quantity_json}': {error_message}", err=True)
+            raise typer.Exit(code=1)
+
     try:
         markdown_output.parent.mkdir(parents=True, exist_ok=True)
-        generate_quote_review_report(input_excel, markdown_output)
+        generate_quote_review_report(input_excel, markdown_output, quantity_result=quantity_result)
     except (OSError, ValueError) as exc:
         typer.echo(f"Failed to generate quote review report '{markdown_output}': {exc}", err=True)
         raise typer.Exit(code=1)

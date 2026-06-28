@@ -6,8 +6,8 @@
 
 - 算量结果：`scratch/cad-import-10-real-template-current/result.json`
 - 报价结果：`scratch/cad-import-10-real-template-current/quote.xlsx`
-- 复核报告可通过命令生成：`cad-budget quote-report scratch/cad-import-10-real-template-current/quote.xlsx --markdown-output scratch/cad-import-10-real-template-current/quote-review.md`
-- 生成的 `quote-review.md` 顶部会先按复核备注归纳补图/复核行动建议，显示每类行动影响的报价行数、涉及项目名摘要和 Excel 行号，再列出状态统计和带 Excel 行号的明细表。
+- 复核报告可通过命令生成：`cad-budget quote-report scratch/cad-import-10-real-template-current/quote.xlsx --quantity-json scratch/cad-import-10-real-template-current/result.json --markdown-output scratch/cad-import-10-real-template-current/quote-review.md`
+- 生成的 `quote-review.md` 顶部会先按复核备注归纳补图/复核行动建议，显示每类行动影响的报价行数、涉及项目名摘要、Excel 行号，以及可选 `QuantityResult` 提供的房间/对象摘要，再列出状态统计和带 Excel 行号的明细表。
 
 ## 当前统计
 
