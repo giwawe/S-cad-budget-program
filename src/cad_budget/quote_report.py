@@ -132,23 +132,25 @@ def _status_summary(rows: list[QuoteReviewRow]) -> list[str]:
 
 
 def _action_summary(rows: list[QuoteReviewRow]) -> list[str]:
-    actions: dict[str, list[int]] = {label: [] for label, _ in _ACTION_RULES}
+    actions: dict[str, list[QuoteReviewRow]] = {label: [] for label, _ in _ACTION_RULES}
     for row in rows:
         searchable_text = " ".join(
             part or "" for part in [row.item_name, row.basis, row.review_status, row.review_note]
         )
         for label, keywords in _ACTION_RULES:
             if any(keyword in searchable_text for keyword in keywords):
-                actions[label].append(row.excel_row)
+                actions[label].append(row)
                 break
 
     lines = ["## 复核行动建议", ""]
-    actionable = [(label, row_numbers) for label, row_numbers in actions.items() if row_numbers]
+    actionable = [(label, action_rows) for label, action_rows in actions.items() if action_rows]
     if not actionable:
         lines.append("- 暂无明确补图建议")
         return lines
-    for label, row_numbers in actionable:
-        lines.append(f"- {label}：{len(row_numbers)} 行，涉及 Excel 行 {_format_excel_rows(row_numbers)}")
+    for label, action_rows in actionable:
+        item_names = _format_item_names(action_rows)
+        excel_rows = _format_excel_rows([row.excel_row for row in action_rows])
+        lines.append(f"- {label}：影响 {len(action_rows)} 个报价行，涉及项目：{item_names}；Excel 行 {excel_rows}")
     return lines
 
 
@@ -168,6 +170,14 @@ def _source_summary(rows: list[QuoteReviewRow]) -> list[str]:
 
 def _format_excel_rows(row_numbers: list[int]) -> str:
     return "、".join(str(row_number) for row_number in row_numbers)
+
+
+def _format_item_names(rows: list[QuoteReviewRow]) -> str:
+    names: list[str] = []
+    for row in rows:
+        if row.item_name not in names:
+            names.append(row.item_name)
+    return "、".join(names)
 
 
 def _format_quantity(value: Any) -> str:
