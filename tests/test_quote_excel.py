@@ -89,6 +89,7 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert "\u8e72\u5751" in rules.squat_toilet_count_items
     assert "\u53a8\u623f\u3001\u536b\u751f\u95f4\u6392\u6c61\u7ba1\u5305\u9694\u97f3\u68c9" in rules.pipe_insulation_length_items
     assert "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053(\u5355\u7ba1)" in rules.pipe_wrap_length_items
+    assert rules.pipe_default_length_factor == 1.5
     assert "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54" in rules.building_area_percent_count_items
     assert rules.building_area_percent_count_items["\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54"] == 0.1
 
@@ -139,7 +140,13 @@ def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkey
 
 def test_load_quote_rules_reads_external_rule_file(tmp_path: Path):
     rules_path = tmp_path / "rules.json"
-    _write_custom_quote_rules(rules_path, kitchen_height=0.5, bathroom_height=1.2, tile_height=2.0)
+    _write_custom_quote_rules(
+        rules_path,
+        kitchen_height=0.5,
+        bathroom_height=1.2,
+        tile_height=2.0,
+        pipe_default_length_factor=2.0,
+    )
 
     rules = load_quote_rules(rules_path)
 
@@ -152,6 +159,7 @@ def test_load_quote_rules_reads_external_rule_file(tmp_path: Path):
     assert rules.wall_cabinet_length_items == set()
     assert rules.default_custom_height == 2.6
     assert rules.low_custom_height_threshold == 1.0
+    assert rules.pipe_default_length_factor == 2.0
     assert rules.source_label == str(rules_path)
 
 
@@ -2090,11 +2098,43 @@ def test_export_residential_quote_defaults_missing_pipe_markers_from_wet_room_co
     pipe_wrap = _item_row_named(rows, "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053(\u5355\u7ba1)")
     assert insulation[3] == 8.25
     assert insulation[9] == "\u81ea\u52a8\u6c47\u603b"
-    assert insulation[12] == "\u53a8\u623f/\u536b\u751f\u95f4\u6570\u91cf*\u5c42\u9ad8*1.5\u9ed8\u8ba4\u957f\u5ea6"
-    assert "\u6309\u53a8\u623f/\u536b\u751f\u95f4\u5c42\u9ad8\u5408\u8ba1*1.5\u9ed8\u8ba4\u8ba1\u7b97" in insulation[14]
+    assert insulation[12] == "\u53a8\u623f/\u536b\u751f\u95f4\u5c42\u9ad8\u5408\u8ba1*1.5\u9ed8\u8ba4\u957f\u5ea6"
+    assert "\u672a\u6807\u6ce8\u7acb\u7ba1\u4f4d\u7f6e" in insulation[14]
+    assert "1.5\u500d\u5c42\u9ad8\u4f30\u7b97" in insulation[14]
     assert pipe_wrap[3] == 8.25
     assert pipe_wrap[9] == "\u81ea\u52a8\u6c47\u603b"
-    assert pipe_wrap[12] == "\u53a8\u623f/\u536b\u751f\u95f4\u6570\u91cf*\u5c42\u9ad8*1.5\u9ed8\u8ba4\u957f\u5ea6"
+    assert pipe_wrap[12] == "\u53a8\u623f/\u536b\u751f\u95f4\u5c42\u9ad8\u5408\u8ba1*1.5\u9ed8\u8ba4\u957f\u5ea6"
+    assert "1.5\u500d\u5c42\u9ad8\u4f30\u7b97" in pipe_wrap[14]
+
+
+def test_export_residential_quote_uses_custom_pipe_default_length_factor(tmp_path: Path, monkeypatch):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_pipe_items=True)
+    custom_rules = load_default_quote_rules()
+    custom_rules.pipe_default_length_factor = 2.0
+    monkeypatch.setattr(quote_excel, "load_quote_rules", lambda rules_path=None: custom_rules)
+    result = QuantityResult(
+        project_name="Custom Pipe Factor",
+        rows=[
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0, height=2.8),
+            _quantity_row("bath", "\u4e3b\u536b", floor_area=3.0, net_wall_area=12.0, height=2.7),
+        ],
+        construction_details=[],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    insulation = _item_row_named(rows, "\u53a8\u623f\u3001\u536b\u751f\u95f4\u6392\u6c61\u7ba1\u5305\u9694\u97f3\u68c9")
+    pipe_wrap = _item_row_named(rows, "\u5305\u4e0a/\u4e0b\u6c34\u7ba1\u9053(\u5355\u7ba1)")
+    assert insulation[3] == 11.0
+    assert insulation[12] == "\u53a8\u623f/\u536b\u751f\u95f4\u5c42\u9ad8\u5408\u8ba1*2\u9ed8\u8ba4\u957f\u5ea6"
+    assert "2\u500d\u5c42\u9ad8\u4f30\u7b97" in insulation[14]
+    assert pipe_wrap[3] == 11.0
+    assert pipe_wrap[12] == "\u53a8\u623f/\u536b\u751f\u95f4\u5c42\u9ad8\u5408\u8ba1*2\u9ed8\u8ba4\u957f\u5ea6"
+    assert "2\u500d\u5c42\u9ad8\u4f30\u7b97" in pipe_wrap[14]
 
 
 def test_export_residential_quote_keeps_kitchen_and_balcony_sliding_doors_separate(tmp_path: Path):
@@ -2417,18 +2457,28 @@ def _write_quote_header(sheet) -> None:
     sheet.append([None, None, None, None, "\u4e3b\u6750\n\u5355\u4ef7", "\u8f85\u6750\n\u5355\u4ef7"])
 
 
-def _write_custom_quote_rules(path: Path, *, kitchen_height: float, bathroom_height: float, tile_height: float) -> None:
+def _write_custom_quote_rules(
+    path: Path,
+    *,
+    kitchen_height: float,
+    bathroom_height: float,
+    tile_height: float,
+    pipe_default_length_factor: float | None = None,
+) -> None:
+    data = {
+        "wet_room_heights": {
+            "kitchen_waterproof_wall_height": kitchen_height,
+            "bathroom_waterproof_wall_height": bathroom_height,
+            "wall_tile_height": tile_height,
+        },
+        "floor_area_aggregate_items": ["\u5783\u573e\u6e05\u8fd0\u8d39"],
+        "tile_area_aggregate_items": ["\u7f8e\u7f1d"],
+    }
+    if pipe_default_length_factor is not None:
+        data["pipe_default_length_factor"] = pipe_default_length_factor
     path.write_text(
         json.dumps(
-            {
-                "wet_room_heights": {
-                    "kitchen_waterproof_wall_height": kitchen_height,
-                    "bathroom_waterproof_wall_height": bathroom_height,
-                    "wall_tile_height": tile_height,
-                },
-                "floor_area_aggregate_items": ["\u5783\u573e\u6e05\u8fd0\u8d39"],
-                "tile_area_aggregate_items": ["\u7f8e\u7f1d"],
-            },
+            data,
             ensure_ascii=False,
         ),
         encoding="utf-8",

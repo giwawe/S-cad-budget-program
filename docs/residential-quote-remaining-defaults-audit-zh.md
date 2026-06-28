@@ -38,8 +38,8 @@
 | 玻璃淋浴房 | 有 `QUOTE_SHOWER_GLASS` 时按标识个数汇总；没有标识时按 0 | `construction_details` 中 `shower_glass` 数量 | 每个点、块、线或折线实体按 1 个计；不从卫生间数量推断，避免和 `淋浴隔断` 重复报价 |
 | 蹲坑 | 有 `QUOTE_SQUAT_TOILET` 时按标识个数汇总；没有标识时按 0 | `construction_details` 中 `squat_toilet` 数量 | 每个点、块、线或折线实体按 1 个计；不从卫生间数量推断，避免和 `马桶` 重复报价 |
 | 打混凝土过梁孔 | 按 `QuantityResult.building_area` 的 10% 取整数自动汇总；没有闭合外墙轮廓或 `QUOTE_BUILDING_AREA` 时仍按模板默认 | 闭合 `QUOTE_EXT_WALL` 面积汇总；没有闭合外墙轮廓时使用闭合 `QUOTE_BUILDING_AREA` 备用轮廓 | 不再使用室内空间面积相加作为建筑面积代理值；复核备注提示设计师确认建筑面积来源 |
-| 厨房、卫生间排污管包隔音棉 | 有 `QUOTE_PIPE_INSULATION` 时自动汇总；没有标识时按厨房和卫生间层高合计乘以 1.5 默认生成 | `construction_details` 中 `pipe_insulation` 立管长度，或湿区层高默认长度 | 按标识 `HEIGHT` 汇总；缺高时按楼层/项目默认高度推断；无标识时提示设计师可修改默认长度 |
-| 包上/下水管道(单管) | 有 `QUOTE_PIPE_WRAP` 时自动汇总；没有标识时按厨房和卫生间层高合计乘以 1.5 默认生成 | `construction_details` 中 `pipe_wrap` 立管长度，或湿区层高默认长度 | 按标识 `HEIGHT` 汇总；缺高时按楼层/项目默认高度推断；无标识时提示设计师可修改默认长度 |
+| 厨房、卫生间排污管包隔音棉 | 有 `QUOTE_PIPE_INSULATION` 时自动汇总；没有标识时按厨房和卫生间层高合计乘以报价规则 `pipe_default_length_factor` 默认生成，内置默认系数为 1.5 | `construction_details` 中 `pipe_insulation` 立管长度，或湿区层高默认长度 | 按标识 `HEIGHT` 汇总；缺高时按楼层/项目默认高度推断；无标识时提示设计师可修改默认长度 |
+| 包上/下水管道(单管) | 有 `QUOTE_PIPE_WRAP` 时自动汇总；没有标识时按厨房和卫生间层高合计乘以报价规则 `pipe_default_length_factor` 默认生成，内置默认系数为 1.5 | `construction_details` 中 `pipe_wrap` 立管长度，或湿区层高默认长度 | 按标识 `HEIGHT` 汇总；缺高时按楼层/项目默认高度推断；无标识时提示设计师可修改默认长度 |
 | 阳台推拉门 | 有阳台/露台空间宽门洞时自动汇总；没有匹配门洞时按 0 | 阳台/露台 `QuantityRow.door_details` 宽度大于等于 1.4m 的唯一门洞 | 按门洞面积汇总，使用独立空间关键词，不影响厨房推拉门 |
 | 阳台推拉门双包套 | 有阳台/露台空间宽门洞时自动汇总；没有匹配门洞时按 0 | 与阳台推拉门同源门洞 | 按门洞宽度加两侧有效门洞高度汇总，门洞高度缺失时使用 2.2m 并提示复核 |
 | 全屋定制 | 有 `QUOTE_CUSTOM` 时自动汇总；样例未画标识时仍按模板默认 | `QUOTE_CUSTOM` 线/闭合轮廓、`HEIGHT`/`高`、`TYPE`/`类型`、`ROOM`/`空间` | 按投影面积汇总；缺高默认 2.6m；高度低于 1m 的柜体不计投影面积，复核备注提示按长度确认 |

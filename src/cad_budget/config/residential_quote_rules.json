@@ -52,6 +52,7 @@
   "pipe_wrap_length_items": [
     "包上/下水管道(单管)"
   ],
+  "pipe_default_length_factor": 1.5,
   "building_area_percent_count_items": {
     "打混凝土过梁孔": 0.1
   },

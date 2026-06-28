@@ -26,7 +26,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 - `building_area=136.237652`
 - `exterior_rows=1`
 - `construction_details=4`，包含新砌墙和 `QUOTE_WALL_TILE`，暂无 `QUOTE_LINTEL`、`QUOTE_BACKGROUND_WALL`、`QUOTE_SHOWER_GLASS`、`QUOTE_SQUAT_TOILET`、拆墙、管道或外墙修补标识
-- 已有全屋定制、地柜/吊柜标识；拆墙、外墙修补、阳台推拉门缺标识时已按 0 自动汇总并提示复核；管道/包管缺标识时按厨房和卫生间层高合计乘以 1.5 默认生成
+- 已有全屋定制、地柜/吊柜标识；拆墙、外墙修补、阳台推拉门缺标识时已按 0 自动汇总并提示复核；管道/包管缺标识时按厨房和卫生间层高合计乘以报价规则 `pipe_default_length_factor` 默认生成，内置默认系数为 1.5
 - 无匹配阳台/露台宽门洞
 
 ## 优先补齐顺序
@@ -39,7 +39,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 | 4 | `QUOTE_SQUAT_TOILET` | 蹲坑 | 每个标识按 1 个计；无标识时按 0，避免和马桶重复报价 |
 | 5 | `QUOTE_EXT_WALL` 或 `QUOTE_BUILDING_AREA` | 外墙批嵌、打混凝土过梁孔 | 既影响外墙面积，也影响建筑面积百分比项目；最新 `10.dxf` 样例已补齐，可作为参考 |
 | 6 | `QUOTE_NEW_WALL` | 砌120厚砖墙、砌240厚砖墙 | 新砌墙不能从房间面积推断；缺少 `THICKNESS` 时按 240mm；最新 `10.dxf` 样例已补齐 |
-| 7 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 缺标识时按厨房和卫生间层高合计乘以 1.5 默认生成；点位少、补图成本低 |
+| 7 | `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` | 排污管隔音棉、包上/下水管道(单管) | 缺标识时按厨房和卫生间层高合计乘以报价规则 `pipe_default_length_factor` 默认生成，内置默认系数为 1.5；点位少、补图成本低 |
 | 8 | `QUOTE_CUSTOM` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` | 全屋定制、地柜、吊柜 | 对主材金额影响较大，需要设计方案同步；旧图可继续用 `QUOTE_CABINET + TYPE`；最新 `10.dxf` 样例已补齐 |
 | 9 | `QUOTE_EXT_REPAIR` | 外墙批嵌以及修补 | 缺标识时按 0 并提示手工输入；必须由设计师确认修补范围 |
 | 10 | 阳台/露台门洞信息 | 阳台推拉门、阳台推拉门双包套 | 没有匹配阳台/露台宽门洞时按 0 |
@@ -123,7 +123,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\generate_marker_rich_quote_sample.py --o
 复核点：
 
 - 缺少 `HEIGHT` 时，系统按楼层/项目默认高度推断并提示复核。
-- 缺少 `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` 时，报价默认按厨房和卫生间层高合计乘以 1.5 生成，设计师可在 Excel 中修改。
+- 缺少 `QUOTE_PIPE_INSULATION` / `QUOTE_PIPE_WRAP` 时，报价默认按厨房和卫生间层高合计乘以报价规则 `pipe_default_length_factor` 生成，内置默认系数为 1.5，设计师可在 Excel 中修改。
 
 ### 全屋定制
 

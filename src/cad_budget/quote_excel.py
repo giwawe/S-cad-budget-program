@@ -193,6 +193,7 @@ class ResidentialQuoteRules:
     squat_toilet_count_items: set[str]
     pipe_insulation_length_items: set[str]
     pipe_wrap_length_items: set[str]
+    pipe_default_length_factor: float
     building_area_percent_count_items: dict[str, float]
     custom_projected_area_items: set[str]
     cabinet_length_items: set[str]
@@ -275,6 +276,7 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         squat_toilet_count_items=_optional_item_set(data, "squat_toilet_count_items"),
         pipe_insulation_length_items=_optional_item_set(data, "pipe_insulation_length_items"),
         pipe_wrap_length_items=_optional_item_set(data, "pipe_wrap_length_items"),
+        pipe_default_length_factor=_optional_float(data, "pipe_default_length_factor", 1.5),
         building_area_percent_count_items=_building_area_percent_count_items(data),
         custom_projected_area_items=_optional_item_set(data, "custom_projected_area_items"),
         cabinet_length_items=_optional_item_set(data, "cabinet_length_items"),
@@ -755,6 +757,7 @@ def _aggregate_quantity_for_item(
             "\u7ba1\u9053\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838",
             zero_note="\u672a\u8bc6\u522bQUOTE_PIPE_INSULATION\u6392\u6c61\u7ba1\u9694\u97f3\u68c9\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u8ba1\u7b97\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165",
             rooms=rooms,
+            default_length_factor=rules.pipe_default_length_factor,
         )
     if item_name in rules.pipe_wrap_length_items:
         return _pipe_length_aggregate(
@@ -764,6 +767,7 @@ def _aggregate_quantity_for_item(
             "\u7ba1\u9053\u6807\u8bc6\u7f3a\u5c11\u9ad8\u5ea6\u65f6\u6309\u9879\u76ee/\u697c\u5c42\u9ed8\u8ba4\u9ad8\u5ea6\u8ba1\u7b97\uff0c\u9700\u590d\u6838",
             zero_note="\u672a\u8bc6\u522bQUOTE_PIPE_WRAP\u5305\u7ba1\u6807\u8bc6\uff0c\u9ed8\u8ba40\uff1b\u5982\u9700\u8ba1\u7b97\u8bf7\u8bbe\u8ba1\u5e08\u624b\u5de5\u8f93\u5165",
             rooms=rooms,
+            default_length_factor=rules.pipe_default_length_factor,
         )
     if item_name in rules.building_area_percent_count_items:
         return _building_area_percent_count_aggregate(building_area, rules.building_area_percent_count_items[item_name])
@@ -1163,6 +1167,7 @@ def _pipe_length_aggregate(
     default_height_note: str,
     zero_note: str | None = None,
     rooms: list[QuantityRow] | None = None,
+    default_length_factor: float = 1.5,
 ) -> QuoteAggregateQuantity | None:
     details = [detail for detail in construction_details if detail.kind is kind]
     quantity = _round_quantity(sum(detail.length for detail in details))
@@ -1176,15 +1181,20 @@ def _pipe_length_aggregate(
         )
 
     wet_rooms = [room for room in rooms or [] if _is_wet_room(room)]
-    default_quantity = _round_quantity(sum(room.height for room in wet_rooms) * 1.5)
+    factor_label = f"{default_length_factor:g}"
+    default_quantity = _round_quantity(sum(room.height for room in wet_rooms) * default_length_factor)
     if wet_rooms and default_quantity > 0:
         marker_note = zero_note or "\u672a\u8bc6\u522b\u7ba1\u9053/\u5305\u7ba1\u6807\u8bc6"
         return QuoteAggregateQuantity(
             quantity=default_quantity,
-            basis="\u53a8\u623f/\u536b\u751f\u95f4\u6570\u91cf*\u5c42\u9ad8*1.5\u9ed8\u8ba4\u957f\u5ea6",
+            basis=f"\u53a8\u623f/\u536b\u751f\u95f4\u5c42\u9ad8\u5408\u8ba1*{factor_label}\u9ed8\u8ba4\u957f\u5ea6",
             rooms=wet_rooms,
             review_status="\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
-            review_note=f"{marker_note}\uff1b\u6309\u53a8\u623f/\u536b\u751f\u95f4\u5c42\u9ad8\u5408\u8ba1*1.5\u9ed8\u8ba4\u8ba1\u7b97\uff0c\u8bbe\u8ba1\u5e08\u53ef\u4fee\u6539",
+            review_note=(
+                f"{marker_note}\uff1b\u672a\u6807\u6ce8\u7acb\u7ba1\u4f4d\u7f6e\uff0c"
+                f"\u6682\u6309\u53a8\u623f\u53ca\u536b\u751f\u95f4\u6bcf\u4e2a\u7a7a\u95f4\u7efc\u5408\u957f\u5ea6"
+                f"{factor_label}\u500d\u5c42\u9ad8\u4f30\u7b97\uff0c\u8bbe\u8ba1\u5e08\u53ef\u4fee\u6539"
+            ),
         )
 
     if zero_note is not None:
