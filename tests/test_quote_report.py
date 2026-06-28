@@ -17,6 +17,10 @@ def test_generate_quote_review_report_groups_review_rows(tmp_path: Path):
     assert "- 自动生成-默认推断：2 行" in report_text
     assert "- 自动生成-异常提示：1 行" in report_text
     assert "- 按模板生成：1 行" in report_text
+    assert "## 复核行动建议" in report_text
+    assert "- 补窗高：1 行，涉及 Excel 行 5" in report_text
+    assert "- 补新砌墙高度/厚度：1 行，涉及 Excel 行 6" in report_text
+    assert "- 复核外墙修补范围：1 行，涉及 Excel 行 7" in report_text
     assert "| 5 | 101 | 卧室墙面项目 | 31.5 | 墙面净面积 | 自动生成-默认推断 | 窗高缺失 1 个 |" in report_text
     assert "| 6 | 102 | 砌240厚砖墙 | 6 | 新砌240mm砖墙面积汇总 | 自动生成-默认推断 | 墙体标识缺少高度 |" in report_text
     assert "| 7 | 103 | 外墙修补 | 0 | 外墙修补范围面积汇总 | 自动生成-异常提示 | 需要确认修补范围 |" in report_text

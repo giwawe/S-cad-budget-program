@@ -14,6 +14,14 @@ _REVIEW_STATUSES = [
     "自动生成-异常提示",
     "按模板生成",
 ]
+_ACTION_RULES = [
+    ("补窗高", ["窗高", "默认窗高"]),
+    ("补新砌墙高度/厚度", ["新砌", "墙体标识", "THICKNESS", "厚度"]),
+    ("补管道/包管标识", ["QUOTE_PIPE_INSULATION", "QUOTE_PIPE_WRAP", "立管", "管道", "包管"]),
+    ("补门洞/推拉门高度", ["推拉门门高", "门洞缺少高度", "默认门洞高度", "门高缺少"]),
+    ("补全屋定制高度/类型", ["全屋定制", "定制项", "缺少类型"]),
+    ("复核外墙修补范围", ["外墙修补", "修补范围"]),
+]
 
 
 @dataclass(frozen=True)
@@ -42,6 +50,8 @@ def build_quote_review_report(input_excel: Path) -> str:
     headers = _header_columns(sheet)
     rows = _review_rows(sheet, headers)
     lines = ["# 报价复核报告", ""]
+    lines.extend(_action_summary(rows))
+    lines.append("")
     lines.extend(_status_summary(rows))
     lines.append("")
     lines.extend(_source_summary(rows))
@@ -121,6 +131,27 @@ def _status_summary(rows: list[QuoteReviewRow]) -> list[str]:
     return lines
 
 
+def _action_summary(rows: list[QuoteReviewRow]) -> list[str]:
+    actions: dict[str, list[int]] = {label: [] for label, _ in _ACTION_RULES}
+    for row in rows:
+        searchable_text = " ".join(
+            part or "" for part in [row.item_name, row.basis, row.review_status, row.review_note]
+        )
+        for label, keywords in _ACTION_RULES:
+            if any(keyword in searchable_text for keyword in keywords):
+                actions[label].append(row.excel_row)
+                break
+
+    lines = ["## 复核行动建议", ""]
+    actionable = [(label, row_numbers) for label, row_numbers in actions.items() if row_numbers]
+    if not actionable:
+        lines.append("- 暂无明确补图建议")
+        return lines
+    for label, row_numbers in actionable:
+        lines.append(f"- {label}：{len(row_numbers)} 行，涉及 Excel 行 {_format_excel_rows(row_numbers)}")
+    return lines
+
+
 def _source_summary(rows: list[QuoteReviewRow]) -> list[str]:
     counts: dict[str, int] = {}
     for row in rows:
@@ -133,6 +164,10 @@ def _source_summary(rows: list[QuoteReviewRow]) -> list[str]:
     for source in sorted(counts):
         lines.append(f"- {source}：{counts[source]} 行")
     return lines
+
+
+def _format_excel_rows(row_numbers: list[int]) -> str:
+    return "、".join(str(row_number) for row_number in row_numbers)
 
 
 def _format_quantity(value: Any) -> str:
