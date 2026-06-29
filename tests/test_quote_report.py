@@ -26,7 +26,7 @@ def test_generate_quote_review_report_groups_review_rows(tmp_path: Path):
 
     assert report_path.read_text(encoding="utf-8") == report_text
     assert "# 报价复核报告" in report_text
-    assert "- 自动生成-默认推断：5 行" in report_text
+    assert "- 自动生成-默认推断：6 行" in report_text
     assert "- 自动生成-异常提示：1 行" in report_text
     assert "- 按模板生成：1 行" in report_text
     assert "## 复核行动建议" in report_text
@@ -34,12 +34,13 @@ def test_generate_quote_review_report_groups_review_rows(tmp_path: Path):
     assert "- 补新砌墙高度/厚度：影响 1 个报价行，涉及项目：砌240厚砖墙；Excel 行 7" in report_text
     assert "- 补门洞/推拉门高度：影响 1 个报价行，涉及项目：厨房推拉门；Excel 行 9" in report_text
     assert "- 补全屋定制高度/类型：影响 1 个报价行，涉及项目：全屋定制；Excel 行 10" in report_text
+    assert "- 补管道/包管标识：影响 1 个报价行，涉及项目：包上/下水管道(单管)；Excel 行 11" in report_text
     assert "- 复核外墙修补范围：影响 1 个报价行，涉及项目：外墙修补；Excel 行 8" in report_text
     assert "| 5 | 101 | 卧室墙面项目 | 31.5 | 墙面净面积 | 自动生成-默认推断 | 窗高缺失 1 个 |" in report_text
     assert "| 6 | 102 | 墙面乳胶漆 | 31.5 | 墙面净面积 | 自动生成-默认推断 | 窗高缺失 1 个 |" in report_text
     assert "| 7 | 103 | 砌240厚砖墙 | 6 | 新砌240mm砖墙面积汇总 | 自动生成-默认推断 | 墙体标识缺少高度 |" in report_text
     assert "| 8 | 104 | 外墙修补 | 0 | 外墙修补范围面积汇总 | 自动生成-异常提示 | 需要确认修补范围 |" in report_text
-    assert "| 11 | 107 | 主材包 | 1 |  | 按模板生成 |  |" in report_text
+    assert "| 12 | 107 | 主材包 | 1 |  | 按模板生成 |  |" in report_text
     assert "普通自动行" not in report_text
 
 
@@ -74,6 +75,42 @@ def test_generate_quote_review_report_uses_quantity_result_for_room_object_summa
                 ],
             ),
             _quantity_row(
+                "bath-a",
+                "卫生间",
+                window_details=[
+                    WindowQuantityDetail(id="bath-a-window", width=0.8, height=1.8, area=1.44, height_defaulted=True),
+                ],
+                door_details=[
+                    DoorQuantityDetail(
+                        id="bath-a-door",
+                        room_id="bath-a",
+                        width=0.8,
+                        height=2.2,
+                        effective_height=2.2,
+                        height_defaulted=True,
+                        area=1.76,
+                    )
+                ],
+            ),
+            _quantity_row(
+                "bath-b",
+                "卫生间",
+                window_details=[
+                    WindowQuantityDetail(id="bath-b-window", width=0.8, height=1.8, area=1.44, height_defaulted=True),
+                ],
+                door_details=[
+                    DoorQuantityDetail(
+                        id="bath-b-door",
+                        room_id="bath-b",
+                        width=0.8,
+                        height=2.2,
+                        effective_height=2.2,
+                        height_defaulted=True,
+                        area=1.76,
+                    )
+                ],
+            ),
+            _quantity_row(
                 "master",
                 "主卧",
                 custom_details=[
@@ -99,9 +136,10 @@ def test_generate_quote_review_report_uses_quantity_result_for_room_object_summa
 
     report_text = generate_quote_review_report(quote_path, report_path, quantity_result=quantity_result)
 
-    assert "涉及对象：卧室窗高 2 个" in report_text
-    assert "涉及对象：厨房门洞/推拉门高度 1 个" in report_text
+    assert "涉及对象：卧室窗高 2 个、卫生间窗高 2 个" in report_text
+    assert "涉及对象：厨房门洞/推拉门高度 1 个、卫生间门洞/推拉门高度 2 个" in report_text
     assert "涉及对象：主卧全屋定制高度/类型 1 处" in report_text
+    assert "涉及对象：厨房、卫生间湿区空间" in report_text
 
 
 def _write_quote_workbook(path: Path) -> None:
@@ -135,6 +173,7 @@ def _write_quote_workbook(path: Path) -> None:
         [104, "外墙修补", "m2", 0, None, None, None, None, None, "自动汇总", "全屋", None, "外墙修补范围面积汇总", "自动生成-异常提示", "需要确认修补范围"],
         [105, "厨房推拉门", "m2", 3.96, None, None, None, None, None, "自动汇总", "全屋", None, "宽度>=1.4m门洞面积汇总", "自动生成-默认推断", "推拉门门高缺少时默认推拉门高度2.4m"],
         [106, "全屋定制", "m2", 5.2, None, None, None, None, None, "自动汇总", "全屋", None, "全屋定制投影面积汇总", "自动生成-默认推断", "缺少高度的定制项按默认2.6m计算；部分定制项缺少类型，需复核"],
+        [108, "包上/下水管道(单管)", "M", 3.0, None, None, None, None, None, "自动汇总", "全屋", None, "厨房/卫生间层高合计*1.5默认长度", "自动生成-默认推断", "未识别QUOTE_PIPE_WRAP包管标识，默认0"],
         [107, "主材包", "项", 1, None, None, None, None, None, "模板默认", None, None, None, "按模板生成", None],
     ]
     for row_index, values in enumerate(rows, start=4):

@@ -172,36 +172,45 @@ def _quantity_action_contexts(quantity_result: QuantityResult | None) -> dict[st
         return {}
 
     contexts: dict[str, str] = {}
-    window_parts = [
-        f"{row.room_name}窗高 {count} 个"
+    window_context = _summarize_room_object_counts(
+        (
+            row.room_name,
+            "窗高",
+            sum(1 for window in row.window_details if window.height_defaulted),
+            "个",
+        )
         for row in quantity_result.rows
-        if (count := sum(1 for window in row.window_details if window.height_defaulted)) > 0
-    ]
-    if window_parts:
-        contexts["补窗高"] = "、".join(window_parts)
+    )
+    if window_context:
+        contexts["补窗高"] = window_context
 
-    door_parts = [
-        f"{row.room_name}门洞/推拉门高度 {count} 个"
+    door_context = _summarize_room_object_counts(
+        (
+            row.room_name,
+            "门洞/推拉门高度",
+            sum(1 for door in row.door_details if door.height_defaulted),
+            "个",
+        )
         for row in quantity_result.rows
-        if (count := sum(1 for door in row.door_details if door.height_defaulted)) > 0
-    ]
-    if door_parts:
-        contexts["补门洞/推拉门高度"] = "、".join(door_parts)
+    )
+    if door_context:
+        contexts["补门洞/推拉门高度"] = door_context
 
-    custom_parts = [
-        f"{row.room_name}全屋定制高度/类型 {count} 处"
-        for row in quantity_result.rows
-        if (
-            count := sum(
+    custom_context = _summarize_room_object_counts(
+        (
+            row.room_name,
+            "全屋定制高度/类型",
+            sum(
                 1
                 for custom in row.custom_details
                 if custom.height_defaulted or custom.fixture_type is None
-            )
+            ),
+            "处",
         )
-        > 0
-    ]
-    if custom_parts:
-        contexts["补全屋定制高度/类型"] = "、".join(custom_parts)
+        for row in quantity_result.rows
+    )
+    if custom_context:
+        contexts["补全屋定制高度/类型"] = custom_context
 
     new_wall_count = sum(
         1
@@ -211,11 +220,37 @@ def _quantity_action_contexts(quantity_result: QuantityResult | None) -> dict[st
     if new_wall_count:
         contexts["补新砌墙高度/厚度"] = f"新砌墙标识 {new_wall_count} 处"
 
-    wet_room_names = [row.room_name for row in quantity_result.rows if "厨房" in row.room_name or "卫" in row.room_name]
+    wet_room_names = _unique_ordered(
+        row.room_name for row in quantity_result.rows if "厨房" in row.room_name or "卫" in row.room_name
+    )
     if wet_room_names:
         contexts["补管道/包管标识"] = f"{'、'.join(wet_room_names)}湿区空间"
 
     return contexts
+
+
+def _unique_ordered(values) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        if value not in result:
+            result.append(value)
+    return result
+
+
+def _summarize_room_object_counts(items) -> str | None:
+    counts: dict[tuple[str, str, str], int] = {}
+    ordered_keys: list[tuple[str, str, str]] = []
+    for room_name, label, count, unit in items:
+        if count <= 0:
+            continue
+        key = (room_name, label, unit)
+        if key not in counts:
+            counts[key] = 0
+            ordered_keys.append(key)
+        counts[key] += count
+    if not ordered_keys:
+        return None
+    return "、".join(f"{room_name}{label} {counts[key]} {unit}" for key in ordered_keys for room_name, label, unit in [key])
 
 
 def _source_summary(rows: list[QuoteReviewRow]) -> list[str]:
