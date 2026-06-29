@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -140,6 +141,67 @@ def test_generate_quote_review_report_uses_quantity_result_for_room_object_summa
     assert "涉及对象：厨房门洞/推拉门高度 1 个、卫生间门洞/推拉门高度 2 个" in report_text
     assert "涉及对象：主卧全屋定制高度/类型 1 处" in report_text
     assert "涉及对象：厨房、卫生间湿区空间" in report_text
+
+
+def test_generate_quote_review_report_can_write_structured_json(tmp_path: Path):
+    quote_path = tmp_path / "quote.xlsx"
+    report_path = tmp_path / "report.md"
+    json_path = tmp_path / "report.json"
+    _write_quote_workbook(quote_path)
+    quantity_result = QuantityResult(
+        project_name="结构化复核",
+        rows=[
+            _quantity_row(
+                "bed",
+                "卧室",
+                window_details=[
+                    WindowQuantityDetail(id="w1", width=1.2, height=1.8, area=2.16, height_defaulted=True),
+                ],
+            )
+        ],
+        construction_details=[],
+        exceptions=[],
+    )
+
+    report_text = generate_quote_review_report(
+        quote_path,
+        report_path,
+        quantity_result=quantity_result,
+        json_output=json_path,
+    )
+
+    assert report_path.read_text(encoding="utf-8") == report_text
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    assert data["status_counts"] == {
+        "自动生成-默认推断": 6,
+        "自动生成-异常提示": 1,
+        "按模板生成": 1,
+    }
+    assert data["source_counts"] == {
+        "模板默认": 1,
+        "自动汇总": 5,
+        "自动算量": 2,
+    }
+    window_action = next(action for action in data["actions"] if action["label"] == "补窗高")
+    assert window_action == {
+        "label": "补窗高",
+        "quote_row_count": 2,
+        "item_names": ["卧室墙面项目", "墙面乳胶漆"],
+        "excel_rows": [5, 6],
+        "objects": ["卧室窗高 1 个"],
+    }
+    exterior_row = next(row for row in data["rows"] if row["excel_row"] == 8)
+    assert exterior_row == {
+        "excel_row": 8,
+        "number": 104,
+        "item_name": "外墙修补",
+        "quantity": 0,
+        "quantity_source": "自动汇总",
+        "source_room": "全屋",
+        "basis": "外墙修补范围面积汇总",
+        "review_status": "自动生成-异常提示",
+        "review_note": "需要确认修补范围",
+    }
 
 
 def _write_quote_workbook(path: Path) -> None:

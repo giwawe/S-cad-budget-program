@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -44,18 +45,23 @@ def generate_quote_review_report(
     markdown_output: Path,
     *,
     quantity_result: QuantityResult | None = None,
+    json_output: Path | None = None,
 ) -> str:
     report_text = build_quote_review_report(input_excel, quantity_result=quantity_result)
     markdown_output.parent.mkdir(parents=True, exist_ok=True)
     markdown_output.write_text(report_text, encoding="utf-8")
+    if json_output is not None:
+        report_data = build_quote_review_data(input_excel, quantity_result=quantity_result)
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(
+            json.dumps(report_data, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
     return report_text
 
 
 def build_quote_review_report(input_excel: Path, *, quantity_result: QuantityResult | None = None) -> str:
-    workbook = load_workbook(input_excel, data_only=False)
-    sheet = workbook.active
-    headers = _header_columns(sheet)
-    rows = _review_rows(sheet, headers)
+    rows = _load_review_rows(input_excel)
     action_contexts = _quantity_action_contexts(quantity_result)
     lines = ["# 报价复核报告", ""]
     lines.extend(_action_summary(rows, action_contexts))
@@ -90,6 +96,24 @@ def build_quote_review_report(input_excel: Path, *, quantity_result: QuantityRes
             )
     lines.append("")
     return "\n".join(lines)
+
+
+def build_quote_review_data(input_excel: Path, *, quantity_result: QuantityResult | None = None) -> dict[str, Any]:
+    rows = _load_review_rows(input_excel)
+    action_contexts = _quantity_action_contexts(quantity_result)
+    return {
+        "actions": _action_items(rows, action_contexts),
+        "status_counts": _status_counts(rows),
+        "source_counts": _source_counts(rows),
+        "rows": [_row_to_dict(row) for row in rows],
+    }
+
+
+def _load_review_rows(input_excel: Path) -> list[QuoteReviewRow]:
+    workbook = load_workbook(input_excel, data_only=False)
+    sheet = workbook.active
+    headers = _header_columns(sheet)
+    return _review_rows(sheet, headers)
 
 
 def _header_columns(sheet) -> dict[str, int]:
@@ -133,13 +157,34 @@ def _review_rows(sheet, headers: dict[str, int]) -> list[QuoteReviewRow]:
 
 def _status_summary(rows: list[QuoteReviewRow]) -> list[str]:
     lines = ["## 复核状态统计", ""]
-    for status in _REVIEW_STATUSES:
-        count = sum(1 for row in rows if row.review_status == status)
+    counts = _status_counts(rows)
+    for status, count in counts.items():
         lines.append(f"- {status}：{count} 行")
     return lines
 
 
-def _action_summary(rows: list[QuoteReviewRow], action_contexts: dict[str, str]) -> list[str]:
+def _status_counts(rows: list[QuoteReviewRow]) -> dict[str, int]:
+    return {status: sum(1 for row in rows if row.review_status == status) for status in _REVIEW_STATUSES}
+
+
+def _action_summary(rows: list[QuoteReviewRow], action_contexts: dict[str, list[str]]) -> list[str]:
+    action_items = _action_items(rows, action_contexts)
+    lines = ["## 复核行动建议", ""]
+    if not action_items:
+        lines.append("- 暂无明确补图建议")
+        return lines
+    for action in action_items:
+        context = "、".join(action["objects"])
+        context_text = f"；涉及对象：{context}" if context else ""
+        lines.append(
+            f"- {action['label']}：影响 {action['quote_row_count']} 个报价行，"
+            f"涉及项目：{'、'.join(action['item_names'])}；"
+            f"Excel 行 {_format_excel_rows(action['excel_rows'])}{context_text}"
+        )
+    return lines
+
+
+def _action_items(rows: list[QuoteReviewRow], action_contexts: dict[str, list[str]]) -> list[dict[str, Any]]:
     actions: dict[str, list[QuoteReviewRow]] = {label: [] for label, _ in _ACTION_RULES}
     for row in rows:
         searchable_text = " ".join(
@@ -150,28 +195,26 @@ def _action_summary(rows: list[QuoteReviewRow], action_contexts: dict[str, str])
                 actions[label].append(row)
                 break
 
-    lines = ["## 复核行动建议", ""]
     actionable = [(label, action_rows) for label, action_rows in actions.items() if action_rows]
-    if not actionable:
-        lines.append("- 暂无明确补图建议")
-        return lines
+    items: list[dict[str, Any]] = []
     for label, action_rows in actionable:
-        item_names = _format_item_names(action_rows)
-        excel_rows = _format_excel_rows([row.excel_row for row in action_rows])
-        context = action_contexts.get(label)
-        context_text = f"；涉及对象：{context}" if context else ""
-        lines.append(
-            f"- {label}：影响 {len(action_rows)} 个报价行，涉及项目：{item_names}；"
-            f"Excel 行 {excel_rows}{context_text}"
+        items.append(
+            {
+                "label": label,
+                "quote_row_count": len(action_rows),
+                "item_names": _item_names(action_rows),
+                "excel_rows": [row.excel_row for row in action_rows],
+                "objects": action_contexts.get(label, []),
+            }
         )
-    return lines
+    return items
 
 
-def _quantity_action_contexts(quantity_result: QuantityResult | None) -> dict[str, str]:
+def _quantity_action_contexts(quantity_result: QuantityResult | None) -> dict[str, list[str]]:
     if quantity_result is None:
         return {}
 
-    contexts: dict[str, str] = {}
+    contexts: dict[str, list[str]] = {}
     window_context = _summarize_room_object_counts(
         (
             row.room_name,
@@ -218,13 +261,13 @@ def _quantity_action_contexts(quantity_result: QuantityResult | None) -> dict[st
         if detail.kind is ConstructionKind.NEW_WALL and (detail.height_defaulted or detail.thickness is None)
     )
     if new_wall_count:
-        contexts["补新砌墙高度/厚度"] = f"新砌墙标识 {new_wall_count} 处"
+        contexts["补新砌墙高度/厚度"] = [f"新砌墙标识 {new_wall_count} 处"]
 
     wet_room_names = _unique_ordered(
         row.room_name for row in quantity_result.rows if "厨房" in row.room_name or "卫" in row.room_name
     )
     if wet_room_names:
-        contexts["补管道/包管标识"] = f"{'、'.join(wet_room_names)}湿区空间"
+        contexts["补管道/包管标识"] = [f"{'、'.join(wet_room_names)}湿区空间"]
 
     return contexts
 
@@ -237,7 +280,7 @@ def _unique_ordered(values) -> list[str]:
     return result
 
 
-def _summarize_room_object_counts(items) -> str | None:
+def _summarize_room_object_counts(items) -> list[str] | None:
     counts: dict[tuple[str, str, str], int] = {}
     ordered_keys: list[tuple[str, str, str]] = []
     for room_name, label, count, unit in items:
@@ -250,14 +293,11 @@ def _summarize_room_object_counts(items) -> str | None:
         counts[key] += count
     if not ordered_keys:
         return None
-    return "、".join(f"{room_name}{label} {counts[key]} {unit}" for key in ordered_keys for room_name, label, unit in [key])
+    return [f"{room_name}{label} {counts[key]} {unit}" for key in ordered_keys for room_name, label, unit in [key]]
 
 
 def _source_summary(rows: list[QuoteReviewRow]) -> list[str]:
-    counts: dict[str, int] = {}
-    for row in rows:
-        source = row.quantity_source or "未标注"
-        counts[source] = counts.get(source, 0) + 1
+    counts = _source_counts(rows)
     lines = ["## 数量来源统计", ""]
     if not counts:
         lines.append("- 无需要复核的报价行")
@@ -267,16 +307,42 @@ def _source_summary(rows: list[QuoteReviewRow]) -> list[str]:
     return lines
 
 
+def _source_counts(rows: list[QuoteReviewRow]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        source = row.quantity_source or "未标注"
+        counts[source] = counts.get(source, 0) + 1
+    return counts
+
+
+def _row_to_dict(row: QuoteReviewRow) -> dict[str, Any]:
+    return {
+        "excel_row": row.excel_row,
+        "number": row.number,
+        "item_name": row.item_name,
+        "quantity": row.quantity,
+        "quantity_source": row.quantity_source,
+        "source_room": row.source_room,
+        "basis": row.basis,
+        "review_status": row.review_status,
+        "review_note": row.review_note,
+    }
+
+
 def _format_excel_rows(row_numbers: list[int]) -> str:
     return "、".join(str(row_number) for row_number in row_numbers)
 
 
 def _format_item_names(rows: list[QuoteReviewRow]) -> str:
+    return "、".join(_item_names(rows))
+
+
+def _item_names(rows: list[QuoteReviewRow]) -> list[str]:
     names: list[str] = []
     for row in rows:
         if row.item_name not in names:
             names.append(row.item_name)
-    return "、".join(names)
+    return names
 
 
 def _format_quantity(value: Any) -> str:
