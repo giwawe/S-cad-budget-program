@@ -185,11 +185,16 @@ def test_generate_quote_review_report_can_write_structured_json(tmp_path: Path):
     window_action = next(action for action in data["actions"] if action["label"] == "补窗高")
     assert window_action == {
         "label": "补窗高",
+        "priority": "high",
+        "suggested_action": "在 QUOTE_WINDOW 窗块属性或窗洞轮廓 XDATA 中补充 HEIGHT；也可由预算员在报价 Excel 中复核默认窗高。",
         "quote_row_count": 2,
         "item_names": ["卧室墙面项目", "墙面乳胶漆"],
         "excel_rows": [5, 6],
         "objects": ["卧室窗高 1 个"],
     }
+    pipe_action = next(action for action in data["actions"] if action["label"] == "补管道/包管标识")
+    assert pipe_action["priority"] == "medium"
+    assert "QUOTE_PIPE_INSULATION" in pipe_action["suggested_action"]
     exterior_row = next(row for row in data["rows"] if row["excel_row"] == 8)
     assert exterior_row == {
         "excel_row": 8,

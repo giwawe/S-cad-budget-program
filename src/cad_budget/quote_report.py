@@ -25,6 +25,32 @@ _ACTION_RULES = [
     ("补全屋定制高度/类型", ["全屋定制", "定制项", "缺少类型"]),
     ("复核外墙修补范围", ["外墙修补", "修补范围"]),
 ]
+_ACTION_METADATA = {
+    "补窗高": {
+        "priority": "high",
+        "suggested_action": "在 QUOTE_WINDOW 窗块属性或窗洞轮廓 XDATA 中补充 HEIGHT；也可由预算员在报价 Excel 中复核默认窗高。",
+    },
+    "补新砌墙高度/厚度": {
+        "priority": "high",
+        "suggested_action": "在 QUOTE_NEW_WALL 标识中补充 HEIGHT 和 THICKNESS，确认新砌墙高度及 120/240mm 厚度归类。",
+    },
+    "补管道/包管标识": {
+        "priority": "medium",
+        "suggested_action": "按实际方案补充 QUOTE_PIPE_INSULATION 或 QUOTE_PIPE_WRAP 立管标识；不补标时由预算员复核默认长度。",
+    },
+    "补门洞/推拉门高度": {
+        "priority": "medium",
+        "suggested_action": "在 QUOTE_DOOR 门块属性或门洞轮廓 XDATA 中补充 HEIGHT，重点确认推拉门 2.4m 和门洞 2.2m 默认高度。",
+    },
+    "补全屋定制高度/类型": {
+        "priority": "medium",
+        "suggested_action": "在 QUOTE_CUSTOM 标识中补充 HEIGHT 和 TYPE，或由预算员复核默认 2.6m 投影面积及定制类型。",
+    },
+    "复核外墙修补范围": {
+        "priority": "high",
+        "suggested_action": "用 QUOTE_EXT_REPAIR 标识明确外墙修补范围；若不在报价范围内，由预算员保持 0 或手工填写。",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -198,9 +224,12 @@ def _action_items(rows: list[QuoteReviewRow], action_contexts: dict[str, list[st
     actionable = [(label, action_rows) for label, action_rows in actions.items() if action_rows]
     items: list[dict[str, Any]] = []
     for label, action_rows in actionable:
+        metadata = _ACTION_METADATA[label]
         items.append(
             {
                 "label": label,
+                "priority": metadata["priority"],
+                "suggested_action": metadata["suggested_action"],
                 "quote_row_count": len(action_rows),
                 "item_names": _item_names(action_rows),
                 "excel_rows": [row.excel_row for row in action_rows],
