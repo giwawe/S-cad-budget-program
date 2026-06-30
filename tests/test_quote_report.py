@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from cad_budget.models import (
     DataStatus,
@@ -207,6 +207,54 @@ def test_generate_quote_review_report_can_write_structured_json(tmp_path: Path):
         "review_status": "自动生成-异常提示",
         "review_note": "需要确认修补范围",
     }
+
+
+def test_generate_quote_review_report_can_write_action_checklist_excel(tmp_path: Path):
+    quote_path = tmp_path / "quote.xlsx"
+    report_path = tmp_path / "report.md"
+    checklist_path = tmp_path / "quote-review-checklist.xlsx"
+    _write_quote_workbook(quote_path)
+    quantity_result = QuantityResult(
+        project_name="清单复核",
+        rows=[
+            _quantity_row(
+                "bed",
+                "卧室",
+                window_details=[
+                    WindowQuantityDetail(id="w1", width=1.2, height=1.8, area=2.16, height_defaulted=True),
+                ],
+            )
+        ],
+        construction_details=[],
+        exceptions=[],
+    )
+
+    generate_quote_review_report(
+        quote_path,
+        report_path,
+        quantity_result=quantity_result,
+        checklist_output=checklist_path,
+    )
+
+    workbook = load_workbook(checklist_path)
+    sheet = workbook["复核清单"]
+    headers = [cell.value for cell in sheet[1]]
+    assert headers == ["优先级", "行动类型", "建议动作", "影响报价行数", "涉及项目", "Excel行", "涉及对象", "处理状态", "备注"]
+    assert sheet.freeze_panes == "A2"
+    assert sheet.auto_filter.ref == "A1:I7"
+    rows = list(sheet.iter_rows(min_row=2, values_only=True))
+    assert [row[1] for row in rows[:3]] == ["补窗高", "补新砌墙高度/厚度", "复核外墙修补范围"]
+    first_row = rows[0]
+    assert first_row[:8] == (
+        "high",
+        "补窗高",
+        "在 QUOTE_WINDOW 窗块属性或窗洞轮廓 XDATA 中补充 HEIGHT；也可由预算员在报价 Excel 中复核默认窗高。",
+        2,
+        "卧室墙面项目、墙面乳胶漆",
+        "5、6",
+        "卧室窗高 1 个",
+        "待处理",
+    )
 
 
 def _write_quote_workbook(path: Path) -> None:

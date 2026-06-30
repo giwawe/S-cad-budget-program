@@ -191,6 +191,7 @@ def quote_report(
     quantity_json: Path | None = typer.Option(None, "--quantity-json", help="Optional QuantityResult JSON for room/object context."),
     markdown_output: Path = typer.Option(..., "--markdown-output", help="Path for generated quote review Markdown."),
     json_output: Path | None = typer.Option(None, "--json-output", help="Optional structured quote review JSON output."),
+    checklist_output: Path | None = typer.Option(None, "--checklist-output", help="Optional quote review checklist Excel output."),
 ) -> None:
     quantity_result: QuantityResult | None = None
     if quantity_json is not None:
@@ -213,6 +214,7 @@ def quote_report(
             markdown_output,
             quantity_result=quantity_result,
             json_output=json_output,
+            checklist_output=checklist_output,
         )
     except (OSError, ValueError) as exc:
         typer.echo(f"Failed to generate quote review report '{markdown_output}': {exc}", err=True)
@@ -221,6 +223,8 @@ def quote_report(
     typer.echo(f"Wrote {markdown_output}")
     if json_output is not None:
         typer.echo(f"Wrote {json_output}")
+    if checklist_output is not None:
+        typer.echo(f"Wrote {checklist_output}")
 
 
 @app.command("init-rules")

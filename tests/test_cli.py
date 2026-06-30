@@ -441,6 +441,7 @@ def test_cli_quote_report_writes_markdown_review_report(tmp_path: Path):
     quote_output = tmp_path / "quote.xlsx"
     report_output = tmp_path / "quote-review.md"
     json_output = tmp_path / "quote-review.json"
+    checklist_output = tmp_path / "quote-review-checklist.xlsx"
     input_json.write_text(json.dumps(_quantity_result_payload()), encoding="utf-8")
     _write_quote_cli_template(template, include_fitout=True)
     quote_result = runner.invoke(
@@ -460,18 +461,23 @@ def test_cli_quote_report_writes_markdown_review_report(tmp_path: Path):
             str(report_output),
             "--json-output",
             str(json_output),
+            "--checklist-output",
+            str(checklist_output),
         ],
     )
 
     assert result.exit_code == 0
     assert report_output.exists()
     assert json_output.exists()
+    assert checklist_output.exists()
     report_text = report_output.read_text(encoding="utf-8")
     report_data = json.loads(json_output.read_text(encoding="utf-8"))
+    checklist_workbook = load_workbook(checklist_output)
     assert "# 报价复核报告" in report_text
     assert "按模板生成" in report_text
     assert "actions" in report_data
     assert "rows" in report_data
+    assert checklist_workbook.sheetnames == ["复核清单"]
     assert "Wrote" in result.output
 
 

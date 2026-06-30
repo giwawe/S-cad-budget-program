@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 
 from cad_budget.models import ConstructionKind, QuantityResult
 
@@ -17,6 +18,8 @@ _REVIEW_STATUSES = [
     "自动生成-异常提示",
     "按模板生成",
 ]
+_CHECKLIST_HEADERS = ["优先级", "行动类型", "建议动作", "影响报价行数", "涉及项目", "Excel行", "涉及对象", "处理状态", "备注"]
+_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 _ACTION_RULES = [
     ("补窗高", ["窗高", "默认窗高"]),
     ("补新砌墙高度/厚度", ["新砌", "墙体标识", "THICKNESS", "厚度"]),
@@ -72,17 +75,22 @@ def generate_quote_review_report(
     *,
     quantity_result: QuantityResult | None = None,
     json_output: Path | None = None,
+    checklist_output: Path | None = None,
 ) -> str:
     report_text = build_quote_review_report(input_excel, quantity_result=quantity_result)
     markdown_output.parent.mkdir(parents=True, exist_ok=True)
     markdown_output.write_text(report_text, encoding="utf-8")
-    if json_output is not None:
+    if json_output is not None or checklist_output is not None:
         report_data = build_quote_review_data(input_excel, quantity_result=quantity_result)
+    if json_output is not None:
         json_output.parent.mkdir(parents=True, exist_ok=True)
         json_output.write_text(
             json.dumps(report_data, ensure_ascii=False, indent=2, default=str),
             encoding="utf-8",
         )
+    if checklist_output is not None:
+        checklist_output.parent.mkdir(parents=True, exist_ok=True)
+        _write_quote_review_checklist(report_data, checklist_output)
     return report_text
 
 
@@ -133,6 +141,49 @@ def build_quote_review_data(input_excel: Path, *, quantity_result: QuantityResul
         "source_counts": _source_counts(rows),
         "rows": [_row_to_dict(row) for row in rows],
     }
+
+
+def _write_quote_review_checklist(report_data: dict[str, Any], output: Path) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "复核清单"
+    sheet.append(_CHECKLIST_HEADERS)
+
+    header_fill = PatternFill("solid", fgColor="D9EAF7")
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    actions = sorted(
+        enumerate(report_data["actions"]),
+        key=lambda indexed_action: (_PRIORITY_ORDER.get(indexed_action[1]["priority"], 99), indexed_action[0]),
+    )
+    for _, action in actions:
+        sheet.append(
+            [
+                action["priority"],
+                action["label"],
+                action["suggested_action"],
+                action["quote_row_count"],
+                "、".join(action["item_names"]),
+                _format_excel_rows(action["excel_rows"]),
+                "、".join(action["objects"]),
+                "待处理",
+                None,
+            ]
+        )
+
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = f"A1:I{max(sheet.max_row, 1)}"
+    widths = [10, 22, 64, 14, 32, 24, 36, 12, 24]
+    for column_index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[sheet.cell(row=1, column=column_index).column_letter].width = width
+    for row in sheet.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+
+    workbook.save(output)
 
 
 def _load_review_rows(input_excel: Path) -> list[QuoteReviewRow]:
