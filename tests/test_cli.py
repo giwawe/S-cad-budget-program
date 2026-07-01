@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import ezdxf
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from typer.testing import CliRunner
 
 from cad_budget.cli import app
@@ -481,6 +481,70 @@ def test_cli_quote_report_writes_markdown_review_report(tmp_path: Path):
     assert "Wrote" in result.output
 
 
+def test_cli_quote_report_fail_on_high_blocks_high_priority_actions(tmp_path: Path):
+    runner = CliRunner()
+    quote_output = tmp_path / "quote.xlsx"
+    report_output = tmp_path / "quote-review.md"
+    _write_quote_review_workbook(
+        quote_output,
+        [["窗高缺失墙面项目", "m2", 10, "自动算量", "墙面净面积", "自动生成-默认推断", "窗高缺失 1 个"]],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "quote-report",
+            str(quote_output),
+            "--markdown-output",
+            str(report_output),
+            "--fail-on",
+            "high",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert report_output.exists()
+    assert "Quote review gate failed" in result.output
+    assert "补窗高" in result.output
+
+
+def test_cli_quote_report_fail_on_high_allows_medium_priority_actions(tmp_path: Path):
+    runner = CliRunner()
+    quote_output = tmp_path / "quote.xlsx"
+    report_output = tmp_path / "quote-review.md"
+    _write_quote_review_workbook(
+        quote_output,
+        [["包上/下水管道(单管)", "M", 3, "自动汇总", "厨房/卫生间层高合计*1.5默认长度", "自动生成-默认推断", "未识别QUOTE_PIPE_WRAP包管标识"]],
+    )
+
+    high_result = runner.invoke(
+        app,
+        [
+            "quote-report",
+            str(quote_output),
+            "--markdown-output",
+            str(report_output),
+            "--fail-on",
+            "high",
+        ],
+    )
+    medium_result = runner.invoke(
+        app,
+        [
+            "quote-report",
+            str(quote_output),
+            "--markdown-output",
+            str(report_output),
+            "--fail-on",
+            "medium",
+        ],
+    )
+
+    assert high_result.exit_code == 0
+    assert medium_result.exit_code == 1
+    assert "补管道/包管标识" in medium_result.output
+
+
 def test_cli_init_rules_writes_default_rules_json(tmp_path: Path):
     runner = CliRunner()
     output = tmp_path / "rules.json"
@@ -739,6 +803,37 @@ def _write_quote_cli_template(path: Path, *, include_fitout: bool, include_kitch
             sheet.append([2, "墙地面防漏处理", "M2", 1, 28, 10.5, 13, None, "说明"])
             sheet.append([3, "墙面贴瓷砖(600X1200)", "M2", 1, 0, 40, 60, None, "说明"])
             sheet.append([4, "地面砖铺贴(750X1500)", "M2", 1, 0, 36, 60, None, "说明"])
+    workbook.save(path)
+
+
+def _write_quote_review_workbook(path: Path, rows: list[list]) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "商品房整装报价"
+    headers = [
+        "编号",
+        "项目名称",
+        "单位",
+        "数量",
+        "主材单价",
+        "辅材单价",
+        "人工单价",
+        "合价",
+        "工艺说明",
+        "数量来源",
+        "来源空间",
+        "空间ID",
+        "计量口径",
+        "复核状态",
+        "复核备注",
+    ]
+    for column, header in enumerate(headers, start=1):
+        sheet.cell(row=3, column=column).value = header
+    for index, row in enumerate(rows, start=4):
+        item_name, unit, quantity, source, basis, status, note = row
+        values = [index - 3, item_name, unit, quantity, None, None, None, None, None, source, "全屋", None, basis, status, note]
+        for column, value in enumerate(values, start=1):
+            sheet.cell(row=index, column=column).value = value
     workbook.save(path)
 
 

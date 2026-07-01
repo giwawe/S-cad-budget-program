@@ -1,4 +1,5 @@
 import json
+from enum import Enum
 from pathlib import Path
 
 import typer
@@ -11,10 +12,18 @@ from cad_budget.models import ProjectInput, QuantityResult
 from cad_budget.export_excel import export_quantity_result
 from cad_budget.import_excel import import_quantity_result
 from cad_budget.quote_excel import default_quote_rules_text, export_residential_quote
-from cad_budget.quote_report import generate_quote_review_report
+from cad_budget.quote_report import build_quote_review_data, generate_quote_review_report
 from cad_budget.quantity import calculate_quantities
 
 app = typer.Typer(help="CAD renovation quantity takeoff tools.")
+
+
+class QuoteReportFailOn(str, Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+
+
+_QUOTE_REVIEW_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
 @app.callback()
@@ -192,6 +201,7 @@ def quote_report(
     markdown_output: Path = typer.Option(..., "--markdown-output", help="Path for generated quote review Markdown."),
     json_output: Path | None = typer.Option(None, "--json-output", help="Optional structured quote review JSON output."),
     checklist_output: Path | None = typer.Option(None, "--checklist-output", help="Optional quote review checklist Excel output."),
+    fail_on: QuoteReportFailOn | None = typer.Option(None, "--fail-on", help="Fail when quote review actions meet this priority threshold."),
 ) -> None:
     quantity_result: QuantityResult | None = None
     if quantity_json is not None:
@@ -225,6 +235,21 @@ def quote_report(
         typer.echo(f"Wrote {json_output}")
     if checklist_output is not None:
         typer.echo(f"Wrote {checklist_output}")
+    if fail_on is not None:
+        report_data = build_quote_review_data(input_excel, quantity_result=quantity_result)
+        threshold = _QUOTE_REVIEW_PRIORITY_ORDER[fail_on.value]
+        failed_actions = [
+            action
+            for action in report_data["actions"]
+            if _QUOTE_REVIEW_PRIORITY_ORDER.get(action["priority"], 99) <= threshold
+        ]
+        if failed_actions:
+            summaries = ", ".join(
+                f"{action['label']}({action['priority']}, {action['quote_row_count']} rows)"
+                for action in failed_actions
+            )
+            typer.echo(f"Quote review gate failed for --fail-on {fail_on.value}: {summaries}", err=True)
+            raise typer.Exit(code=1)
 
 
 @app.command("init-rules")
