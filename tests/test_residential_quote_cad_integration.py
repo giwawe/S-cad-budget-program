@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import os
 import subprocess
 import sys
@@ -114,6 +115,139 @@ def test_marker_rich_quote_sample_script_writes_reusable_outputs(tmp_path: Path)
     readme = (output_dir / "README.md").read_text(encoding="utf-8")
     assert "QUOTE_EXT_WALL" in readme
     assert "自动汇总: 17" in readme
+
+
+def test_real_template_quote_review_script_writes_pipeline_outputs(tmp_path: Path):
+    sample_dir = tmp_path / "marker-sample"
+    output_dir = tmp_path / "real-template-review"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+
+    sample_result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/generate_marker_rich_quote_sample.py",
+            "--output-dir",
+            str(sample_dir),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert sample_result.returncode == 0, sample_result.stderr
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_real_template_quote_review.py",
+            "--dxf",
+            str(sample_dir / "marker-rich-plan.dxf"),
+            "--template",
+            str(sample_dir / "marker-rich-template.xlsx"),
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    expected_files = {
+        "project.json",
+        "result.json",
+        "result.xlsx",
+        "quote.xlsx",
+        "quote-review.md",
+        "quote-review.json",
+        "quote-review-checklist.xlsx",
+        "summary.json",
+    }
+    assert {path.name for path in output_dir.iterdir()} == expected_files
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["automation_counts"]["自动汇总"] == 17
+    assert summary["automation_counts"]["模板默认"] == 0
+    assert summary["gate_failed"] is False
+    assert "Quote review pipeline complete" in completed.stdout
+
+
+def test_real_template_quote_review_script_reports_missing_input(tmp_path: Path):
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_real_template_quote_review.py",
+            "--dxf",
+            str(tmp_path / "missing.dxf"),
+            "--template",
+            str(tmp_path / "missing-template.xlsx"),
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 1
+    assert "Input DXF does not exist" in completed.stderr
+    assert "Traceback" not in completed.stderr
+
+
+def test_real_template_quote_review_script_fail_on_medium_returns_nonzero(tmp_path: Path):
+    sample_dir = tmp_path / "marker-sample"
+    output_dir = tmp_path / "real-template-review"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+
+    sample_result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/generate_marker_rich_quote_sample.py",
+            "--output-dir",
+            str(sample_dir),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert sample_result.returncode == 0, sample_result.stderr
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_real_template_quote_review.py",
+            "--dxf",
+            str(sample_dir / "marker-rich-plan.dxf"),
+            "--template",
+            str(sample_dir / "marker-rich-template.xlsx"),
+            "--output-dir",
+            str(output_dir),
+            "--fail-on",
+            "medium",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 1
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["gate_failed"] is True
+    assert summary["action_priority_counts"]["medium"] == 2
+    assert len(summary["failed_actions"]) == 2
 
 
 def _build_marker_rich_dxf(path: Path) -> None:

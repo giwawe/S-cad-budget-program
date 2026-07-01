@@ -188,6 +188,14 @@ The quote workbook writes a small automation summary in columns `Q:S`, counting 
 
 Remaining template-default items from the real commodity-apartment sample are tracked in `docs/residential-quote-remaining-defaults-audit-zh.md`, grouped by whether they need new CAD marker layers or should stay manual. The current real-template default-inferred review report is in `docs/residential-quote-real-template-review-zh.md`. A designer-facing checklist for reducing those defaults is available at `docs/residential-quote-sample-cad-marker-checklist-zh.md`.
 
+To rerun the real-template regression pipeline against the local desktop DXF and template, run:
+
+```powershell
+$env:PYTHONPATH='src'; py -3.14 scripts\run_real_template_quote_review.py --fail-on high
+```
+
+By default this reads `D:\Desktop\10.dxf` and `D:\Desktop\清单式报价表（商品房）-修正版.xlsx`, then writes `project.json`, `result.json`, `result.xlsx`, `quote.xlsx`, `quote-review.md`, `quote-review.json`, `quote-review-checklist.xlsx`, and `summary.json` under `scratch\cad-import-10-real-template-current`. Use `--dxf`, `--template`, `--output-dir`, `--rules`, and `--fail-on` to override those defaults.
+
 To generate a compact local sample that already contains the supported quote marker layers and demonstrates the expected automation stats, run:
 
 ```powershell
