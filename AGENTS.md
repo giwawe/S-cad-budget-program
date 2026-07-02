@@ -197,10 +197,17 @@ DWG / DXF
 $env:PYTHONPATH='src'; py -3.14 -m pytest -q
 ```
 
-5. 如果改动影响真实 CAD 导入，重新用 DXF 样例生成 `scratch/cad-import-test/project.json`、`result.json`、`result.xlsx` 并核对数量。
+5. 如果改动影响 CAD 导入、算量、报价规则、真实模板输出或单价套用，必须运行真实业务验收：
+
+```powershell
+$env:PYTHONPATH='src'; py -3.14 scripts\run_real_acceptance.py
+```
+
+6. `scripts\run_real_acceptance.py` 只做真实业务验收；全量 pytest 仍单独运行，不要把 full pytest 塞进验收脚本。
 
 ## 后续可能的工作
 
+- GUI 前置状态见 `docs/project-status-zh.md`。进入图形界面前，应先确认 GUI v1 只做文件选择、运行生成/验收、显示统计和打开输出目录，不做 CAD 编辑器或报价编辑器。
 - 修复或统一中文显示/编码问题，确保 README、Excel 表头和测试断言都是真实中文。
 - 楼梯专项工程量后续可增加专门字段或专门规则，目前只做人工补录提示。
 - Excel 修改后的数据已经可以回读成 `QuantityResult` JSON；后续如果需要闭环到项目源数据，还要另行定义回写 `ProjectInput` 或图纸标注的接口。

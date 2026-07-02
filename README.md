@@ -4,6 +4,8 @@ First-version CAD renovation quantity takeoff core.
 
 The system accepts normalized CAD-derived JSON using the `QUOTE_*` standard, calculates room quantities, reports exceptions, and exports Excel for later quotation work.
 
+Current project status and GUI readiness are tracked in [docs/project-status-zh.md](docs/project-status-zh.md).
+
 ## Local Usage
 
 Install development dependencies:
@@ -16,6 +18,13 @@ Run tests:
 
 ```bash
 pytest -q
+```
+
+After changing CAD import, quantity, quote, real-template output, or unit-price behavior, run the real business acceptance check and the full test suite:
+
+```powershell
+$env:PYTHONPATH='src'; py -3.14 scripts\run_real_acceptance.py
+$env:PYTHONPATH='src'; py -3.14 -m pytest -q
 ```
 
 Calculate a sample apartment:

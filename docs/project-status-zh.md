@@ -1,0 +1,89 @@
+# 项目状态与 GUI 前置收口
+
+更新时间：2026-07-02
+
+## 当前结论
+
+项目已经具备进入图形界面第一版设计的基础。CAD 导入、算量、商品房整装报价、全局单价表、真实模板回归和一键验收入口都已落地。GUI 前还需要做的是产品边界确认和界面服务接口整理，不再需要补一大块核心算量能力。
+
+## 已完成能力
+
+- DXF/DWG 导入路径已建立：DXF 直接导入，DWG 通过外部转换器先转 DXF。
+- `QUOTE_*` 图层规范已覆盖空间、文字、窗、门、墙、开放边界、外墙、建筑面积、拆改、新砌墙、过梁、管道、局部墙砖、背景墙、淋浴房、蹲坑、全屋定制和橱柜。
+- `ProjectInput` 到 `QuantityResult` 的算量主流程已稳定，Excel 算量表可导出和回读。
+- 商品房整装报价可从 `QuantityResult` 和真实模板生成报价 Excel。
+- 全局单价表按 `项目名称 + 单位` 去重维护，重复项目只改一次，后续方案复用同一套单价。
+- `priced-quote` 可一键生成正式报价包：`quote-priced.xlsx`、`quote-priced-review.md`、`quote-priced-review.json`、`quote-priced-review-checklist.xlsx`。
+- 真实模板关键业务数值已固化，当前一键验收入口为：
+
+```powershell
+$env:PYTHONPATH='src'; py -3.14 scripts\run_real_acceptance.py
+```
+
+- 当前全量测试基线：`263 passed, 80 warnings`。
+
+## 当前真实模板验收口径
+
+默认输入：
+
+- DXF：`D:\Desktop\10.dxf`
+- 模板：`D:\Desktop\清单式报价表（商品房）-修正版.xlsx`
+- 单价表：`scratch\cad-import-10-real-template-current\quote-unit-prices.xlsx`
+
+默认输出：
+
+- 回归输出：`scratch\cad-import-10-real-template-current`
+- 正式报价包：`scratch\cad-import-10-real-template-priced-command`
+
+当前验收统计：
+
+| 指标 | 当前值 |
+| --- | ---: |
+| 自动算量 | 53 |
+| 自动汇总 | 46 |
+| 模板默认 | 0 |
+| 自动生成-默认推断 | 38 |
+| 自动生成-异常提示 | 0 |
+| 按模板生成 | 0 |
+| high 复核行动 | 3 |
+| medium 复核行动 | 3 |
+| low 复核行动 | 0 |
+| 正式报价单价匹配行 | 99 |
+
+已业务确认的关键数量包括：暗窗帘箱只进普通干区有窗空间、主卧 L 形窗合并宽度 3.467m、厨房墙砖 14.954467㎡、室内门 3、厨房推拉门面积 3.843228㎡、厨房推拉门双包套 6.146922m、建筑面积 136.237652㎡、地面砖现场维护费使用室内地面面积 116.615998㎡。
+
+## 必须保持
+
+- 修改 `LayerName`、`dxf_adapter.py`、`quantity.py`、Excel/报价对 CAD 结果的使用口径，或新增/变更 CAD 图层、块属性、单位规则、几何推断规则、异常口径时，必须同步更新 `docs/cad-lightweight-drawing-standard-zh.md`。
+- 修改 CAD/算量/报价规则后，至少运行：
+
+```powershell
+$env:PYTHONPATH='src'; py -3.14 scripts\run_real_acceptance.py
+$env:PYTHONPATH='src'; py -3.14 -m pytest -q
+```
+
+- `scripts\run_real_acceptance.py` 只做真实业务验收；全量 pytest 保持独立运行，避免验收入口变慢且职责混杂。
+- 真实业务单价不提交仓库；`config/quote-unit-prices.xlsx` 已在 `.gitignore` 中。
+
+## 必须做
+
+- GUI v1 需求边界文档：明确第一版只做文件选择、运行导入/报价/验收、显示统计与复核动作、打开输出目录。
+- GUI 前置服务接口清单：把 GUI 需要调用的 Python 函数、输入路径、输出摘要、错误信息整理成稳定接口，避免 GUI 拼命令行。
+- GUI 技术选型确认：建议预算员/设计师使用场景优先 `PySide6`，如果只做开发者工具可考虑 `Textual`。
+
+## 建议做
+
+- 把真实复核行动决策表和单价表维护流程保持为 GUI 的业务说明来源。
+- 给 GUI 增加“最近一次验收摘要”的读取能力，直接读 `summary.json`。
+- 在 GUI 里把 high/medium 复核动作按“补 CAD / 预算员确认 / 可接受默认”分组展示。
+
+## 后续增强
+
+- GUI 内部报价编辑器。
+- CAD 图纸可视化预览或图层检查。
+- 从 Excel 回读后闭环写回项目源数据或 CAD 标注。
+- 更细的多项目单价库、客户方案管理、历史报价对比。
+
+## 进入 GUI 的建议范围
+
+GUI v1 应保持轻量：选择 DXF、模板、单价表和输出目录，点击运行，展示验收统计、复核行动、输出文件路径，并提供打开输出目录按钮。第一版不要做 CAD 编辑器、报价 Excel 编辑器或复杂主材库管理。
