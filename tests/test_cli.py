@@ -519,6 +519,24 @@ def test_cli_init_prices_writes_default_unit_price_table_and_refuses_overwrite(t
     assert "already exists" in second_result.output
 
 
+def test_cli_init_prices_writes_custom_output_without_default_path(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    template = tmp_path / "template.xlsx"
+    custom_prices = tmp_path / "prices" / "custom-unit-prices.xlsx"
+    default_prices = tmp_path / "config" / "quote-unit-prices.xlsx"
+    _write_quote_cli_template(template, include_fitout=True, include_kitchen=True)
+
+    result = runner.invoke(app, ["init-prices", str(template), "--output", str(custom_prices)])
+
+    assert result.exit_code == 0
+    assert custom_prices.exists()
+    assert not default_prices.exists()
+    rows = list(load_workbook(custom_prices).active.iter_rows(values_only=True))
+    floor_tile_rows = [row for row in rows[1:] if row[0] == "地面砖铺贴(750X1500)" and row[1] == "M2"]
+    assert len(floor_tile_rows) == 1
+
+
 def test_cli_priced_quote_generates_quote_and_review_outputs(tmp_path: Path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
@@ -543,6 +561,22 @@ def test_cli_priced_quote_generates_quote_and_review_outputs(tmp_path: Path, mon
     living_floor_tile = _row_containing_after(rows, "客厅工程", "地面砖铺贴(750X1500)")
     assert living_floor_tile[4:7] == (1, 2, 3)
     assert "Wrote" in result.output
+
+
+def test_cli_priced_quote_requires_unit_price_workbook(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    output_dir = tmp_path / "priced"
+    input_json.write_text(json.dumps(_quantity_result_payload(include_kitchen=True)), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True, include_kitchen=True)
+
+    result = runner.invoke(app, ["priced-quote", str(input_json), "--template", str(template), "--output-dir", str(output_dir)])
+
+    assert result.exit_code == 1
+    assert "Unit price workbook is required for priced-quote" in result.output
+    assert not output_dir.exists()
 
 
 def test_cli_check_prices_reports_invalid_unit_price_table(tmp_path: Path):
