@@ -52,11 +52,12 @@ class _AcceptanceWorker(QObject):
 
 
 class CadBudgetMainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, settings_path: Path | None = None) -> None:
         super().__init__()
         self.setWindowTitle("CAD Budget")
         self.resize(1200, 760)
         self.setStyleSheet(_APP_STYLESHEET)
+        self._settings_path = settings_path
         self._page_titles = ["运行", "结果", "设置"]
         self._path_edits: dict[str, QLineEdit] = {}
         self._settings_edits: dict[str, QLineEdit] = {}
@@ -64,7 +65,7 @@ class CadBudgetMainWindow(QMainWindow):
         self._latest_summary_text: GuiSummaryText | None = None
         self._worker_thread: QThread | None = None
         self._worker: _AcceptanceWorker | None = None
-        self._settings = load_gui_settings()
+        self._settings = load_gui_settings(self._settings_path)
 
         self._navigation = QListWidget()
         self._navigation.setObjectName("mainNavigation")
@@ -332,7 +333,7 @@ class CadBudgetMainWindow(QMainWindow):
     @Slot()
     def _save_settings(self) -> None:
         settings = self._settings_from_edits()
-        save_gui_settings(settings)
+        save_gui_settings(settings, self._settings_path)
         self._settings = settings
         self._apply_settings(settings)
         self._run_log.setText("默认路径已保存")
