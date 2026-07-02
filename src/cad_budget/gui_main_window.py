@@ -141,6 +141,7 @@ class CadBudgetMainWindow(QMainWindow):
         self._output_files_table = QTableWidget(0, 2)
         self._output_files_table.setObjectName("outputFilesTable")
         self._output_files_table.setHorizontalHeaderLabels(["文件", "路径"])
+        self._output_files_table.setColumnWidth(0, 180)
         self._output_files_table.horizontalHeader().setStretchLastSection(True)
         self._output_files_table.verticalHeader().setVisible(False)
         self._output_files_table.setAlternatingRowColors(True)
@@ -388,6 +389,8 @@ _INPUT_LABELS = {
 _APP_STYLESHEET = """
 QMainWindow {
     background: #f6f7f9;
+    font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI";
+    font-size: 14px;
 }
 QListWidget#mainNavigation {
     background: #202733;

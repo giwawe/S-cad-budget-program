@@ -35,9 +35,11 @@ def test_main_window_source_wires_runtime_actions() -> None:
     assert "subprocess.Popen" in source
     assert '"运行", "结果", "设置"' in source
     assert "cellDoubleClicked" in source
+    assert "setColumnWidth(0, 180)" in source
     assert "default_gui_settings" in source
     assert "load_gui_settings" in source
     assert "save_gui_settings" in source
+    assert "Microsoft YaHei UI" in source
 
 
 def test_main_window_constructs_three_pages_when_pyside6_is_available(monkeypatch) -> None:
