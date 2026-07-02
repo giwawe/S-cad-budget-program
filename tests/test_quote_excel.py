@@ -556,6 +556,32 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
     assert sheet["S5"].value == "=R5/SUM(R3:R5)"
 
 
+def test_export_residential_quote_writes_draft_template_header_and_footer(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path)
+    result = QuantityResult(
+        project_name="10",
+        building_area=136.237652,
+        rows=[_quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0)],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    sheet = load_workbook(output_path, data_only=False).active
+    rows = list(sheet.iter_rows(values_only=True))
+    assert sheet["A1"].value == "\u5de5\u7a0b(\u9884) \u7b97\u8868"
+    assert sheet["A2"].value == "\u5730\u5740\u540d\u79f0\uff1a"
+    assert sheet["C2"].value == "\u5ba2\u6237\uff1a"
+    assert sheet["G2"].value == "\u88c5\u4fee\u9762\u79ef\uff1a136.237652"
+    assert sheet["I2"].value == "\u65e5\u671f\uff1a"
+
+    notes_row_index = next(index for index, row in enumerate(rows, start=1) if row[0] == "\u7f16\u5236\u8bf4\u660e\uff1a")
+    assert rows[notes_row_index][0] == "1\u3001\u672c\u62a5\u4ef7\u4e0d\u542b\u5176\u4ed6\u7ba1\u7406\u5904\u6240\u589e\u52a0\u4efb\u4f55\u8d39\u7528\uff0c\u5982\u679c\u7ba1\u7406\u5904\u6240\u589e\u6b64\u8d39\u7528\u4e1a\u4e3b\u627f\u62c5\uff1b"
+    assert rows[-1][:6] == ("\u5ba2\u6237\u7b7e\u540d\uff1a", None, "\u8bbe\u8ba1\u5e08\uff1a", None, None, "\u62a5\u4ef7\u5458\uff1a")
+
+
 def test_export_residential_quote_auto_fills_custom_and_cabinet_items(tmp_path: Path):
     template_path = tmp_path / "template.xlsx"
     output_path = tmp_path / "quote.xlsx"

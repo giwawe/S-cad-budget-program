@@ -128,6 +128,23 @@ _SECTION_FILL = PatternFill("solid", fgColor="D9EAD3")
 _REVIEW_FILL = PatternFill("solid", fgColor="EADCF8")
 _WHITE_FONT = Font(color="FFFFFF", bold=True)
 _BOLD_FONT = Font(bold=True)
+_QUOTE_FOOTER_NOTES = [
+    "1、本报价不含其他管理处所增加任何费用，如果管理处所增此费用业主承担；",
+    "2、施工中如有项目需增补或有设计变更，工作量及价格由甲乙双方协商认定，签字为准并进入工程总造价。",
+    "3、甲方变更认可后即须交齐增补款项，不缴款者乙方有权停工，由此引起的工期延误不属乙方责任。",
+    "4、所有款项甲方应缴给乙方财务（开据公司盖章票据），如因款项不是支付乙方财务产生的损失不属乙方责任。",
+    "5、甲方自购材料运费自理。",
+    "6、物业押金及物业管理费由甲方承担。",
+    "7、本报价单不含装修期间所产生的水电费。",
+    "8、施工以合同与预算为准，口头承诺无效。",
+    "9、上述材料若因市场缺货,按同等档次产品品牌，若选择超过材料名单价值的材料应按市场价格补差额。",
+    "10、工程竣工验收合格后，乙方向甲方办理移交及发放保修卡。不按约缴款者视甲方自动放弃保修权益，乙方并将依法追缴。",
+    "11、如未办理竣工验收即入住（或更换装修钥匙）视为验收合格。",
+    "12、本预算未经签字确认前，请勿带走，  否则，必须交付本报价总额3％的预算费，合同签订后计入工程款；",
+    "13、本报介未含：  室内所有广告画面及字体、活动家具、音响及功放、空调、电器、室内所有监控线路铺设及设备安装；",
+    "14、施工监理员按本预算进行施工，预算没有的项目不在施工范围内；",
+    "15、本报价一式两份，双方各执一份，   同具法律效力。",
+]
 
 
 @dataclass
@@ -514,7 +531,7 @@ def export_residential_quote(
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = QUOTE_SHEET_NAME
-    _write_quote_title(sheet, result.project_name)
+    _write_quote_title(sheet, result.building_area)
 
     subtotal_rows: list[int] = []
     section_index = 0
@@ -561,15 +578,17 @@ def export_residential_quote(
         )
 
     _append_summary_rows(sheet, subtotal_rows)
+    _append_quote_footer(sheet)
     _write_automation_summary(sheet, rules.source_label)
     _configure_sheet(sheet)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(output_path)
 
 
-def _write_quote_title(sheet, project_name: str) -> None:
+def _write_quote_title(sheet, building_area: float | None = None) -> None:
     sheet.append(["\u5de5\u7a0b(\u9884) \u7b97\u8868"])
-    sheet.append([f"\u540d\u79f0\uff1a{project_name}"])
+    area_label = "" if building_area is None else str(building_area)
+    sheet.append(["\u5730\u5740\u540d\u79f0\uff1a", None, "\u5ba2\u6237\uff1a", None, None, None, f"\u88c5\u4fee\u9762\u79ef\uff1a{area_label}", None, "\u65e5\u671f\uff1a"])
     sheet.append(QUOTE_HEADERS)
     sheet.append(QUOTE_SUBHEADERS)
     for row in sheet.iter_rows(min_row=1, max_row=4):
@@ -584,6 +603,8 @@ def _write_quote_title(sheet, project_name: str) -> None:
         cell.font = _WHITE_FONT
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     sheet["A1"].font = Font(bold=True, size=14)
+    sheet["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9)
 
 
 def _find_unit_price_header_row(sheet) -> int:
@@ -817,6 +838,22 @@ def _append_summary_rows(sheet, subtotal_rows: list[int]) -> None:
         sheet.cell(row=row_index, column=1).font = _BOLD_FONT
         sheet.cell(row=row_index, column=2).font = _BOLD_FONT
         sheet.cell(row=row_index, column=8).font = _BOLD_FONT
+
+
+def _append_quote_footer(sheet) -> None:
+    heading_row = sheet.max_row + 1
+    sheet.append(["\u7f16\u5236\u8bf4\u660e\uff1a"])
+    sheet.cell(row=heading_row, column=1).font = _BOLD_FONT
+    for note in _QUOTE_FOOTER_NOTES:
+        row_index = sheet.max_row + 1
+        sheet.append([note])
+        sheet.merge_cells(start_row=row_index, start_column=1, end_row=row_index, end_column=9)
+        sheet.cell(row=row_index, column=1).alignment = Alignment(wrap_text=True, vertical="top")
+
+    signature_row = sheet.max_row + 1
+    sheet.append(["\u5ba2\u6237\u7b7e\u540d\uff1a", None, "\u8bbe\u8ba1\u5e08\uff1a", None, None, "\u62a5\u4ef7\u5458\uff1a"])
+    for column_index in (1, 3, 6):
+        sheet.cell(row=signature_row, column=column_index).font = _BOLD_FONT
 
 
 def _style_item_row(sheet, row_index: int) -> None:

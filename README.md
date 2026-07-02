@@ -240,6 +240,8 @@ $env:PYTHONPATH='src'; py -3.14 scripts\run_real_acceptance.py
 
 By default this reads `D:\Desktop\10.dxf`, `D:\Desktop\清单式报价表（商品房）-修正版.xlsx`, and `scratch\cad-import-10-real-template-current\quote-unit-prices.xlsx`. It writes `project.json`, `result.json`, `result.xlsx`, `quote.xlsx`, `quote-review.md`, `quote-review.json`, `quote-review-checklist.xlsx`, and `summary.json` under `scratch\cad-import-10-real-template-current`, writes the `quote-priced.*` package under `scratch\cad-import-10-real-template-priced-command`, asserts the key business-approved quantities, and validates the priced package. Use `--dxf`, `--template`, `--output-dir`, `--unit-prices`, `--priced-output-dir`, `--unit`, and `--rules` to override defaults.
 
+The generated `quote-priced.xlsx` uses the current quote draft shell: title and customer/address/date fields at the top, building area from `QuantityResult.building_area`, and the footer notes plus customer/designer/estimator signature row.
+
 To generate a compact local sample that already contains the supported quote marker layers and demonstrates the expected automation stats, run:
 
 ```powershell

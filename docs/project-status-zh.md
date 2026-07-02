@@ -20,7 +20,7 @@
 $env:PYTHONPATH='src'; py -3.14 scripts\run_real_acceptance.py
 ```
 
-- 当前全量测试基线：`263 passed, 80 warnings`。
+- 当前全量测试基线：`281 passed, 80 warnings`。
 
 ## 当前真实模板验收口径
 
@@ -34,6 +34,8 @@ $env:PYTHONPATH='src'; py -3.14 scripts\run_real_acceptance.py
 
 - 回归输出：`scratch\cad-import-10-real-template-current`
 - 正式报价包：`scratch\cad-import-10-real-template-priced-command`
+
+`quote-priced.xlsx` 已使用当前报价草稿外壳：顶部包含地址、客户、装修面积、日期栏，装修面积来自 `QuantityResult.building_area`；表尾包含 `编制说明` 和客户、设计师、报价员签名栏。
 
 当前验收统计：
 
