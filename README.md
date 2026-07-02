@@ -4,7 +4,7 @@ First-version CAD renovation quantity takeoff core.
 
 The system accepts normalized CAD-derived JSON using the `QUOTE_*` standard, calculates room quantities, reports exceptions, and exports Excel for later quotation work.
 
-Current project status and GUI readiness are tracked in [docs/project-status-zh.md](docs/project-status-zh.md).
+Current project status and GUI readiness are tracked in [docs/project-status-zh.md](docs/project-status-zh.md). GUI v1 scope, service boundaries, and visual direction are documented in [docs/gui-v1-scope-zh.md](docs/gui-v1-scope-zh.md), [docs/gui-v1-service-interface-zh.md](docs/gui-v1-service-interface-zh.md), and [docs/gui-v1-visual-design-brief-zh.md](docs/gui-v1-visual-design-brief-zh.md).
 
 ## Local Usage
 
