@@ -1392,6 +1392,35 @@ def test_import_dxf_infers_rotated_window_width_from_outline_major_dimension(tmp
     assert result.project.windows[0].width == pytest.approx(1.5, abs=0.001)
 
 
+def test_import_dxf_merges_touching_slender_window_outlines_as_l_shape_width(tmp_path: Path):
+    doc = ezdxf.new("R2010")
+    doc.header["$INSUNITS"] = 4
+    modelspace = doc.modelspace()
+    doc.layers.add("QUOTE_ROOM")
+    doc.layers.add("QUOTE_WINDOW")
+    modelspace.add_lwpolyline(
+        [(0, 0), (4000, 0), (4000, 3000), (0, 3000), (0, 0)],
+        dxfattribs={"layer": "QUOTE_ROOM", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(1000, 1000), (2500, 1000), (2500, 1100), (1000, 1100), (1000, 1000)],
+        dxfattribs={"layer": "QUOTE_WINDOW", "closed": True},
+    )
+    modelspace.add_lwpolyline(
+        [(2500, 1000), (2600, 1000), (2600, 1900), (2500, 1900), (2500, 1000)],
+        dxfattribs={"layer": "QUOTE_WINDOW", "closed": True},
+    )
+    dxf_path = _save_doc(tmp_path / "l_shape_window.dxf", doc)
+
+    result = import_dxf(CadImportOptions(source_path=dxf_path))
+
+    assert not result.has_blockers
+    assert result.project is not None
+    assert len(result.project.windows) == 1
+    assert result.project.windows[0].width == pytest.approx(2.4, abs=0.001)
+    assert result.project.windows[0].attributes["source"] == "closed_outline_l_shape"
+
+
 def test_import_dxf_warns_for_degenerate_closed_window_outline(tmp_path: Path):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4

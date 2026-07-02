@@ -557,7 +557,7 @@ def test_cli_init_rules_writes_default_rules_json(tmp_path: Path):
     assert data["wet_room_heights"]["wall_tile_height"] == 2.5
     assert data["building_area_percent_count_items"]
     assert "floor_area_percent_count_items" not in data
-    assert "垃圾清运费" in data["floor_area_aggregate_items"]
+    assert "垃圾清运费" in data["building_area_aggregate_items"]
     rules = load_quote_rules(output)
     assert rules.wall_tile_height == 2.5
     assert "Wrote" in result.output
@@ -610,7 +610,7 @@ def test_cli_quote_uses_external_rules_file(tmp_path: Path):
     kitchen_waterproof = _row_containing_after(rows, "厨房工程", "墙地面防漏处理")
     kitchen_wall_tile = _row_containing_after(rows, "厨房工程", "墙面贴瓷砖(600X1200)")
     assert kitchen_waterproof[3] == 11.0
-    assert kitchen_wall_tile[3] == 19.0
+    assert kitchen_wall_tile[3] == 20.0
     assert sheet["Q7"].value == "规则来源"
     assert sheet["R7"].value == str(rules)
 

@@ -84,6 +84,9 @@ _WET_ROOM_BASE_ITEMS = [
     "\u5730\u9762\u7816\u94fa\u8d34(750X1500)",
 ]
 _WALL_TILE_VARIANTS = ["\u5899\u9762\u8d34\u74f7\u7816(600x1200)", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)"]
+_CURTAIN_BOX_ITEMS = {"\u6697\u7a97\u5e18\u7bb1"}
+_WALL_TILE_WINDOW_DEDUCTION_THRESHOLD = 3.0
+_INTERIOR_DOOR_SOURCE_ROOM_KEYWORDS = {"\u5367\u5ba4", "\u4e3b\u5367", "\u6b21\u5367", "\u5ba2\u5367", "\u513f\u7ae5\u623f", "\u8001\u4eba\u623f", "\u4e66\u623f"}
 _TERRACE_ITEMS = [
     "\u5730\u9762\u627e\u5e73",
     "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406",
@@ -164,6 +167,7 @@ class ResidentialQuoteRules:
     bathroom_waterproof_wall_height: float
     wall_tile_height: float
     floor_area_aggregate_items: set[str]
+    building_area_aggregate_items: set[str]
     tile_area_aggregate_items: set[str]
     room_count_aggregate_items: set[str]
     wet_room_count_aggregate_items: set[str]
@@ -247,6 +251,7 @@ def _quote_rules_from_dict(data: dict[str, Any], source_label: str) -> Residenti
         bathroom_waterproof_wall_height=_required_float(wet_room_heights, "bathroom_waterproof_wall_height"),
         wall_tile_height=_required_float(wet_room_heights, "wall_tile_height"),
         floor_area_aggregate_items=_required_item_set(floor_area_items, "floor_area_aggregate_items"),
+        building_area_aggregate_items=_optional_item_set(data, "building_area_aggregate_items"),
         tile_area_aggregate_items=_required_item_set(tile_area_items, "tile_area_aggregate_items"),
         room_count_aggregate_items=_optional_item_set(data, "room_count_aggregate_items"),
         wet_room_count_aggregate_items=_optional_item_set(data, "wet_room_count_aggregate_items"),
@@ -409,11 +414,21 @@ def export_residential_quote(
 
     for room in included_rooms:
         section_index += 1
-        item_names = _item_names_for_room(room, item_index)
+        item_names = _item_names_for_room(room, item_index, result.construction_details)
         items = [item_index[name] for name in item_names if name in item_index]
         if not items:
             continue
-        subtotal_rows.append(_append_section(sheet, _section_label(section_index), f"{room.room_name}\u5de5\u7a0b", items, room, rules=rules))
+        subtotal_rows.append(
+            _append_section(
+                sheet,
+                _section_label(section_index),
+                f"{room.room_name}\u5de5\u7a0b",
+                items,
+                room,
+                rules=rules,
+                construction_details=result.construction_details,
+            )
+        )
 
     for section in template.sections:
         if _is_space_template_section(section.name):
@@ -499,7 +514,7 @@ def _append_section(
             else None
         )
         if room is not None:
-            quantity = _quantity_for_item(item.name, room, rules)
+            quantity = _quantity_for_item(item.name, room, rules, construction_details or [])
         elif aggregate is not None:
             quantity = aggregate.quantity
         else:
@@ -645,7 +660,11 @@ def _build_item_index(template: QuoteTemplate) -> dict[str, QuoteTemplateItem]:
     return item_index
 
 
-def _item_names_for_room(room: QuantityRow, item_index: dict[str, QuoteTemplateItem]) -> list[str]:
+def _item_names_for_room(
+    room: QuantityRow,
+    item_index: dict[str, QuoteTemplateItem],
+    construction_details: list[ConstructionQuantityDetail] | None = None,
+) -> list[str]:
     name = room.room_name
     if any(keyword in name for keyword in ["\u53a8\u623f", "\u536b", "\u6d17\u624b\u95f4", "\u536b\u751f\u95f4"]):
         names = _WET_ROOM_BASE_ITEMS.copy()
@@ -655,10 +674,34 @@ def _item_names_for_room(room: QuantityRow, item_index: dict[str, QuoteTemplateI
         return names
     if any(keyword in name for keyword in ["\u9732\u53f0", "\u9633\u53f0"]):
         return _TERRACE_ITEMS
-    return _GENERAL_ROOM_ITEMS
+    names = _GENERAL_ROOM_ITEMS.copy()
+    if _explicit_wall_tile_area_for_room(room, construction_details or []) > 0:
+        wall_tile = next((variant for variant in _WALL_TILE_VARIANTS if variant in item_index), None)
+        if wall_tile is not None and wall_tile not in names:
+            names.append(wall_tile)
+    return _with_window_room_items(room, names, item_index)
 
 
-def _quantity_for_item(item_name: str, room: QuantityRow, rules: ResidentialQuoteRules) -> float:
+def _with_window_room_items(
+    room: QuantityRow,
+    names: list[str],
+    item_index: dict[str, QuoteTemplateItem],
+) -> list[str]:
+    if not room.window_details:
+        return names
+    result = names.copy()
+    for item_name in _CURTAIN_BOX_ITEMS:
+        if item_name in item_index and item_name not in result:
+            result.append(item_name)
+    return result
+
+
+def _quantity_for_item(
+    item_name: str,
+    room: QuantityRow,
+    rules: ResidentialQuoteRules,
+    construction_details: list[ConstructionQuantityDetail] | None = None,
+) -> float:
     if item_name in {
         "\u8f7b\u94a2\u9f99\u9aa8\u5e73\u9876",
         "\u9876\u9762\u6279\u5d4c",
@@ -682,8 +725,10 @@ def _quantity_for_item(item_name: str, room: QuantityRow, rules: ResidentialQuot
         "\u5899\u9762\u8d34\u74f7\u7816(600X1200)",
     }:
         if not _is_wet_room(room):
-            return 0
+            return _explicit_wall_tile_area_for_room(room, construction_details or [])
         return _wet_wall_tile_area(room, rules)
+    if item_name in _CURTAIN_BOX_ITEMS:
+        return _curtain_wall_length([room])
     return 0
 
 
@@ -773,6 +818,8 @@ def _aggregate_quantity_for_item(
         return _building_area_percent_count_aggregate(building_area, rules.building_area_percent_count_items[item_name])
     if not rooms:
         return None
+    if item_name in rules.building_area_aggregate_items:
+        return _building_area_aggregate(building_area)
     if item_name in rules.custom_projected_area_items:
         return _custom_projected_area_aggregate(rooms, rules)
     if item_name in rules.base_cabinet_length_items:
@@ -1216,6 +1263,17 @@ def _building_area_percent_count_aggregate(building_area: float | None, percent:
     )
 
 
+def _building_area_aggregate(building_area: float | None) -> QuoteAggregateQuantity | None:
+    if building_area is None or building_area <= 0:
+        return None
+    return QuoteAggregateQuantity(
+        quantity=_round_quantity(building_area),
+        basis="QUOTE_EXT_WALL\u56f4\u5408\u5efa\u7b51\u9762\u79ef",
+        rooms=[],
+        review_status="\u81ea\u52a8\u751f\u6210",
+    )
+
+
 def _zero_aggregate(basis: str, note: str | None = None, *, status: str | None = None) -> QuoteAggregateQuantity:
     return QuoteAggregateQuantity(
         quantity=0,
@@ -1490,6 +1548,8 @@ def _door_default_note_for_rooms(
 
 
 def _review_status_for_room(item_name: str, room: QuantityRow) -> str:
+    if item_name in _CURTAIN_BOX_ITEMS and room.window_details:
+        return "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad"
     if room.status == DataStatus.DEFAULT_INFERRED:
         if _only_window_height_defaulted(room) and not _room_item_uses_window_height(item_name):
             return "\u81ea\u52a8\u751f\u6210"
@@ -1500,6 +1560,8 @@ def _review_status_for_room(item_name: str, room: QuantityRow) -> str:
 
 
 def _review_note_for_room(item_name: str, room: QuantityRow) -> str | None:
+    if item_name in _CURTAIN_BOX_ITEMS and room.window_details:
+        return "\u7a97\u5e18\u7bb1\u6309\u540c\u623f\u95f4\u540c\u5899\u6bb5\u53bb\u91cd\uff0cL\u5f62\u7a97\u9700\u4eba\u5de5\u786e\u8ba4"
     if room.status not in {DataStatus.DEFAULT_INFERRED, DataStatus.NEEDS_REVIEW}:
         return None
     notes = _translated_exception_notes_for_room(
@@ -1589,12 +1651,39 @@ def _measure_basis_for_item(item_name: str, room: QuantityRow) -> str:
         "\u5899\u9762\u8d34\u74f7\u7816(600x1200)",
         "\u5899\u9762\u8d34\u74f7\u7816(600X1200)",
     }:
-        return "2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef"
+        if _is_wet_room(room):
+            return "2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef"
+        return "QUOTE_WALL_TILE\u663e\u5f0f\u5899\u7816\u9762\u79ef"
+    if item_name in _CURTAIN_BOX_ITEMS:
+        return "\u7a97\u6240\u5728\u5899\u9762\u957f\u5ea6"
     return "\u81ea\u52a8\u7b97\u91cf"
 
 
 def _wet_wall_tile_area(room: QuantityRow, rules: ResidentialQuoteRules) -> float:
-    return _round_quantity(max(0, room.wall_measure_perimeter * rules.wall_tile_height - room.window_area))
+    large_window_area = sum(
+        detail.area for detail in room.window_details if detail.area > _WALL_TILE_WINDOW_DEDUCTION_THRESHOLD
+    )
+    if not room.window_details and room.window_area > _WALL_TILE_WINDOW_DEDUCTION_THRESHOLD:
+        large_window_area = room.window_area
+    sliding_door_area = sum(
+        _door_quote_area(door, rules)
+        for door in room.door_details
+        if door.width is not None and door.width >= rules.wide_door_width_threshold
+    )
+    return _round_quantity(max(0, room.wall_measure_perimeter * rules.wall_tile_height - large_window_area - sliding_door_area))
+
+
+def _explicit_wall_tile_area_for_room(
+    room: QuantityRow,
+    construction_details: list[ConstructionQuantityDetail],
+) -> float:
+    return _round_quantity(
+        sum(
+            detail.area
+            for detail in construction_details
+            if detail.kind is ConstructionKind.WALL_TILE and detail.room_id == room.room_id and detail.area > 0
+        )
+    )
 
 
 def _curtain_wall_length(rooms: list[QuantityRow]) -> float:
@@ -1602,7 +1691,9 @@ def _curtain_wall_length(rooms: list[QuantityRow]) -> float:
     fallback_total = 0.0
     for room in rooms:
         for detail in room.window_details:
-            if detail.wall_segment_key and detail.wall_segment_length is not None:
+            if "+" in detail.id:
+                fallback_total += detail.width
+            elif detail.wall_segment_key and detail.wall_segment_length is not None:
                 segment_lengths[f"{room.room_id}:{detail.wall_segment_key}"] = detail.wall_segment_length
             else:
                 fallback_total += detail.width
@@ -1639,13 +1730,24 @@ def _tile_piece_basis(area_label: str, spec: tuple[str, float, float], loss_rate
 
 
 def _ordinary_interior_door_count(rooms: list[QuantityRow], rules: ResidentialQuoteRules) -> tuple[int, list[QuantityRow]]:
+    bathroom_door_ids = {
+        door.id
+        for room in rooms
+        if _is_bathroom(room)
+        for door in room.door_details
+    }
     seen_door_ids: set[str] = set()
     source_rooms: dict[str, QuantityRow] = {}
     for room in rooms:
-        if _is_bathroom(room):
+        if _is_bathroom(room) or not any(keyword in room.room_name for keyword in _INTERIOR_DOOR_SOURCE_ROOM_KEYWORDS):
             continue
         for door in room.door_details:
-            if door.width is None or door.width >= rules.wide_door_width_threshold or door.id in seen_door_ids:
+            if (
+                door.width is None
+                or door.width >= rules.wide_door_width_threshold
+                or door.id in seen_door_ids
+                or door.id in bathroom_door_ids
+            ):
                 continue
             seen_door_ids.add(door.id)
             source_rooms[room.room_id] = room

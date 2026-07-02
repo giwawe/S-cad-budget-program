@@ -45,7 +45,7 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert rules.kitchen_waterproof_wall_height == 0.3
     assert rules.bathroom_waterproof_wall_height == 1.8
     assert rules.wall_tile_height == 2.5
-    assert "\u5783\u573e\u6e05\u8fd0\u8d39" in rules.floor_area_aggregate_items
+    assert "\u5783\u573e\u6e05\u8fd0\u8d39" in rules.building_area_aggregate_items
     assert "\u7f8e\u7f1d" in rules.tile_area_aggregate_items
     assert "\u623f\u95f4\u6210\u54c1\u4fdd\u62a4" in rules.room_count_aggregate_items
     assert "\u6d74\u5ba4\u67dc" in rules.bathroom_count_aggregate_items
@@ -56,7 +56,7 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert rules.tile_piece_loss_rate == 0.05
     assert rules.wide_door_width_threshold == 1.4
     assert rules.default_door_height == 2.2
-    assert rules.default_sliding_door_height == 2.4
+    assert rules.default_sliding_door_height == 2.2
     assert "\u7a97\u5e18" in rules.curtain_wall_length_items
     assert "\u5730\u9762\u74f7\u7816" in rules.floor_tile_piece_items
     assert "\u5899\u9762\u74f7\u7816" in rules.wall_tile_piece_items
@@ -92,6 +92,7 @@ def test_load_default_quote_rules_reads_packaged_rule_file():
     assert rules.pipe_default_length_factor == 1.5
     assert "\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54" in rules.building_area_percent_count_items
     assert rules.building_area_percent_count_items["\u6253\u6df7\u51dd\u571f\u8fc7\u6881\u5b54"] == 0.1
+    assert "\u6750\u6599\u642c\u8fd0\u8d39" in rules.building_area_aggregate_items
 
 
 def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkeypatch):
@@ -135,7 +136,7 @@ def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkey
     kitchen_wall_tile = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
     assert kitchen_waterproof[3] == 11.0
     assert bath_waterproof[3] == 12.6
-    assert kitchen_wall_tile[3] == 19.0
+    assert kitchen_wall_tile[3] == 20.0
 
 
 def test_load_quote_rules_reads_external_rule_file(tmp_path: Path):
@@ -348,7 +349,7 @@ def test_export_residential_quote_accepts_external_rules_and_records_source(tmp_
     kitchen_waterproof = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u5730\u9762\u9632\u6f0f\u5904\u7406")
     kitchen_wall_tile = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
     assert kitchen_waterproof[3] == 11.0
-    assert kitchen_wall_tile[3] == 19.0
+    assert kitchen_wall_tile[3] == 20.0
     assert sheet["Q7"].value == "\u89c4\u5219\u6765\u6e90"
     assert sheet["R7"].value == str(rules_path)
 
@@ -359,6 +360,7 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
     _create_quote_template(template_path)
     result = QuantityResult(
         project_name="Quote Demo",
+        building_area=29.0,
         rows=[
             _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
             _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0, wall_measure_perimeter=10.0, window_area=1.0),
@@ -410,8 +412,8 @@ def test_export_residential_quote_generates_actual_room_sections_and_preserves_m
 
     kitchen_wall_tile = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
     bath_wall_tile = _row_containing_after(rows, "\u4e3b\u536b\u5de5\u7a0b", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
-    assert kitchen_wall_tile[3] == 24.0
-    assert bath_wall_tile[3] == 19.5
+    assert kitchen_wall_tile[3] == 25.0
+    assert bath_wall_tile[3] == 20.0
     assert kitchen_wall_tile[12] == "2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef"
 
     manual_item = _row_containing(rows, "\u7a97\u5e18")
@@ -780,6 +782,7 @@ def test_export_residential_quote_auto_fills_whole_house_area_items(tmp_path: Pa
     _create_quote_template(template_path, include_area_summary_items=True)
     result = QuantityResult(
         project_name="Area Summary Demo",
+        building_area=29.0,
         rows=[
             _quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0),
             _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0, wall_measure_perimeter=10.0, window_area=1.0),
@@ -803,7 +806,7 @@ def test_export_residential_quote_auto_fills_whole_house_area_items(tmp_path: Pa
         "\u81ea\u52a8\u6c47\u603b",
         "\u5168\u5c4b",
         None,
-        "\u5ba4\u5185\u5730\u9762\u9762\u79ef\u6c47\u603b",
+        "QUOTE_EXT_WALL\u56f4\u5408\u5efa\u7b51\u9762\u79ef",
         "\u81ea\u52a8\u751f\u6210",
         None,
     )
@@ -828,7 +831,7 @@ def test_export_residential_quote_auto_fills_tile_area_items(tmp_path: Path):
     workbook = load_workbook(output_path, data_only=False)
     rows = list(workbook.active.iter_rows(values_only=True))
     tile_grout = _row_containing(rows, "\u7f8e\u7f1d")
-    assert tile_grout[3] == 72.5
+    assert tile_grout[3] == 74.0
     assert tile_grout[9:15] == (
         "\u81ea\u52a8\u6c47\u603b",
         "\u5168\u5c4b",
@@ -1123,6 +1126,15 @@ def test_export_residential_quote_auto_fills_curtains_by_unique_window_wall_leng
                         wall_segment_key="living:1",
                         wall_segment_length=3.0,
                     ),
+                    WindowQuantityDetail(
+                        id="w4+w5",
+                        width=2.4,
+                        height=1.8,
+                        area=4.32,
+                        height_defaulted=False,
+                        wall_segment_key="living:2",
+                        wall_segment_length=8.0,
+                    ),
                 ],
             )
         ],
@@ -1134,7 +1146,7 @@ def test_export_residential_quote_auto_fills_curtains_by_unique_window_wall_leng
     workbook = load_workbook(output_path, data_only=False)
     rows = list(workbook.active.iter_rows(values_only=True))
     curtains = _item_row_named(rows, "\u7a97\u5e18")
-    assert curtains[3] == 7.0
+    assert curtains[3] == 9.4
     assert curtains[9:15] == (
         "\u81ea\u52a8\u6c47\u603b",
         "\u5168\u5c4b",
@@ -1167,7 +1179,7 @@ def test_export_residential_quote_auto_fills_tile_piece_counts_from_area_and_spe
     wall_tiles = _item_row_named(rows, "\u5899\u9762\u74f7\u7816")
     assert floor_tiles[3] == 28
     assert floor_tiles[12] == "\u5730\u7816\u9762\u79ef\u6309750X1500\u89c4\u683c+5%\u635f\u8017\u6298\u7b97\u7247\u6570"
-    assert wall_tiles[3] == 64
+    assert wall_tiles[3] == 66
     assert wall_tiles[12] == "\u5899\u7816\u9762\u79ef\u6309600x1200\u89c4\u683c+5%\u635f\u8017\u6298\u7b97\u7247\u6570"
 
 
@@ -1220,9 +1232,9 @@ def test_export_residential_quote_adds_explicit_non_wet_wall_tile_markers(tmp_pa
     rows = list(workbook.active.iter_rows(values_only=True))
     wall_tiles = _item_row_named(rows, "\u5899\u9762\u74f7\u7816")
     tile_grout = _item_row_named(rows, "\u7f8e\u7f1d")
-    assert wall_tiles[3] == 41
+    assert wall_tiles[3] == 42
     assert wall_tiles[13] == "\u81ea\u52a8\u751f\u6210"
-    assert tile_grout[3] == 57.6
+    assert tile_grout[3] == 58.6
     assert tile_grout[12] == "\u5730\u7816\u9762\u79ef+2.5m\u4ee5\u4e0b\u5899\u9762\u8d34\u7816\u9762\u79ef+QUOTE_WALL_TILE\u663e\u5f0f\u5899\u7816\u9762\u79ef"
 
 
@@ -1286,7 +1298,7 @@ def test_export_residential_quote_parses_tile_spec_with_star_separator(tmp_path:
     wall_tiles = _item_row_named(rows, "\u5899\u9762\u74f7\u7816")
     assert floor_tiles[3] == 25
     assert floor_tiles[12] == "\u5730\u7816\u9762\u79ef\u6309750*1500\u89c4\u683c+5%\u635f\u8017\u6298\u7b97\u7247\u6570"
-    assert wall_tiles[3] == 35
+    assert wall_tiles[3] == 37
     assert wall_tiles[12] == "\u5899\u7816\u9762\u79ef\u6309600*1200\u89c4\u683c+5%\u635f\u8017\u6298\u7b97\u7247\u6570"
 
 
@@ -1400,9 +1412,9 @@ def test_export_residential_quote_auto_fills_doors_and_shower_items(tmp_path: Pa
     glass_shower = _item_row_named(rows, "\u73bb\u7483\u6dcb\u6d74\u623f")
     assert interior_door[3] == 1
     assert interior_door[12] == "\u666e\u901a\u5ba4\u5185\u95e8\u6d1e\u6570\u91cf\u6c47\u603b"
-    assert sliding_door[3] == 3.84
+    assert sliding_door[3] == 3.52
     assert sliding_door[12] == "\u5bbd\u5ea6>=1.4m\u95e8\u6d1e\u9762\u79ef\u6c47\u603b"
-    assert "\u9ed8\u8ba4\u63a8\u62c9\u95e8\u9ad8\u5ea62.4m" in sliding_door[14]
+    assert "\u9ed8\u8ba4\u63a8\u62c9\u95e8\u9ad8\u5ea62.2m" in sliding_door[14]
     assert shower_partition[3] == 1
     assert shower_partition[12] == "\u536b\u751f\u95f4\u6570\u91cf\u6c47\u603b"
     assert glass_shower[3] == 0
@@ -2304,7 +2316,272 @@ def test_export_residential_quote_uses_one_wall_tile_variant_for_wet_rooms(tmp_p
     kitchen_rows = _rows_between_section_and_subtotal(rows, "\u53a8\u623f\u5de5\u7a0b")
     tile_rows = [row for row in kitchen_rows if row[1] in {"\u5899\u9762\u8d34\u74f7\u7816(600x1200)", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)"}]
     assert len(tile_rows) == 1
-    assert tile_rows[0][3] == 24.0
+    assert tile_rows[0][3] == 25.0
+
+
+def test_export_residential_quote_deducts_large_windows_and_sliding_doors_from_kitchen_wall_tile(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path)
+    result = QuantityResult(
+        project_name="Kitchen Wall Tile Deduction Demo",
+        rows=[
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                wall_measure_perimeter=10.0,
+                window_area=5.5,
+                window_details=[
+                    WindowQuantityDetail(id="small-window", width=1.0, height=2.0, area=2.0, height_defaulted=False),
+                    WindowQuantityDetail(id="large-window", width=1.75, height=2.0, area=3.5, height_defaulted=False),
+                ],
+                door_details=[
+                    DoorQuantityDetail(
+                        id="kitchen-slide",
+                        room_id="kitchen",
+                        width=1.5,
+                        height=None,
+                        effective_height=2.2,
+                        height_defaulted=True,
+                        area=3.3,
+                    )
+                ],
+            )
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    kitchen_wall_tile = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
+    assert kitchen_wall_tile[3] == 18.2
+
+
+def test_export_residential_quote_adds_dark_curtain_box_to_window_rooms(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path)
+    workbook = load_workbook(template_path)
+    sheet = workbook["\u6574\u88c5"]
+    for row in range(1, sheet.max_row + 1):
+        if sheet.cell(row=row, column=2).value == "\u5730\u9762\u7816\u94fa\u8d34(750X1500)":
+            sheet.insert_rows(row + 1)
+            sheet.cell(row=row + 1, column=1, value=7)
+            sheet.cell(row=row + 1, column=2, value="\u6697\u7a97\u5e18\u7bb1")
+            sheet.cell(row=row + 1, column=3, value="M")
+            sheet.cell(row=row + 1, column=4, value=99)
+            sheet.cell(row=row + 1, column=5, value=0)
+            sheet.cell(row=row + 1, column=6, value=0)
+            sheet.cell(row=row + 1, column=7, value=10)
+            sheet.cell(row=row + 1, column=9, value="\u6697\u7a97\u5e18\u7bb1")
+            break
+    workbook.save(template_path)
+    result = QuantityResult(
+        project_name="Curtain Box Demo",
+        rows=[
+            _quantity_row(
+                "living",
+                "\u5ba2\u5385",
+                floor_area=20.0,
+                net_wall_area=50.0,
+                window_details=[
+                    WindowQuantityDetail(
+                        id="w1",
+                        width=1.2,
+                        height=1.8,
+                        area=2.16,
+                        height_defaulted=True,
+                        wall_segment_key="living:0",
+                        wall_segment_length=4.0,
+                    ),
+                    WindowQuantityDetail(
+                        id="w2",
+                        width=1.0,
+                        height=1.8,
+                        area=1.8,
+                        height_defaulted=False,
+                        wall_segment_key="living:0",
+                        wall_segment_length=4.0,
+                    ),
+                ],
+            ),
+            _quantity_row(
+                "kitchen",
+                "\u53a8\u623f",
+                floor_area=6.0,
+                net_wall_area=18.0,
+                wall_measure_perimeter=10.0,
+                window_details=[
+                    WindowQuantityDetail(
+                        id="kitchen-window",
+                        width=1.2,
+                        height=1.8,
+                        area=2.16,
+                        height_defaulted=False,
+                        wall_segment_key="kitchen:0",
+                        wall_segment_length=1.2,
+                    )
+                ],
+            ),
+            _quantity_row(
+                "bath",
+                "\u536b\u751f\u95f4",
+                floor_area=3.0,
+                net_wall_area=12.0,
+                wall_measure_perimeter=8.0,
+                window_details=[
+                    WindowQuantityDetail(
+                        id="bath-window",
+                        width=0.8,
+                        height=1.8,
+                        area=1.44,
+                        height_defaulted=False,
+                        wall_segment_key="bath:0",
+                        wall_segment_length=0.8,
+                    )
+                ],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    curtain_box = _row_containing_after(rows, "\u5ba2\u5385\u5de5\u7a0b", "\u6697\u7a97\u5e18\u7bb1")
+    kitchen_rows = _rows_between_section_and_subtotal(rows, "\u53a8\u623f\u5de5\u7a0b")
+    bath_rows = _rows_between_section_and_subtotal(rows, "\u536b\u751f\u95f4\u5de5\u7a0b")
+    assert curtain_box[3] == 4.0
+    assert all(row[1] != "\u6697\u7a97\u5e18\u7bb1" for row in kitchen_rows)
+    assert all(row[1] != "\u6697\u7a97\u5e18\u7bb1" for row in bath_rows)
+    assert curtain_box[9:15] == (
+        "\u81ea\u52a8\u7b97\u91cf",
+        "\u5ba2\u5385",
+        "living",
+        "\u7a97\u6240\u5728\u5899\u9762\u957f\u5ea6",
+        "\u81ea\u52a8\u751f\u6210-\u9ed8\u8ba4\u63a8\u65ad",
+        "\u7a97\u5e18\u7bb1\u6309\u540c\u623f\u95f4\u540c\u5899\u6bb5\u53bb\u91cd\uff0cL\u5f62\u7a97\u9700\u4eba\u5de5\u786e\u8ba4",
+    )
+
+
+def test_export_residential_quote_adds_explicit_non_wet_wall_tile_to_room_section(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path)
+    workbook = load_workbook(template_path)
+    sheet = workbook["\u6574\u88c5"]
+    for row in range(1, sheet.max_row + 1):
+        if sheet.cell(row=row, column=2).value == "\u5730\u9762\u7816\u94fa\u8d34(750X1500)":
+            sheet.insert_rows(row + 1)
+            sheet.cell(row=row + 1, column=1, value=7)
+            sheet.cell(row=row + 1, column=2, value="\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
+            sheet.cell(row=row + 1, column=3, value="M2")
+            sheet.cell(row=row + 1, column=4, value=99)
+            sheet.cell(row=row + 1, column=5, value=0)
+            sheet.cell(row=row + 1, column=6, value=40)
+            sheet.cell(row=row + 1, column=7, value=60)
+            sheet.cell(row=row + 1, column=9, value="\u5899\u7816\u8bf4\u660e")
+            break
+    workbook.save(template_path)
+    result = QuantityResult(
+        project_name="Living Wall Tile Demo",
+        rows=[_quantity_row("living", "\u5ba2\u5385", floor_area=20.0, net_wall_area=50.0)],
+        construction_details=[
+            ConstructionQuantityDetail(
+                id="living-wall-tile",
+                kind=ConstructionKind.WALL_TILE,
+                room_id="living",
+                room_name="\u5ba2\u5385",
+                length=3.0,
+                height=2.4,
+                effective_height=2.4,
+                area=7.2,
+            )
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    wall_tile = _row_containing_after(rows, "\u5ba2\u5385\u5de5\u7a0b", "\u5899\u9762\u8d34\u74f7\u7816(600X1200)")
+    assert wall_tile[3] == 7.2
+    assert wall_tile[12] == "QUOTE_WALL_TILE\u663e\u5f0f\u5899\u7816\u9762\u79ef"
+
+
+def test_export_residential_quote_uses_building_area_for_configured_whole_house_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_area_summary_items=True)
+    result = QuantityResult(
+        project_name="Building Area Aggregate Demo",
+        building_area=136.2,
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=80.0, net_wall_area=20.0),
+            _quantity_row("bedroom", "\u5367\u5ba4", floor_area=36.0, net_wall_area=18.0),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    garbage = _item_row_named(rows, "\u5783\u573e\u6e05\u8fd0\u8d39")
+    wiring = _item_row_named(rows, "\u5f3a\u7535\u5e03\u7ebf")
+    maintenance = _item_row_named(rows, "\u5730\u9762\u7816\u73b0\u573a\u7ef4\u62a4\u8d39")
+    assert garbage[3] == 136.2
+    assert wiring[3] == 136.2
+    assert garbage[12] == "QUOTE_EXT_WALL\u56f4\u5408\u5efa\u7b51\u9762\u79ef"
+    assert maintenance[3] == 116.0
+
+
+def test_export_residential_quote_skips_bath_shared_doors_for_interior_door_count(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path, include_advanced_summary_items=True)
+    result = QuantityResult(
+        project_name="Interior Door Count Demo",
+        rows=[
+            _quantity_row(
+                "bedroom",
+                "\u5367\u5ba4",
+                floor_area=10.0,
+                net_wall_area=30.0,
+                door_details=[
+                    DoorQuantityDetail(id="bed-door", room_id="bedroom", width=0.9, height=2.1, effective_height=2.1, area=1.89),
+                    DoorQuantityDetail(id="bath-door", room_id="bedroom", width=0.8, height=2.1, effective_height=2.1, area=1.68),
+                ],
+            ),
+            _quantity_row(
+                "bath",
+                "\u4e3b\u536b",
+                floor_area=3.0,
+                net_wall_area=15.0,
+                door_details=[
+                    DoorQuantityDetail(id="bath-door", room_id="bath", width=0.8, height=2.1, effective_height=2.1, area=1.68),
+                ],
+            ),
+            _quantity_row(
+                "living",
+                "\u5ba2\u5385",
+                floor_area=20.0,
+                net_wall_area=50.0,
+                door_details=[
+                    DoorQuantityDetail(id="entry-like", room_id="living", width=1.2, height=2.1, effective_height=2.1, area=2.52),
+                ],
+            ),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    interior_door = _item_row_named(rows, "\u5ba4\u5185\u95e8")
+    assert interior_door[3] == 1
 
 
 def _create_quote_template(

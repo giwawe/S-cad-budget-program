@@ -5,9 +5,11 @@
     "wall_tile_height": 2.5
   },
   "floor_area_aggregate_items": [
+    "地面砖现场维护费"
+  ],
+  "building_area_aggregate_items": [
     "垃圾清运费",
     "材料搬运费",
-    "地面砖现场维护费",
     "强电布线",
     "弱电布线",
     "水路布管",
@@ -120,7 +122,7 @@
   "tile_piece_loss_rate": 0.05,
   "wide_door_width_threshold": 1.4,
   "default_door_height": 2.2,
-  "default_sliding_door_height": 2.4,
+  "default_sliding_door_height": 2.2,
   "default_custom_height": 2.6,
   "low_custom_height_threshold": 1.0,
   "sliding_door_room_keywords": [

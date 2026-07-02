@@ -52,7 +52,7 @@ def test_marker_rich_dxf_turns_quote_defaults_into_automatic_aggregates(tmp_path
         "地面瓷砖": 17,
         "墙面瓷砖": 55,
         "美缝": 55.4,
-        "阳台推拉门": 4.8,
+        "阳台推拉门": 4.4,
         "阳台推拉门双包套": 6.4,
     }
     for item_name, expected_quantity in expected_quantities.items():

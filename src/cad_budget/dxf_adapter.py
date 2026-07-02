@@ -158,6 +158,81 @@ def _outline_width(polygon: Polygon) -> float:
     )
 
 
+def _window_outline_candidates_touch(candidate: dict, other: dict) -> bool:
+    polygon = candidate["polygon"]
+    other_polygon = other["polygon"]
+    if polygon.distance(other_polygon) > 0.005:
+        return False
+    return _outline_is_slender(polygon) and _outline_is_slender(other_polygon)
+
+
+def _outline_is_slender(polygon: Polygon) -> bool:
+    dimensions = _outline_rectangle_dimensions(polygon)
+    if dimensions is None:
+        return False
+    short_side, long_side = dimensions
+    return short_side <= 0.4 and long_side > short_side * 2
+
+
+def _outline_rectangle_dimensions(polygon: Polygon) -> tuple[float, float] | None:
+    rectangle = polygon.minimum_rotated_rectangle
+    if not hasattr(rectangle, "exterior"):
+        return None
+    rectangle_points = list(rectangle.exterior.coords)
+    lengths = sorted(
+        {
+            round(hypot(following[0] - current[0], following[1] - current[1]), 10)
+            for current, following in zip(rectangle_points, rectangle_points[1:])
+            if hypot(following[0] - current[0], following[1] - current[1]) > 1e-9
+        }
+    )
+    if len(lengths) < 2:
+        return None
+    return lengths[0], lengths[-1]
+
+
+def _merge_adjacent_window_outlines(candidates: list[dict]) -> list[WindowMarker]:
+    merged: list[WindowMarker] = []
+    visited: set[int] = set()
+    for index, candidate in enumerate(candidates):
+        if index in visited:
+            continue
+        component = [index]
+        visited.add(index)
+        cursor = 0
+        while cursor < len(component):
+            current_index = component[cursor]
+            for other_index, other in enumerate(candidates):
+                if other_index in visited:
+                    continue
+                if _window_outline_candidates_touch(candidates[current_index], other):
+                    visited.add(other_index)
+                    component.append(other_index)
+            cursor += 1
+        if len(component) == 1:
+            merged.append(candidate["marker"])
+            continue
+
+        component_candidates = [candidates[item_index] for item_index in component]
+        width = round(sum(_outline_width(item["polygon"]) for item in component_candidates), 10)
+        union_polygon = component_candidates[0]["polygon"]
+        for item in component_candidates[1:]:
+            union_polygon = union_polygon.union(item["polygon"])
+        heights = {item["marker"].height for item in component_candidates}
+        height = heights.pop() if len(heights) == 1 else None
+        ids = [item["marker"].id for item in component_candidates]
+        merged.append(
+            WindowMarker(
+                id="+".join(ids),
+                point=Point(x=union_polygon.centroid.x, y=union_polygon.centroid.y),
+                width=width,
+                height=height,
+                attributes={"source": "closed_outline_l_shape", "component_ids": ids},
+            )
+        )
+    return merged
+
+
 def _outline_width_from_points(points: list[Point]) -> float:
     hull = MultiPoint([(point.x, point.y) for point in points]).convex_hull
     rectangle = hull.minimum_rotated_rectangle
@@ -626,6 +701,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     ordinary_texts: list[TextMarker] = []
     floor_markers: list[TextMarker] = []
     windows: list[WindowMarker] = []
+    window_outline_candidates: list[dict] = []
     doors: list[DoorMarker] = []
     walls: list[PolylineMarker] = []
     openings: list[PolylineMarker] = []
@@ -790,14 +866,17 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
                 attrs = _xdata_key_value_attributes(entity, _FIXTURE_XDATA_APPIDS)
                 marker_attrs = dict(attrs)
                 marker_attrs["source"] = "closed_outline"
-                windows.append(
-                    WindowMarker(
-                        id=_entity_id(entity),
-                        point=_outline_centroid(points),
-                        width=_outline_width(polygon),
-                        height=_dimension_from_attributes(attrs, _WINDOW_HEIGHT_ATTRIBUTE_KEYS),
-                        attributes=marker_attrs,
-                    )
+                window_outline_candidates.append(
+                    {
+                        "marker": WindowMarker(
+                            id=_entity_id(entity),
+                            point=_outline_centroid(points),
+                            width=_outline_width(polygon),
+                            height=_dimension_from_attributes(attrs, _WINDOW_HEIGHT_ATTRIBUTE_KEYS),
+                            attributes=marker_attrs,
+                        ),
+                        "polygon": polygon,
+                    }
                 )
         elif layer == LayerName.QUOTE_DOOR.value and entity.dxftype() == "INSERT":
             attrs = _insert_attributes(entity)
@@ -1104,6 +1183,7 @@ def import_dxf(options: CadImportOptions) -> CadImportResult:
     if not texts:
         texts = ordinary_texts
 
+    windows.extend(_merge_adjacent_window_outlines(window_outline_candidates))
     _assign_text_names(rooms, texts)
     _assign_room_floors(rooms, floor_markers, issues)
     rooms = _filter_rooms_by_matched_text(rooms, texts, issues)
