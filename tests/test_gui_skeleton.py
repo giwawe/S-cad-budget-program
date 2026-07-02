@@ -25,6 +25,7 @@ def test_gui_app_module_imports_without_starting_qt() -> None:
 def test_main_window_source_wires_runtime_actions() -> None:
     source = Path("src/cad_budget/gui_main_window.py").read_text(encoding="utf-8")
 
+    compile(source, "src/cad_budget/gui_main_window.py", "exec")
     assert "GuiRunController" in source
     assert "QFileDialog.getOpenFileName" in source
     assert "QFileDialog.getExistingDirectory" in source
@@ -32,6 +33,11 @@ def test_main_window_source_wires_runtime_actions() -> None:
     assert "QThread" in source
     assert "setStyleSheet" in source
     assert "subprocess.Popen" in source
+    assert '"运行", "结果", "设置"' in source
+    assert "cellDoubleClicked" in source
+    assert "default_gui_settings" in source
+    assert "load_gui_settings" in source
+    assert "save_gui_settings" in source
 
 
 def test_main_window_constructs_three_pages_when_pyside6_is_available(monkeypatch) -> None:

@@ -23,8 +23,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cad_budget.gui_controller import GuiRunController, GuiRunInputs, GuiSummaryText
+from cad_budget.gui_controller import GuiRunController, GuiRunInputs, GuiSummaryText, format_stage_error
 from cad_budget.gui_services import GuiServiceError
+from cad_budget.gui_settings import GuiSettings, default_gui_settings, load_gui_settings, save_gui_settings
 
 
 class _AcceptanceWorker(QObject):
@@ -58,10 +59,12 @@ class CadBudgetMainWindow(QMainWindow):
         self.setStyleSheet(_APP_STYLESHEET)
         self._page_titles = ["运行", "结果", "设置"]
         self._path_edits: dict[str, QLineEdit] = {}
+        self._settings_edits: dict[str, QLineEdit] = {}
         self._stat_labels: dict[str, QLabel] = {}
         self._latest_summary_text: GuiSummaryText | None = None
         self._worker_thread: QThread | None = None
         self._worker: _AcceptanceWorker | None = None
+        self._settings = load_gui_settings()
 
         self._navigation = QListWidget()
         self._navigation.setObjectName("mainNavigation")
@@ -88,6 +91,7 @@ class CadBudgetMainWindow(QMainWindow):
         layout.addWidget(self._navigation)
         layout.addWidget(self._pages, 1)
         self.setCentralWidget(root)
+        self._apply_settings(self._settings)
 
     def page_titles(self) -> list[str]:
         return list(self._page_titles)
@@ -141,13 +145,25 @@ class CadBudgetMainWindow(QMainWindow):
         self._output_files_table.verticalHeader().setVisible(False)
         self._output_files_table.setAlternatingRowColors(True)
         self._output_files_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._output_files_table.cellDoubleClicked.connect(self._open_output_file)
         page.layout().addWidget(self._output_files_table, 1)
         return page
 
     def _build_settings_page(self) -> QWidget:
         page = self._page("设置")
-        for label in ("默认模板路径", "默认单价表路径", "默认输出目录", "DXF 默认单位"):
-            page.layout().addWidget(self._path_row("", label, None))
+        page.layout().addWidget(self._settings_path_row("dxf_path", "默认 DXF 文件"))
+        page.layout().addWidget(self._settings_path_row("template_path", "默认模板路径"))
+        page.layout().addWidget(self._settings_path_row("unit_prices_path", "默认单价表路径"))
+        page.layout().addWidget(self._settings_path_row("output_root", "默认输出目录"))
+        actions = QHBoxLayout()
+        save_button = QPushButton("保存默认路径")
+        save_button.clicked.connect(self._save_settings)
+        restore_button = QPushButton("恢复内置默认")
+        restore_button.clicked.connect(self._restore_default_settings)
+        actions.addWidget(save_button)
+        actions.addWidget(restore_button)
+        actions.addStretch(1)
+        page.layout().addLayout(actions)
         page.layout().addStretch(1)
         return page
 
@@ -178,6 +194,19 @@ class CadBudgetMainWindow(QMainWindow):
         layout.addWidget(label)
         layout.addWidget(edit)
         layout.addWidget(button)
+        return row
+
+    def _settings_path_row(self, key: str, label_text: str) -> QWidget:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        label = QLabel(label_text)
+        label.setFixedWidth(112)
+        edit = QLineEdit()
+        edit.setObjectName(f"settings_{key}")
+        self._settings_edits[key] = edit
+        layout.addWidget(label)
+        layout.addWidget(edit)
         return row
 
     def _stat_card(self, label_text: str, value: str) -> QWidget:
@@ -273,7 +302,7 @@ class CadBudgetMainWindow(QMainWindow):
 
     @Slot(str, str)
     def _handle_run_failed(self, stage: str, message: str) -> None:
-        text = f"运行失败 ({stage}): {message}"
+        text = format_stage_error(stage, message)
         self._run_log.setText(text)
         self._result_details.setText(text)
         self._run_button.setEnabled(True)
@@ -292,6 +321,28 @@ class CadBudgetMainWindow(QMainWindow):
             return
         subprocess.Popen(["explorer", str(directory)])
 
+    @Slot(int, int)
+    def _open_output_file(self, row: int, column: int) -> None:
+        path_item = self._output_files_table.item(row, 1)
+        if path_item is None:
+            return
+        subprocess.Popen(["explorer", path_item.text()])
+
+    @Slot()
+    def _save_settings(self) -> None:
+        settings = self._settings_from_edits()
+        save_gui_settings(settings)
+        self._settings = settings
+        self._apply_settings(settings)
+        self._run_log.setText("默认路径已保存")
+
+    @Slot()
+    def _restore_default_settings(self) -> None:
+        settings = default_gui_settings()
+        self._settings = settings
+        self._apply_settings(settings)
+        self._run_log.setText("已恢复内置默认路径")
+
     def _selected_output_root(self) -> Path | None:
         text = self._path_edits.get("output_root", QLineEdit()).text().strip()
         return Path(text) if text else None
@@ -300,6 +351,31 @@ class CadBudgetMainWindow(QMainWindow):
         self._run_log.setText(message)
         QMessageBox.warning(self, "输入不完整", message)
 
+    def _apply_settings(self, settings: GuiSettings) -> None:
+        values = _settings_to_values(settings)
+        for key, value in values.items():
+            if key in self._path_edits:
+                self._path_edits[key].setText(value)
+            if key in self._settings_edits:
+                self._settings_edits[key].setText(value)
+
+    def _settings_from_edits(self) -> GuiSettings:
+        values = {key: edit.text().strip() for key, edit in self._settings_edits.items()}
+        return GuiSettings(
+            dxf_path=Path(values["dxf_path"]),
+            template_path=Path(values["template_path"]),
+            unit_prices_path=Path(values["unit_prices_path"]),
+            output_root=Path(values["output_root"]),
+        )
+
+
+def _settings_to_values(settings: GuiSettings) -> dict[str, str]:
+    return {
+        "dxf_path": str(settings.dxf_path),
+        "template_path": str(settings.template_path),
+        "unit_prices_path": str(settings.unit_prices_path),
+        "output_root": str(settings.output_root),
+    }
 
 _INPUT_LABELS = {
     "dxf_path": "DXF 文件",

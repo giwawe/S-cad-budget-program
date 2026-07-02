@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from cad_budget.cad_adapter_models import CadUnit
-from cad_budget.gui_controller import GuiRunController, GuiRunInputs
+from cad_budget.gui_controller import GuiRunController, GuiRunInputs, format_stage_error
 from cad_budget.gui_services import GuiRunSummary, GuiServiceError
 
 
@@ -97,3 +97,8 @@ def test_gui_run_controller_formats_service_errors(tmp_path: Path) -> None:
 
     assert exc_info.value.stage == "pipeline"
     assert controller.latest_error == "pipeline: DXF import failed"
+
+
+def test_format_stage_error_uses_chinese_stage_label() -> None:
+    assert format_stage_error("pipeline", "DXF import failed") == "\u8fd0\u884c\u5931\u8d25\uff08CAD \u5bfc\u5165/\u751f\u6210\u6d41\u7a0b\uff09: DXF import failed"
+    assert format_stage_error("priced_output", "Unit price mismatch") == "\u8fd0\u884c\u5931\u8d25\uff08\u6b63\u5f0f\u62a5\u4ef7\u5305\u6821\u9a8c\uff09: Unit price mismatch"

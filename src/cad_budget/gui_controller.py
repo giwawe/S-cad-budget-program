@@ -22,6 +22,13 @@ TEXT_AUTO_EXCEPTION_HINT = "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
 TEXT_HIGH_REVIEW = "\u9ad8\u4f18\u5148\u7ea7\u590d\u6838"
 TEXT_MEDIUM_REVIEW = "\u4e2d\u4f18\u5148\u7ea7\u590d\u6838"
 TEXT_UNIT_PRICE_MATCHED = "\u5355\u4ef7\u5339\u914d\u884c"
+TEXT_RUN_FAILED = "\u8fd0\u884c\u5931\u8d25"
+TEXT_STAGE_INPUT = "\u8f93\u5165\u6587\u4ef6\u68c0\u67e5"
+TEXT_STAGE_PIPELINE = "CAD \u5bfc\u5165/\u751f\u6210\u6d41\u7a0b"
+TEXT_STAGE_KEY_RESULTS = "\u5173\u952e\u4e1a\u52a1\u7ed3\u679c\u65ad\u8a00"
+TEXT_STAGE_PRICED_OUTPUT = "\u6b63\u5f0f\u62a5\u4ef7\u5305\u6821\u9a8c"
+TEXT_STAGE_ACCEPTANCE = "\u771f\u5b9e\u9a8c\u6536"
+TEXT_STAGE_UNEXPECTED = "\u672a\u9884\u671f\u9519\u8bef"
 TEXT_PRICED_QUOTE = "\u6b63\u5f0f\u62a5\u4ef7\u8868"
 TEXT_PRICED_REVIEW = "\u6b63\u5f0f\u62a5\u4ef7\u590d\u6838\u62a5\u544a"
 TEXT_PRICED_REVIEW_JSON = "\u590d\u6838\u6570\u636e"
@@ -34,6 +41,15 @@ OUTPUT_FILE_LABELS = {
     "priced_review_json": TEXT_PRICED_REVIEW_JSON,
     "review_checklist": TEXT_REVIEW_CHECKLIST,
     "summary_json": TEXT_SUMMARY_JSON,
+}
+
+STAGE_LABELS = {
+    "input": TEXT_STAGE_INPUT,
+    "pipeline": TEXT_STAGE_PIPELINE,
+    "key_results": TEXT_STAGE_KEY_RESULTS,
+    "priced_output": TEXT_STAGE_PRICED_OUTPUT,
+    "acceptance": TEXT_STAGE_ACCEPTANCE,
+    "unexpected": TEXT_STAGE_UNEXPECTED,
 }
 
 
@@ -112,3 +128,8 @@ def _format_output_files(output_files: dict[str, Path]) -> list[tuple[str, Path]
         if path is not None:
             rows.append((label, path))
     return rows
+
+
+def format_stage_error(stage: str, message: str) -> str:
+    label = STAGE_LABELS.get(stage, stage)
+    return f"{TEXT_RUN_FAILED}\uff08{label}\uff09: {message}"
