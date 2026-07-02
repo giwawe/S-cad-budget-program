@@ -14,6 +14,12 @@ Install development dependencies:
 pip install -e ".[dev]"
 ```
 
+Install optional GUI dependencies:
+
+```bash
+pip install -e ".[gui]"
+```
+
 Run tests:
 
 ```bash
@@ -25,6 +31,12 @@ After changing CAD import, quantity, quote, real-template output, or unit-price 
 ```powershell
 $env:PYTHONPATH='src'; py -3.14 scripts\run_real_acceptance.py
 $env:PYTHONPATH='src'; py -3.14 -m pytest -q
+```
+
+Launch the GUI skeleton after installing GUI dependencies:
+
+```powershell
+cad-budget-gui
 ```
 
 Calculate a sample apartment:

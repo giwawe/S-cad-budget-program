@@ -17,10 +17,14 @@ dependencies = [
 
 [project.scripts]
 cad-budget = "cad_budget.cli:app"
+cad-budget-gui = "cad_budget.gui_app:main"
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.2.0"
+]
+gui = [
+  "PySide6>=6.7"
 ]
 
 [tool.setuptools.packages.find]

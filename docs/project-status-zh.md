@@ -76,12 +76,13 @@ $env:PYTHONPATH='src'; py -3.14 -m pytest -q
 
 - `src/cad_budget/gui_services.py` 已新增，当前封装真实验收入口为 GUI 友好的请求/响应接口。
 - GUI 服务层已补单元测试，覆盖成功摘要、输入文件缺失、pipeline 失败和正式报价包校验失败。
-- 确认是否把 `PySide6` 加入可选依赖，例如 `pip install -e ".[gui]"`。
+- `PySide6` 已加入可选依赖：`pip install -e ".[gui]"`。
+- GUI 骨架入口已新增：`cad-budget-gui`。
 
 ## GUI 实现建议
 
 - 第一轮实现 `PySide6` 桌面操作台。
-- 主界面只做文件选择、运行按钮、摘要统计、复核行动列表、输出路径和打开目录。
+- 主界面已具备运行、结果、设置三页骨架；下一步接入文件选择、运行按钮、摘要统计、复核行动列表、输出路径和打开目录。
 - 核心业务通过 GUI 服务层调用，不在界面层拼长命令。
 - 开发阶段可以调用设计类 skill 辅助视觉方案和设计评审；交付后的 GUI 运行时不依赖 Codex skill。
 
