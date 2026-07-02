@@ -90,6 +90,12 @@ $env:PYTHONPATH='src'; py -3.14 -m pytest -q
 
 GUI v1 应保持轻量：选择 DXF、模板、单价表和输出目录，点击运行，展示验收统计、复核行动、输出文件路径，并提供打开输出目录按钮。第一版不要做 CAD 编辑器、报价 Excel 编辑器或复杂主材库管理。
 
+## GUI 当前进展
+
+- `src/cad_budget/gui_controller.py` 已新增，用于把 GUI 选择的 DXF、模板、单价表和输出根目录转换成真实验收请求，并格式化运行摘要。
+- `cad-budget-gui` 主窗口已接入文件选择、后台线程运行真实验收、结果摘要刷新和打开输出目录按钮。
+- GUI 运行时会把用户选择的输出根目录映射为 `cad-import-10-real-template-current` 和 `cad-import-10-real-template-priced-command` 两个子目录，保持与现有验收路径一致。
+
 ## 后续增强
 
 - GUI 内部报价编辑器。

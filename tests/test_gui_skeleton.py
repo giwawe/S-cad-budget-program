@@ -22,6 +22,16 @@ def test_gui_app_module_imports_without_starting_qt() -> None:
     assert hasattr(module, "main")
 
 
+def test_main_window_source_wires_runtime_actions() -> None:
+    source = Path("src/cad_budget/gui_main_window.py").read_text(encoding="utf-8")
+
+    assert "GuiRunController" in source
+    assert "QFileDialog.getOpenFileName" in source
+    assert "QFileDialog.getExistingDirectory" in source
+    assert "QThread" in source
+    assert "subprocess.Popen" in source
+
+
 def test_main_window_constructs_three_pages_when_pyside6_is_available(monkeypatch) -> None:
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
     qt_widgets = pytest.importorskip("PySide6.QtWidgets")

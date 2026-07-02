@@ -216,6 +216,22 @@ src/cad_budget/gui_services.py
 
 第一版可以先用日志文本模拟进度，不必做精细百分比。
 
+## GUI 控制器层
+
+已新增：
+
+```text
+src/cad_budget/gui_controller.py
+```
+
+职责：
+
+- 将 GUI 表单路径转换成 `GuiAcceptanceRequest`。
+- 固定输出子目录名：`cad-import-10-real-template-current` 和 `cad-import-10-real-template-priced-command`。
+- 调用 `run_acceptance_for_gui`。
+- 将 `GuiRunSummary` 格式化为界面可直接展示的摘要文本。
+- 保留最近一次错误，供界面显示清晰失败阶段。
+
 ## 文件打开
 
 GUI 不需要解析所有输出文件；只需要提供打开目录和打开文件按钮。
