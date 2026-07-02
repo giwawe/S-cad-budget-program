@@ -11,7 +11,12 @@ from cad_budget.dxf_adapter import import_dxf
 from cad_budget.models import ProjectInput, QuantityResult
 from cad_budget.export_excel import export_quantity_result
 from cad_budget.import_excel import import_quantity_result
-from cad_budget.quote_excel import default_quote_rules_text, export_quote_unit_price_table, export_residential_quote
+from cad_budget.quote_excel import (
+    default_quote_rules_text,
+    export_quote_unit_price_table,
+    export_residential_quote,
+    validate_quote_unit_price_table,
+)
 from cad_budget.quote_report import build_quote_review_data, generate_quote_review_report
 from cad_budget.quantity import calculate_quantities
 
@@ -207,6 +212,26 @@ def export_prices(
         raise typer.Exit(code=1)
 
     typer.echo(f"Wrote {excel_output}")
+
+
+@app.command("check-prices")
+def check_prices(
+    input_excel: Path,
+) -> None:
+    try:
+        issues = validate_quote_unit_price_table(input_excel)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Failed to check unit price workbook '{input_excel}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    if issues:
+        typer.echo(f"Unit price table has {len(issues)} issue(s):", err=True)
+        for issue in issues:
+            field = f" {issue.field}" if issue.field else ""
+            typer.echo(f"- row {issue.row} {issue.code}{field}: {issue.message}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Unit price table OK: {input_excel}")
 
 
 @app.command("quote-report")

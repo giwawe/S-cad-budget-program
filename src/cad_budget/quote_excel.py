@@ -163,6 +163,16 @@ class QuoteUnitPrice:
     labor_price: float | int
 
 
+@dataclass(frozen=True)
+class QuoteUnitPriceIssue:
+    row: int
+    code: str
+    message: str
+    item_name: str | None = None
+    unit: str | None = None
+    field: str | None = None
+
+
 @dataclass
 class QuoteAggregateQuantity:
     quantity: float
@@ -462,6 +472,10 @@ def load_quote_unit_prices(unit_prices_path: Path | None = None) -> dict[tuple[s
     sheet = workbook[UNIT_PRICE_SHEET_NAME] if UNIT_PRICE_SHEET_NAME in workbook.sheetnames else workbook.active
     header_row = _find_unit_price_header_row(sheet)
     columns = _unit_price_columns(sheet, header_row)
+    issues = _quote_unit_price_issues(sheet, header_row, columns)
+    if issues:
+        issue_summary = "; ".join(f"row {issue.row} {issue.code}: {issue.message}" for issue in issues[:10])
+        raise ValueError(f"Invalid unit price workbook '{unit_prices_path}': {issue_summary}")
     prices: dict[tuple[str, str], QuoteUnitPrice] = {}
     for row_index in range(header_row + 1, sheet.max_row + 1):
         name = _as_text(sheet.cell(row=row_index, column=columns["name"]).value)
@@ -471,16 +485,20 @@ def load_quote_unit_prices(unit_prices_path: Path | None = None) -> dict[tuple[s
         price = QuoteUnitPrice(
             item_name=name,
             unit=unit,
-            main_material_price=_number_or_zero(sheet.cell(row=row_index, column=columns["main"]).value),
-            auxiliary_material_price=_number_or_zero(sheet.cell(row=row_index, column=columns["auxiliary"]).value),
-            labor_price=_number_or_zero(sheet.cell(row=row_index, column=columns["labor"]).value),
+            main_material_price=_strict_price_value(sheet.cell(row=row_index, column=columns["main"]).value),
+            auxiliary_material_price=_strict_price_value(sheet.cell(row=row_index, column=columns["auxiliary"]).value),
+            labor_price=_strict_price_value(sheet.cell(row=row_index, column=columns["labor"]).value),
         )
-        key = _unit_price_key(name, unit)
-        existing = prices.get(key)
-        if existing is not None and existing != price:
-            raise ValueError(f"Duplicate unit price for item '{name}' unit '{unit or ''}'")
-        prices[key] = price
+        prices[_unit_price_key(name, unit)] = price
     return prices
+
+
+def validate_quote_unit_price_table(unit_prices_path: Path) -> list[QuoteUnitPriceIssue]:
+    workbook = load_workbook(unit_prices_path, data_only=True)
+    sheet = workbook[UNIT_PRICE_SHEET_NAME] if UNIT_PRICE_SHEET_NAME in workbook.sheetnames else workbook.active
+    header_row = _find_unit_price_header_row(sheet)
+    columns = _unit_price_columns(sheet, header_row)
+    return _quote_unit_price_issues(sheet, header_row, columns)
 
 
 def export_residential_quote(
@@ -589,6 +607,90 @@ def _unit_price_columns(sheet, header_row: int) -> dict[str, int]:
     if missing:
         raise ValueError(f"Unit price workbook missing headers: {', '.join(missing)}")
     return {key: headers[header] for key, header in required.items()}
+
+
+def _quote_unit_price_issues(sheet, header_row: int, columns: dict[str, int]) -> list[QuoteUnitPriceIssue]:
+    issues: list[QuoteUnitPriceIssue] = []
+    seen: dict[tuple[str, str], QuoteUnitPrice] = {}
+    field_labels = {
+        "main": "\u4e3b\u6750\u5355\u4ef7",
+        "auxiliary": "\u8f85\u6750\u5355\u4ef7",
+        "labor": "\u4eba\u5de5\u5355\u4ef7",
+    }
+    for row_index in range(header_row + 1, sheet.max_row + 1):
+        name = _as_text(sheet.cell(row=row_index, column=columns["name"]).value)
+        if not name:
+            continue
+        unit = _as_text(sheet.cell(row=row_index, column=columns["unit"]).value)
+        parsed_prices: dict[str, float | int] = {}
+        for field, label in field_labels.items():
+            value = sheet.cell(row=row_index, column=columns[field]).value
+            parsed = _parse_unit_price_number(value)
+            if parsed is None:
+                code = "MISSING_PRICE" if value is None or (isinstance(value, str) and not value.strip()) else "INVALID_PRICE"
+                issues.append(
+                    QuoteUnitPriceIssue(
+                        row=row_index,
+                        code=code,
+                        item_name=name,
+                        unit=unit,
+                        field=label,
+                        message=f"{name}({unit or ''}) {label} is empty" if code == "MISSING_PRICE" else f"{name}({unit or ''}) {label} is not numeric: {value}",
+                    )
+                )
+            else:
+                parsed_prices[field] = parsed
+        if len(parsed_prices) != 3:
+            continue
+        price = QuoteUnitPrice(
+            item_name=name,
+            unit=unit,
+            main_material_price=parsed_prices["main"],
+            auxiliary_material_price=parsed_prices["auxiliary"],
+            labor_price=parsed_prices["labor"],
+        )
+        key = _unit_price_key(name, unit)
+        existing = seen.get(key)
+        if existing is not None and existing != price:
+            issues.append(
+                QuoteUnitPriceIssue(
+                    row=row_index,
+                    code="DUPLICATE_CONFLICT",
+                    item_name=name,
+                    unit=unit,
+                    field=None,
+                    message=f"{name}({unit or ''}) has conflicting duplicate unit prices",
+                )
+            )
+        else:
+            seen[key] = price
+    return issues
+
+
+def _parse_unit_price_number(value: Any) -> float | int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return value if math.isfinite(value) else None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            parsed = float(text)
+        except ValueError:
+            return None
+        if not math.isfinite(parsed):
+            return None
+        return int(parsed) if parsed.is_integer() else parsed
+    return None
+
+
+def _strict_price_value(value: Any) -> float | int:
+    parsed = _parse_unit_price_number(value)
+    if parsed is None:
+        raise ValueError(f"Invalid unit price value: {value}")
+    return parsed
 
 
 def _unit_price_key(item_name: str, unit: str | None) -> tuple[str, str]:

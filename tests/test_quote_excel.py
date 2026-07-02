@@ -25,6 +25,7 @@ from cad_budget.quote_excel import (
     load_default_quote_rules,
     load_quote_rules,
     parse_quote_template,
+    validate_quote_unit_price_table,
 )
 
 
@@ -200,6 +201,49 @@ def test_export_residential_quote_applies_unit_price_table_to_repeated_items(tmp
     assert living_floor_tile[4:7] == (1, 2, 3)
     assert kitchen_floor_tile[4:7] == (1, 2, 3)
     assert wall_paint[4:7] == (9, 8, 7)
+
+
+def test_validate_quote_unit_price_table_reports_blank_non_numeric_and_conflicting_duplicates(tmp_path: Path):
+    prices_path = tmp_path / "unit-prices.xlsx"
+    _write_unit_price_table(
+        prices_path,
+        [
+            ("\u5899\u9762\u4e73\u80f6\u6f06", "M2", 10, None, 5),
+            ("\u5730\u9762\u7816\u94fa\u8d34(750X1500)", "M2", "\u4e0d\u662f\u6570\u5b57", 2, 3),
+            ("\u9876\u9762\u6279\u5d4c", "M2", 1, 2, 3),
+            ("\u9876\u9762\u6279\u5d4c", "M2", 1, 2, 4),
+        ],
+    )
+
+    issues = validate_quote_unit_price_table(prices_path)
+
+    assert [(issue.row, issue.code, issue.field) for issue in issues] == [
+        (2, "MISSING_PRICE", "\u8f85\u6750\u5355\u4ef7"),
+        (3, "INVALID_PRICE", "\u4e3b\u6750\u5355\u4ef7"),
+        (5, "DUPLICATE_CONFLICT", None),
+    ]
+    assert "\u9876\u9762\u6279\u5d4c" in issues[2].message
+
+
+def test_export_residential_quote_rejects_invalid_unit_price_table(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    prices_path = tmp_path / "unit-prices.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path)
+    _write_unit_price_table(prices_path, [("\u5899\u9762\u4e73\u80f6\u6f06", "M2", 10, None, 5)])
+    result = QuantityResult(
+        project_name="Invalid Unit Price Demo",
+        rows=[_quantity_row("living", "\u5ba2\u5385", floor_area=10.0, net_wall_area=20.0)],
+        exceptions=[],
+    )
+
+    try:
+        export_residential_quote(result, template_path, output_path, unit_prices_path=prices_path)
+    except ValueError as exc:
+        assert "Invalid unit price workbook" in str(exc)
+        assert "MISSING_PRICE" in str(exc)
+    else:
+        raise AssertionError("Expected invalid unit price workbook to raise ValueError")
 
 
 def test_load_quote_rules_reads_external_rule_file(tmp_path: Path):

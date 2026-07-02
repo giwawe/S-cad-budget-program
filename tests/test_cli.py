@@ -477,6 +477,37 @@ def test_cli_quote_applies_global_unit_price_table(tmp_path: Path):
     assert kitchen_floor_tile[4:7] == (1, 2, 3)
 
 
+def test_cli_check_prices_reports_invalid_unit_price_table(tmp_path: Path):
+    runner = CliRunner()
+    prices = tmp_path / "unit-prices.xlsx"
+    _write_unit_price_cli_table(
+        prices,
+        [
+            ("墙面乳胶漆", "M2", 10, None, 5),
+            ("顶面批嵌", "M2", 1, 2, 3),
+            ("顶面批嵌", "M2", 1, 2, 4),
+        ],
+    )
+
+    result = runner.invoke(app, ["check-prices", str(prices)])
+
+    assert result.exit_code == 1
+    assert "MISSING_PRICE" in result.output
+    assert "DUPLICATE_CONFLICT" in result.output
+    assert "墙面乳胶漆" in result.output
+
+
+def test_cli_check_prices_accepts_valid_unit_price_table(tmp_path: Path):
+    runner = CliRunner()
+    prices = tmp_path / "unit-prices.xlsx"
+    _write_unit_price_cli_table(prices, [("墙面乳胶漆", "M2", 10, 0, 5)])
+
+    result = runner.invoke(app, ["check-prices", str(prices)])
+
+    assert result.exit_code == 0
+    assert "Unit price table OK" in result.output
+
+
 def test_cli_quote_report_writes_markdown_review_report(tmp_path: Path):
     runner = CliRunner()
     input_json = tmp_path / "result.json"
