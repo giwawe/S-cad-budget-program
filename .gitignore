@@ -12,6 +12,7 @@ out/
 .next/
 coverage/
 scratch/
+config/quote-unit-prices.xlsx
 
 # Local environment
 .env

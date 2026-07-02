@@ -175,6 +175,8 @@ To generate the official priced quote and the review package in one step, use `p
 cad-budget priced-quote result.json --template "D:\Desktop\清单式报价表（商品房）.xlsx" --output-dir priced-output
 ```
 
+See [docs/residential-quote-unit-price-workflow-zh.md](docs/residential-quote-unit-price-workflow-zh.md) for the unit-price maintenance workflow and [docs/residential-quote-review-decision-table-zh.md](docs/residential-quote-review-decision-table-zh.md) for the current real-template review decision table.
+
 Generate a Markdown review report from the quote workbook:
 
 ```powershell
