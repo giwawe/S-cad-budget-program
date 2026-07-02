@@ -214,11 +214,11 @@ Remaining template-default items from the real commodity-apartment sample are tr
 To rerun the real-template regression pipeline against the local desktop DXF and template, run:
 
 ```powershell
-$env:PYTHONPATH='src'; py -3.14 scripts\run_real_template_quote_review.py
+$env:PYTHONPATH='src'; py -3.14 scripts\run_real_template_quote_review.py --unit-prices scratch\cad-import-10-real-template-current\quote-unit-prices.xlsx --priced-output-dir scratch\cad-import-10-real-template-priced-command --check-priced-output
 $env:PYTHONPATH='src'; py -3.14 scripts\assert_real_template_key_results.py
 ```
 
-By default this reads `D:\Desktop\10.dxf` and `D:\Desktop\清单式报价表（商品房）-修正版.xlsx`, then writes `project.json`, `result.json`, `result.xlsx`, `quote.xlsx`, `quote-review.md`, `quote-review.json`, `quote-review-checklist.xlsx`, and `summary.json` under `scratch\cad-import-10-real-template-current`. The assertion script locks the key business-approved quantities from the real template review, including building area, indoor tile-protection area, main-bedroom merged L-window width, kitchen wall-tile area, dark curtain-box room filtering, interior-door count, and kitchen sliding-door quantities. Use `--dxf`, `--template`, `--output-dir`, `--rules`, `--unit-prices`, and `--fail-on` to override the pipeline defaults; use `--output-dir` on the assertion script when checking a non-default output folder.
+By default this reads `D:\Desktop\10.dxf` and `D:\Desktop\清单式报价表（商品房）-修正版.xlsx`, then writes `project.json`, `result.json`, `result.xlsx`, `quote.xlsx`, `quote-review.md`, `quote-review.json`, `quote-review-checklist.xlsx`, and `summary.json` under `scratch\cad-import-10-real-template-current`. The assertion script locks the key business-approved quantities from the real template review, including building area, indoor tile-protection area, main-bedroom merged L-window width, kitchen wall-tile area, dark curtain-box room filtering, interior-door count, and kitchen sliding-door quantities. Use `--dxf`, `--template`, `--output-dir`, `--rules`, `--unit-prices`, and `--fail-on` to override the pipeline defaults; pass `--priced-output-dir` to also generate the `quote-priced.*` output package, and `--check-priced-output` to validate that package against the same run's automation/review counts and unit price workbook. Use `--output-dir` on the assertion script when checking a non-default output folder.
 
 To generate a compact local sample that already contains the supported quote marker layers and demonstrates the expected automation stats, run:
 

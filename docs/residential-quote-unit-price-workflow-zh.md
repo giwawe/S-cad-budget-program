@@ -80,3 +80,11 @@ $env:PYTHONPATH='src'; py -3.14 scripts\check_priced_quote_outputs.py --output-d
 ```
 
 该脚本会检查四个正式输出文件是否存在、右侧自动化统计是否符合真实模板当前预期、复核状态统计是否符合当前预期，并确认报价行已套用单价表中匹配的单价。
+
+也可以在真实模板回归时一次生成并校验正式报价包：
+
+```powershell
+$env:PYTHONPATH='src'; py -3.14 scripts\run_real_template_quote_review.py --unit-prices scratch\cad-import-10-real-template-current\quote-unit-prices.xlsx --priced-output-dir scratch\cad-import-10-real-template-priced-command --check-priced-output
+```
+
+该命令会继续写 `scratch\cad-import-10-real-template-current` 下的算量和普通报价回归文件，同时写 `scratch\cad-import-10-real-template-priced-command` 下的正式报价四件套，并把正式报价包校验结果记录到 `summary.json`。
