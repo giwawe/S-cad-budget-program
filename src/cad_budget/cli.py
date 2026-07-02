@@ -23,12 +23,57 @@ from cad_budget.quantity import calculate_quantities
 app = typer.Typer(help="CAD renovation quantity takeoff tools.")
 
 
+DEFAULT_UNIT_PRICES_PATH = Path("config") / "quote-unit-prices.xlsx"
+
+
 class QuoteReportFailOn(str, Enum):
     HIGH = "high"
     MEDIUM = "medium"
 
 
 _QUOTE_REVIEW_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+
+def _read_quantity_result(input_json: Path) -> QuantityResult:
+    try:
+        raw_json = input_json.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        typer.echo(f"Failed to read quantity result JSON '{input_json}': {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    try:
+        return QuantityResult.model_validate_json(raw_json)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        error_message = str(exc).splitlines()[0] if str(exc).splitlines() else str(exc)
+        typer.echo(f"Invalid quantity result JSON in '{input_json}': {error_message}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _resolve_unit_prices_path(unit_prices: Path | None) -> Path | None:
+    if unit_prices is not None:
+        return unit_prices
+    if DEFAULT_UNIT_PRICES_PATH.exists():
+        return DEFAULT_UNIT_PRICES_PATH
+    return None
+
+
+def _check_unit_prices_or_exit(unit_prices_path: Path) -> None:
+    try:
+        issues = validate_quote_unit_price_table(unit_prices_path)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Failed to check unit price workbook '{unit_prices_path}': {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    if issues:
+        _echo_unit_price_issues(issues)
+        raise typer.Exit(code=1)
+
+
+def _echo_unit_price_issues(issues) -> None:
+    typer.echo(f"Unit price table has {len(issues)} issue(s):", err=True)
+    for issue in issues:
+        field = f" {issue.field}" if issue.field else ""
+        typer.echo(f"- row {issue.row} {issue.code}{field}: {issue.message}", err=True)
 
 
 @app.callback()
@@ -178,26 +223,38 @@ def quote(
     unit_prices: Path | None = typer.Option(None, "--unit-prices", help="Optional global unit price workbook."),
     excel_output: Path = typer.Option(..., "--excel-output", help="Path for generated quote Excel output."),
 ) -> None:
-    try:
-        raw_json = input_json.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        typer.echo(f"Failed to read quantity result JSON '{input_json}': {exc}", err=True)
-        raise typer.Exit(code=1)
+    result = _read_quantity_result(input_json)
+    resolved_unit_prices = _resolve_unit_prices_path(unit_prices)
 
     try:
-        result = QuantityResult.model_validate_json(raw_json)
-    except (json.JSONDecodeError, ValidationError) as exc:
-        error_message = str(exc).splitlines()[0] if str(exc).splitlines() else str(exc)
-        typer.echo(f"Invalid quantity result JSON in '{input_json}': {error_message}", err=True)
-        raise typer.Exit(code=1)
-
-    try:
-        export_residential_quote(result, template, excel_output, rules_path=rules, unit_prices_path=unit_prices)
+        export_residential_quote(result, template, excel_output, rules_path=rules, unit_prices_path=resolved_unit_prices)
     except (OSError, ValueError) as exc:
         typer.echo(f"Failed to generate quote Excel '{excel_output}': {exc}", err=True)
         raise typer.Exit(code=1)
 
     typer.echo(f"Wrote {excel_output}")
+
+
+@app.command("init-prices")
+def init_prices(
+    input_excel: Path,
+    output: Path = typer.Option(
+        DEFAULT_UNIT_PRICES_PATH,
+        "--output",
+        help="Path for generated default global unit price workbook.",
+    ),
+) -> None:
+    if output.exists():
+        typer.echo(f"Unit price output already exists '{output}'. Delete it first or choose another path.", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        export_quote_unit_price_table(input_excel, output)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Failed to initialize unit price workbook '{output}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Wrote {output}")
 
 
 @app.command("export-prices")
@@ -225,13 +282,58 @@ def check_prices(
         raise typer.Exit(code=1)
 
     if issues:
-        typer.echo(f"Unit price table has {len(issues)} issue(s):", err=True)
-        for issue in issues:
-            field = f" {issue.field}" if issue.field else ""
-            typer.echo(f"- row {issue.row} {issue.code}{field}: {issue.message}", err=True)
+        _echo_unit_price_issues(issues)
         raise typer.Exit(code=1)
 
     typer.echo(f"Unit price table OK: {input_excel}")
+
+
+@app.command("priced-quote")
+def priced_quote(
+    input_json: Path,
+    template: Path = typer.Option(..., "--template", help="Residential fitout quote template workbook."),
+    rules: Path | None = typer.Option(None, "--rules", help="Optional residential quote rules JSON."),
+    unit_prices: Path | None = typer.Option(None, "--unit-prices", help="Optional global unit price workbook."),
+    output_dir: Path = typer.Option(..., "--output-dir", help="Directory for generated priced quote outputs."),
+) -> None:
+    result = _read_quantity_result(input_json)
+    resolved_unit_prices = _resolve_unit_prices_path(unit_prices)
+    if resolved_unit_prices is None:
+        typer.echo(
+            "Unit price workbook is required for priced-quote. "
+            "Run init-prices first or pass --unit-prices.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    _check_unit_prices_or_exit(resolved_unit_prices)
+
+    quote_output = output_dir / "quote-priced.xlsx"
+    markdown_output = output_dir / "quote-priced-review.md"
+    json_output = output_dir / "quote-priced-review.json"
+    checklist_output = output_dir / "quote-priced-review-checklist.xlsx"
+
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        export_residential_quote(
+            result,
+            template,
+            quote_output,
+            rules_path=rules,
+            unit_prices_path=resolved_unit_prices,
+        )
+        generate_quote_review_report(
+            quote_output,
+            markdown_output,
+            quantity_result=result,
+            json_output=json_output,
+            checklist_output=checklist_output,
+        )
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Failed to generate priced quote outputs in '{output_dir}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    for output in (quote_output, markdown_output, json_output, checklist_output):
+        typer.echo(f"Wrote {output}")
 
 
 @app.command("quote-report")
@@ -245,17 +347,7 @@ def quote_report(
 ) -> None:
     quantity_result: QuantityResult | None = None
     if quantity_json is not None:
-        try:
-            raw_json = quantity_json.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as exc:
-            typer.echo(f"Failed to read quantity result JSON '{quantity_json}': {exc}", err=True)
-            raise typer.Exit(code=1)
-        try:
-            quantity_result = QuantityResult.model_validate_json(raw_json)
-        except (json.JSONDecodeError, ValidationError) as exc:
-            error_message = str(exc).splitlines()[0] if str(exc).splitlines() else str(exc)
-            typer.echo(f"Invalid quantity result JSON in '{quantity_json}': {error_message}", err=True)
-            raise typer.Exit(code=1)
+        quantity_result = _read_quantity_result(quantity_json)
 
     try:
         markdown_output.parent.mkdir(parents=True, exist_ok=True)

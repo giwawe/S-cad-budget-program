@@ -477,6 +477,74 @@ def test_cli_quote_applies_global_unit_price_table(tmp_path: Path):
     assert kitchen_floor_tile[4:7] == (1, 2, 3)
 
 
+def test_cli_quote_uses_default_unit_price_workbook(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    output = tmp_path / "quote.xlsx"
+    default_prices = tmp_path / "config" / "quote-unit-prices.xlsx"
+    input_json.write_text(json.dumps(_quantity_result_payload(include_kitchen=True)), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True, include_kitchen=True)
+    default_prices.parent.mkdir()
+    _write_unit_price_cli_table(default_prices, [("地面砖铺贴(750X1500)", "M2", 1, 2, 3)])
+
+    result = runner.invoke(app, ["quote", str(input_json), "--template", str(template), "--excel-output", str(output)])
+
+    assert result.exit_code == 0
+    rows = list(load_workbook(output, data_only=False).active.iter_rows(values_only=True))
+    living_floor_tile = _row_containing_after(rows, "客厅工程", "地面砖铺贴(750X1500)")
+    kitchen_floor_tile = _row_containing_after(rows, "厨房工程", "地面砖铺贴(750X1500)")
+    assert living_floor_tile[4:7] == (1, 2, 3)
+    assert kitchen_floor_tile[4:7] == (1, 2, 3)
+
+
+def test_cli_init_prices_writes_default_unit_price_table_and_refuses_overwrite(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    template = tmp_path / "template.xlsx"
+    _write_quote_cli_template(template, include_fitout=True, include_kitchen=True)
+    default_prices = tmp_path / "config" / "quote-unit-prices.xlsx"
+
+    result = runner.invoke(app, ["init-prices", str(template)])
+    second_result = runner.invoke(app, ["init-prices", str(template)])
+
+    assert result.exit_code == 0
+    assert default_prices.exists()
+    rows = list(load_workbook(default_prices).active.iter_rows(values_only=True))
+    assert rows[0][:5] == ("项目名称", "单位", "主材单价", "辅材单价", "人工单价")
+    floor_tile_rows = [row for row in rows[1:] if row[0] == "地面砖铺贴(750X1500)" and row[1] == "M2"]
+    assert len(floor_tile_rows) == 1
+    assert second_result.exit_code == 1
+    assert "already exists" in second_result.output
+
+
+def test_cli_priced_quote_generates_quote_and_review_outputs(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    output_dir = tmp_path / "priced"
+    default_prices = tmp_path / "config" / "quote-unit-prices.xlsx"
+    input_json.write_text(json.dumps(_quantity_result_payload(include_kitchen=True)), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True, include_kitchen=True)
+    default_prices.parent.mkdir()
+    _write_unit_price_cli_table(default_prices, [("地面砖铺贴(750X1500)", "M2", 1, 2, 3)])
+
+    result = runner.invoke(app, ["priced-quote", str(input_json), "--template", str(template), "--output-dir", str(output_dir)])
+
+    assert result.exit_code == 0
+    quote_output = output_dir / "quote-priced.xlsx"
+    assert quote_output.exists()
+    assert (output_dir / "quote-priced-review.md").exists()
+    assert (output_dir / "quote-priced-review.json").exists()
+    assert (output_dir / "quote-priced-review-checklist.xlsx").exists()
+    rows = list(load_workbook(quote_output, data_only=False).active.iter_rows(values_only=True))
+    living_floor_tile = _row_containing_after(rows, "客厅工程", "地面砖铺贴(750X1500)")
+    assert living_floor_tile[4:7] == (1, 2, 3)
+    assert "Wrote" in result.output
+
+
 def test_cli_check_prices_reports_invalid_unit_price_table(tmp_path: Path):
     runner = CliRunner()
     prices = tmp_path / "unit-prices.xlsx"

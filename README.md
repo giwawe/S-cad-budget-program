@@ -162,13 +162,26 @@ cad-budget check-prices unit-prices.xlsx
 cad-budget quote result.json --template "D:\Desktop\清单式报价表（商品房）.xlsx" --unit-prices unit-prices.xlsx --excel-output quote.xlsx
 ```
 
+To create the default reusable price workbook for this project, initialize `config\quote-unit-prices.xlsx` from the current template. `quote` automatically uses that default workbook when `--unit-prices` is omitted and the file exists, so edited prices apply to later plans as well:
+
+```powershell
+cad-budget init-prices "D:\Desktop\清单式报价表（商品房）.xlsx"
+cad-budget quote result.json --template "D:\Desktop\清单式报价表（商品房）.xlsx" --excel-output quote.xlsx
+```
+
+To generate the official priced quote and the review package in one step, use `priced-quote`. It requires a valid unit-price workbook, either through `--unit-prices` or the default `config\quote-unit-prices.xlsx`, and writes `quote-priced.xlsx`, `quote-priced-review.md`, `quote-priced-review.json`, and `quote-priced-review-checklist.xlsx`:
+
+```powershell
+cad-budget priced-quote result.json --template "D:\Desktop\清单式报价表（商品房）.xlsx" --output-dir priced-output
+```
+
 Generate a Markdown review report from the quote workbook:
 
 ```powershell
 cad-budget quote-report quote.xlsx --quantity-json result.json --markdown-output quote-review.md --json-output quote-review.json --checklist-output quote-review-checklist.xlsx --fail-on high
 ```
 
-The quote exporter reads only the `整装` worksheet from the template and ignores `半包`. It creates actual room sections from the quantity result, fills quantities that can be derived from room floor/wall areas, supported opening details, and optional `QUOTE_CUSTOM` / `QUOTE_CABINET` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` markers, and preserves template quantities for manual/non-CAD items such as sanitary ware and package lines without reliable CAD data. Passing `--unit-prices unit-prices.xlsx` overrides template prices by exact `项目名称 + 单位`, so repeated items across rooms share one maintained price and future plans can reuse the same edited price workbook. Run `check-prices` after editing the workbook; it fails on blank prices, non-numeric prices, and conflicting duplicate `项目名称 + 单位` rows. The generated workbook also includes visible review columns for quantity source, source room, room id, measurement basis, review status, and notes.
+The quote exporter reads only the `整装` worksheet from the template and ignores `半包`. It creates actual room sections from the quantity result, fills quantities that can be derived from room floor/wall areas, supported opening details, and optional `QUOTE_CUSTOM` / `QUOTE_CABINET` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` markers, and preserves template quantities for manual/non-CAD items such as sanitary ware and package lines without reliable CAD data. Passing `--unit-prices unit-prices.xlsx` overrides template prices by exact `项目名称 + 单位`; when omitted, `quote` uses `config\quote-unit-prices.xlsx` if it exists. Repeated items across rooms share one maintained price, and future plans reuse the same edited price workbook. Run `check-prices` after editing the workbook; it fails on blank prices, non-numeric prices, and conflicting duplicate `项目名称 + 单位` rows. The generated workbook also includes visible review columns for quantity source, source room, room id, measurement basis, review status, and notes.
 
 The quote review report reads those visible review columns from `quote.xlsx`, starts with actionable CAD/review suggestions such as missing window heights, new-wall height/thickness, pipe/wrap markers, door heights, and custom-cabinet attributes, and shows each action's impacted quote-row count, item-name summary, and Excel row numbers. Passing `--quantity-json result.json` is optional and adds room/object context such as which rooms have defaulted window heights or door heights; without it, the report remains Excel-only. Passing `--json-output quote-review.json` also writes structured actions with priority, owner, suggested action, acceptable resolution options, completion condition, status/source counts, and review rows for downstream automation. Passing `--checklist-output quote-review-checklist.xlsx` writes an editable action checklist sorted by priority, with owner, acceptable resolution, completion condition, default `待处理` status, and notes columns for designers and estimators. Passing `--fail-on high` makes the command exit non-zero when high-priority actions remain, while `--fail-on medium` also blocks medium-priority actions; omitting it keeps report generation non-blocking. It then lists rows that need attention grouped by `自动生成-默认推断`, `自动生成-异常提示`, and `按模板生成`. It is intended for repeatable real-template validation after CAD/rule changes.
 
