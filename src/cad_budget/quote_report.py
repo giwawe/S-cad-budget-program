@@ -18,7 +18,20 @@ _REVIEW_STATUSES = [
     "自动生成-异常提示",
     "按模板生成",
 ]
-_CHECKLIST_HEADERS = ["优先级", "行动类型", "建议动作", "影响报价行数", "涉及项目", "Excel行", "涉及对象", "处理状态", "备注"]
+_CHECKLIST_HEADERS = [
+    "优先级",
+    "负责人",
+    "行动类型",
+    "建议动作",
+    "可接受处理方式",
+    "完成条件",
+    "影响报价行数",
+    "涉及项目",
+    "Excel行",
+    "涉及对象",
+    "处理状态",
+    "备注",
+]
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 _ACTION_RULES = [
     ("补窗高", ["窗高", "默认窗高"]),
@@ -31,27 +44,45 @@ _ACTION_RULES = [
 _ACTION_METADATA = {
     "补窗高": {
         "priority": "high",
+        "owner": "设计师/预算员",
         "suggested_action": "在 QUOTE_WINDOW 窗块属性或窗洞轮廓 XDATA 中补充 HEIGHT；也可由预算员在报价 Excel 中复核默认窗高。",
+        "resolution_options": ["CAD补标HEIGHT", "Excel确认默认窗高"],
+        "completion_condition": "所有受影响窗高已补标，或预算员确认默认窗高可用于本次报价。",
     },
     "补新砌墙高度/厚度": {
         "priority": "high",
+        "owner": "设计师",
         "suggested_action": "在 QUOTE_NEW_WALL 标识中补充 HEIGHT 和 THICKNESS，确认新砌墙高度及 120/240mm 厚度归类。",
+        "resolution_options": ["CAD补标HEIGHT/THICKNESS", "设计师确认默认高度和240mm归类"],
+        "completion_condition": "新砌墙高度和厚度已补齐，或已确认默认高度/厚度归类适用于本次报价。",
     },
     "补管道/包管标识": {
         "priority": "medium",
+        "owner": "设计师/预算员",
         "suggested_action": "按实际方案补充 QUOTE_PIPE_INSULATION 或 QUOTE_PIPE_WRAP 立管标识；不补标时由预算员复核默认长度。",
+        "resolution_options": ["CAD补立管标识", "Excel确认默认长度", "Excel改为0或实际长度"],
+        "completion_condition": "管道/包管标识已补齐，或预算员确认默认长度、0值或手工长度。",
     },
     "补门洞/推拉门高度": {
         "priority": "medium",
-        "suggested_action": "在 QUOTE_DOOR 门块属性或门洞轮廓 XDATA 中补充 HEIGHT，重点确认推拉门 2.4m 和门洞 2.2m 默认高度。",
+        "owner": "设计师/预算员",
+        "suggested_action": "在 QUOTE_DOOR 门块属性或门洞轮廓 XDATA 中补充 HEIGHT，或确认推拉门和门洞默认高度 2.2m 适用于本次报价。",
+        "resolution_options": ["CAD补标HEIGHT", "Excel确认2.2m默认高度"],
+        "completion_condition": "受影响门洞/推拉门高度已补标，或预算员确认2.2m默认高度。",
     },
     "补全屋定制高度/类型": {
         "priority": "medium",
+        "owner": "设计师/预算员",
         "suggested_action": "在 QUOTE_CUSTOM 标识中补充 HEIGHT 和 TYPE，或由预算员复核默认 2.6m 投影面积及定制类型。",
+        "resolution_options": ["CAD补标HEIGHT/TYPE", "Excel确认2.6m投影面积", "Excel按方案改数量"],
+        "completion_condition": "全屋定制高度/类型已补齐，或预算员确认默认投影面积和类型口径。",
     },
     "复核外墙修补范围": {
         "priority": "high",
+        "owner": "设计师/预算员",
         "suggested_action": "用 QUOTE_EXT_REPAIR 标识明确外墙修补范围；若不在报价范围内，由预算员保持 0 或手工填写。",
+        "resolution_options": ["CAD补标QUOTE_EXT_REPAIR", "Excel确认不报价保持0", "Excel手工填写修补面积"],
+        "completion_condition": "外墙修补范围已补标，或预算员确认不报价/手工面积。",
     },
 }
 
@@ -163,8 +194,11 @@ def _write_quote_review_checklist(report_data: dict[str, Any], output: Path) -> 
         sheet.append(
             [
                 action["priority"],
+                action["owner"],
                 action["label"],
                 action["suggested_action"],
+                "；".join(action["resolution_options"]),
+                action["completion_condition"],
                 action["quote_row_count"],
                 "、".join(action["item_names"]),
                 _format_excel_rows(action["excel_rows"]),
@@ -175,8 +209,8 @@ def _write_quote_review_checklist(report_data: dict[str, Any], output: Path) -> 
         )
 
     sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = f"A1:I{max(sheet.max_row, 1)}"
-    widths = [10, 22, 64, 14, 32, 24, 36, 12, 24]
+    sheet.auto_filter.ref = f"A1:L{max(sheet.max_row, 1)}"
+    widths = [10, 16, 22, 64, 36, 46, 14, 32, 24, 36, 12, 24]
     for column_index, width in enumerate(widths, start=1):
         sheet.column_dimensions[sheet.cell(row=1, column=column_index).column_letter].width = width
     for row in sheet.iter_rows(min_row=2):
@@ -280,7 +314,10 @@ def _action_items(rows: list[QuoteReviewRow], action_contexts: dict[str, list[st
             {
                 "label": label,
                 "priority": metadata["priority"],
+                "owner": metadata["owner"],
                 "suggested_action": metadata["suggested_action"],
+                "resolution_options": metadata["resolution_options"],
+                "completion_condition": metadata["completion_condition"],
                 "quote_row_count": len(action_rows),
                 "item_names": _item_names(action_rows),
                 "excel_rows": [row.excel_row for row in action_rows],

@@ -186,7 +186,10 @@ def test_generate_quote_review_report_can_write_structured_json(tmp_path: Path):
     assert window_action == {
         "label": "补窗高",
         "priority": "high",
+        "owner": "设计师/预算员",
         "suggested_action": "在 QUOTE_WINDOW 窗块属性或窗洞轮廓 XDATA 中补充 HEIGHT；也可由预算员在报价 Excel 中复核默认窗高。",
+        "resolution_options": ["CAD补标HEIGHT", "Excel确认默认窗高"],
+        "completion_condition": "所有受影响窗高已补标，或预算员确认默认窗高可用于本次报价。",
         "quote_row_count": 2,
         "item_names": ["卧室墙面项目", "墙面乳胶漆"],
         "excel_rows": [5, 6],
@@ -195,6 +198,9 @@ def test_generate_quote_review_report_can_write_structured_json(tmp_path: Path):
     pipe_action = next(action for action in data["actions"] if action["label"] == "补管道/包管标识")
     assert pipe_action["priority"] == "medium"
     assert "QUOTE_PIPE_INSULATION" in pipe_action["suggested_action"]
+    door_action = next(action for action in data["actions"] if action["label"] == "补门洞/推拉门高度")
+    assert "2.2m" in door_action["suggested_action"]
+    assert "2.4m" not in door_action["suggested_action"]
     exterior_row = next(row for row in data["rows"] if row["excel_row"] == 8)
     assert exterior_row == {
         "excel_row": 8,
@@ -239,16 +245,32 @@ def test_generate_quote_review_report_can_write_action_checklist_excel(tmp_path:
     workbook = load_workbook(checklist_path)
     sheet = workbook["复核清单"]
     headers = [cell.value for cell in sheet[1]]
-    assert headers == ["优先级", "行动类型", "建议动作", "影响报价行数", "涉及项目", "Excel行", "涉及对象", "处理状态", "备注"]
+    assert headers == [
+        "优先级",
+        "负责人",
+        "行动类型",
+        "建议动作",
+        "可接受处理方式",
+        "完成条件",
+        "影响报价行数",
+        "涉及项目",
+        "Excel行",
+        "涉及对象",
+        "处理状态",
+        "备注",
+    ]
     assert sheet.freeze_panes == "A2"
-    assert sheet.auto_filter.ref == "A1:I7"
+    assert sheet.auto_filter.ref == "A1:L7"
     rows = list(sheet.iter_rows(min_row=2, values_only=True))
-    assert [row[1] for row in rows[:3]] == ["补窗高", "补新砌墙高度/厚度", "复核外墙修补范围"]
+    assert [row[2] for row in rows[:3]] == ["补窗高", "补新砌墙高度/厚度", "复核外墙修补范围"]
     first_row = rows[0]
-    assert first_row[:8] == (
+    assert first_row[:11] == (
         "high",
+        "设计师/预算员",
         "补窗高",
         "在 QUOTE_WINDOW 窗块属性或窗洞轮廓 XDATA 中补充 HEIGHT；也可由预算员在报价 Excel 中复核默认窗高。",
+        "CAD补标HEIGHT；Excel确认默认窗高",
+        "所有受影响窗高已补标，或预算员确认默认窗高可用于本次报价。",
         2,
         "卧室墙面项目、墙面乳胶漆",
         "5、6",
@@ -286,7 +308,7 @@ def _write_quote_workbook(path: Path) -> None:
         [102, "墙面乳胶漆", "m2", 31.5, None, None, None, None, None, "自动算量", "卧室", "bed", "墙面净面积", "自动生成-默认推断", "窗高缺失 1 个"],
         [103, "砌240厚砖墙", "m2", 6, None, None, None, None, None, "自动汇总", "全屋", None, "新砌240mm砖墙面积汇总", "自动生成-默认推断", "墙体标识缺少高度"],
         [104, "外墙修补", "m2", 0, None, None, None, None, None, "自动汇总", "全屋", None, "外墙修补范围面积汇总", "自动生成-异常提示", "需要确认修补范围"],
-        [105, "厨房推拉门", "m2", 3.96, None, None, None, None, None, "自动汇总", "全屋", None, "宽度>=1.4m门洞面积汇总", "自动生成-默认推断", "推拉门门高缺少时默认推拉门高度2.4m"],
+        [105, "厨房推拉门", "m2", 3.96, None, None, None, None, None, "自动汇总", "全屋", None, "宽度>=1.4m门洞面积汇总", "自动生成-默认推断", "推拉门门高缺少时默认推拉门高度2.2m"],
         [106, "全屋定制", "m2", 5.2, None, None, None, None, None, "自动汇总", "全屋", None, "全屋定制投影面积汇总", "自动生成-默认推断", "缺少高度的定制项按默认2.6m计算；部分定制项缺少类型，需复核"],
         [108, "包上/下水管道(单管)", "M", 3.0, None, None, None, None, None, "自动汇总", "全屋", None, "厨房/卫生间层高合计*1.5默认长度", "自动生成-默认推断", "未识别QUOTE_PIPE_WRAP包管标识，默认0"],
         [107, "主材包", "项", 1, None, None, None, None, None, "模板默认", None, None, None, "按模板生成", None],
