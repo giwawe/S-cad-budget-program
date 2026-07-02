@@ -1,6 +1,70 @@
 # GUI v1 服务接口清单
 
-GUI v1 应调用稳定 Python 函数，而不是在界面层拼接长命令行。当前核心脚本已经具备可复用入口，后续 GUI 可以先薄包装这些函数，再按需要抽到 `src/cad_budget/gui_services.py`。
+GUI v1 应调用稳定 Python 函数，而不是在界面层拼接长命令行。当前已新增 `src/cad_budget/gui_services.py`，作为 GUI 调用现有验收脚本和后续业务服务的第一层稳定接口。
+
+## GUI 服务层
+
+### `GuiAcceptanceRequest`
+
+来源：`src/cad_budget/gui_services.py`
+
+字段：
+
+- `dxf_path: Path`
+- `template_path: Path`
+- `unit_prices_path: Path`
+- `output_dir: Path`
+- `priced_output_dir: Path`
+- `unit: CadUnit = CadUnit.MILLIMETER`
+- `rules_path: Path | None = None`
+
+### `GuiRunSummary`
+
+来源：`src/cad_budget/gui_services.py`
+
+字段：
+
+- `output_dir: Path`
+- `priced_output_dir: Path`
+- `automation_counts: dict[str, int]`
+- `review_status_counts: dict[str, int]`
+- `action_priority_counts: dict[str, int]`
+- `matched_unit_price_rows: int`
+- `output_files: dict[str, Path]`
+
+### `GuiServiceError`
+
+来源：`src/cad_budget/gui_services.py`
+
+字段：
+
+- `stage: str`
+- `message: str`
+
+当前阶段值：
+
+- `input`
+- `pipeline`
+- `key_results`
+- `priced_output`
+- `acceptance`
+
+GUI 应展示 `message`，并用 `stage` 决定错误区域和图标。
+
+### `run_acceptance_for_gui`
+
+函数：
+
+```python
+run_acceptance_for_gui(request: GuiAcceptanceRequest) -> GuiRunSummary
+```
+
+用途：
+
+- 校验输入文件存在。
+- 调用真实验收入口。
+- 返回 GUI 可直接渲染的统计和输出文件路径。
+- 将脚本异常转换为 `GuiServiceError`。
 
 ## 当前可用入口
 
@@ -120,7 +184,7 @@ GUI 用途：
 
 ## 建议新增 GUI 服务模块
 
-进入 GUI 实现时，建议新增：
+已新增：
 
 ```text
 src/cad_budget/gui_services.py
@@ -128,7 +192,7 @@ src/cad_budget/gui_services.py
 
 建议职责：
 
-- 定义 GUI 专用请求对象，例如 `AcceptanceRequest`、`QuoteGenerationRequest`。
+- 定义 GUI 专用请求对象，例如 `GuiAcceptanceRequest`。后续可继续增加 `QuoteGenerationRequest`。
 - 调用现有脚本函数。
 - 捕获异常并转换为 GUI 友好的 `GuiServiceError`。
 - 统一返回可序列化摘要，便于 GUI 和测试使用。

@@ -74,8 +74,8 @@ $env:PYTHONPATH='src'; py -3.14 -m pytest -q
 
 ## GUI 前必须做
 
-- 新增 `src/cad_budget/gui_services.py`，把脚本函数包装成 GUI 友好的请求/响应接口。
-- 给 GUI 服务层补单元测试，覆盖成功摘要和错误归类。
+- `src/cad_budget/gui_services.py` 已新增，当前封装真实验收入口为 GUI 友好的请求/响应接口。
+- GUI 服务层已补单元测试，覆盖成功摘要、输入文件缺失、pipeline 失败和正式报价包校验失败。
 - 确认是否把 `PySide6` 加入可选依赖，例如 `pip install -e ".[gui]"`。
 
 ## GUI 实现建议
