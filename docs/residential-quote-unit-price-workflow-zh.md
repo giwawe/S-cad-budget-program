@@ -71,7 +71,7 @@ cad-budget priced-quote result.json --template "D:\Desktop\清单式报价表（
 - `quote-priced-review.json`
 - `quote-priced-review-checklist.xlsx`
 
-其中 `quote-priced.xlsx` 会使用当前报价草稿外壳：顶部为 `工程(预) 算表`、地址/客户/装修面积/日期栏，`装修面积` 来自 `QuantityResult.building_area`；表尾保留 `编制说明` 和客户、设计师、报价员签名栏。
+其中 `quote-priced.xlsx` 会使用当前报价草稿外壳：顶部为 `工程(预) 算表`、地址/客户/装修面积/日期栏，`装修面积` 来自 `QuantityResult.building_area`；表尾保留 `编制说明` 和客户、设计师、报价员签名栏。正式打印区按主报价表 `A:I` 设置，右侧复核列和自动化统计仍保留在工作表中供内部核对。
 
 ## 输出校验
 

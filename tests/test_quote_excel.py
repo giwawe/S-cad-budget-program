@@ -576,10 +576,28 @@ def test_export_residential_quote_writes_draft_template_header_and_footer(tmp_pa
     assert sheet["C2"].value == "\u5ba2\u6237\uff1a"
     assert sheet["G2"].value == "\u88c5\u4fee\u9762\u79ef\uff1a136.237652"
     assert sheet["I2"].value == "\u65e5\u671f\uff1a"
+    merged_ranges = {str(merged_range) for merged_range in sheet.merged_cells.ranges}
+    assert {"A1:I1", "A2:B2", "C2:F2", "G2:H2"}.issubset(merged_ranges)
+    assert [sheet.column_dimensions[column].width for column in "ABCDEFGHI"] == [8, 24, 8, 10, 12, 34, 12, 12, 12]
+    assert sheet.row_dimensions[1].height == 23
+    assert sheet.row_dimensions[2].height == 20
+    assert sheet.row_dimensions[3].height == 28.75
+    assert sheet.row_dimensions[4].height == 14.75
+    assert sheet.page_setup.orientation == "landscape"
+    assert sheet.page_setup.fitToWidth == 1
+    assert sheet.page_setup.fitToHeight == 0
 
     notes_row_index = next(index for index, row in enumerate(rows, start=1) if row[0] == "\u7f16\u5236\u8bf4\u660e\uff1a")
     assert rows[notes_row_index][0] == "1\u3001\u672c\u62a5\u4ef7\u4e0d\u542b\u5176\u4ed6\u7ba1\u7406\u5904\u6240\u589e\u52a0\u4efb\u4f55\u8d39\u7528\uff0c\u5982\u679c\u7ba1\u7406\u5904\u6240\u589e\u6b64\u8d39\u7528\u4e1a\u4e3b\u627f\u62c5\uff1b"
-    assert rows[-1][:6] == ("\u5ba2\u6237\u7b7e\u540d\uff1a", None, "\u8bbe\u8ba1\u5e08\uff1a", None, None, "\u62a5\u4ef7\u5458\uff1a")
+    assert sheet.row_dimensions[notes_row_index].height == 15
+    assert str(next(merged_range for merged_range in sheet.merged_cells.ranges if merged_range.min_row == notes_row_index)) == f"A{notes_row_index}:I{notes_row_index}"
+    assert sheet.row_dimensions[notes_row_index + 9].height == 17
+    assert sheet.row_dimensions[notes_row_index + 10].height == 17
+    assert sheet.row_dimensions[notes_row_index + 11].height == 17
+    assert str(next(merged_range for merged_range in sheet.merged_cells.ranges if merged_range.min_row == notes_row_index + 1)) == f"A{notes_row_index + 1}:I{notes_row_index + 1}"
+    assert rows[-1][:8] == ("\u5ba2\u6237\u7b7e\u540d\uff1a", None, "\u8bbe\u8ba1\u5e08\uff1a", None, None, None, None, "\u62a5\u4ef7\u5458\uff1a")
+    assert {f"A{sheet.max_row}:B{sheet.max_row}", f"C{sheet.max_row}:G{sheet.max_row}", f"H{sheet.max_row}:I{sheet.max_row}"}.issubset(merged_ranges)
+    assert sheet.row_dimensions[sheet.max_row].height == 14
 
 
 def test_export_residential_quote_auto_fills_custom_and_cabinet_items(tmp_path: Path):

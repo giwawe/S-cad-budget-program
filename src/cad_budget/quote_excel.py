@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from cad_budget.models import (
     ConstructionKind,
@@ -128,6 +128,13 @@ _SECTION_FILL = PatternFill("solid", fgColor="D9EAD3")
 _REVIEW_FILL = PatternFill("solid", fgColor="EADCF8")
 _WHITE_FONT = Font(color="FFFFFF", bold=True)
 _BOLD_FONT = Font(bold=True)
+_QUOTE_BORDER_SIDE = Side(style="thin", color="000000")
+_QUOTE_BORDER = Border(
+    left=_QUOTE_BORDER_SIDE,
+    right=_QUOTE_BORDER_SIDE,
+    top=_QUOTE_BORDER_SIDE,
+    bottom=_QUOTE_BORDER_SIDE,
+)
 _QUOTE_FOOTER_NOTES = [
     "1、本报价不含其他管理处所增加任何费用，如果管理处所增此费用业主承担；",
     "2、施工中如有项目需增补或有设计变更，工作量及价格由甲乙双方协商认定，签字为准并进入工程总造价。",
@@ -605,6 +612,13 @@ def _write_quote_title(sheet, building_area: float | None = None) -> None:
     sheet["A1"].font = Font(bold=True, size=14)
     sheet["A1"].alignment = Alignment(horizontal="center", vertical="center")
     sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9)
+    sheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=2)
+    sheet.merge_cells(start_row=2, start_column=3, end_row=2, end_column=6)
+    sheet.merge_cells(start_row=2, start_column=7, end_row=2, end_column=8)
+    sheet.row_dimensions[1].height = 23
+    sheet.row_dimensions[2].height = 20
+    sheet.row_dimensions[3].height = 28.75
+    sheet.row_dimensions[4].height = 14.75
 
 
 def _find_unit_price_header_row(sheet) -> int:
@@ -843,16 +857,23 @@ def _append_summary_rows(sheet, subtotal_rows: list[int]) -> None:
 def _append_quote_footer(sheet) -> None:
     heading_row = sheet.max_row + 1
     sheet.append(["\u7f16\u5236\u8bf4\u660e\uff1a"])
+    sheet.merge_cells(start_row=heading_row, start_column=1, end_row=heading_row, end_column=9)
     sheet.cell(row=heading_row, column=1).font = _BOLD_FONT
+    sheet.row_dimensions[heading_row].height = 15
     for note in _QUOTE_FOOTER_NOTES:
         row_index = sheet.max_row + 1
         sheet.append([note])
         sheet.merge_cells(start_row=row_index, start_column=1, end_row=row_index, end_column=9)
         sheet.cell(row=row_index, column=1).alignment = Alignment(wrap_text=True, vertical="top")
+        sheet.row_dimensions[row_index].height = 17 if note.startswith(("9、", "10、", "11、")) else 15
 
     signature_row = sheet.max_row + 1
-    sheet.append(["\u5ba2\u6237\u7b7e\u540d\uff1a", None, "\u8bbe\u8ba1\u5e08\uff1a", None, None, "\u62a5\u4ef7\u5458\uff1a"])
-    for column_index in (1, 3, 6):
+    sheet.append(["\u5ba2\u6237\u7b7e\u540d\uff1a", None, "\u8bbe\u8ba1\u5e08\uff1a", None, None, None, None, "\u62a5\u4ef7\u5458\uff1a"])
+    sheet.merge_cells(start_row=signature_row, start_column=1, end_row=signature_row, end_column=2)
+    sheet.merge_cells(start_row=signature_row, start_column=3, end_row=signature_row, end_column=7)
+    sheet.merge_cells(start_row=signature_row, start_column=8, end_row=signature_row, end_column=9)
+    sheet.row_dimensions[signature_row].height = 14
+    for column_index in (1, 3, 8):
         sheet.cell(row=signature_row, column=column_index).font = _BOLD_FONT
 
 
@@ -873,10 +894,10 @@ def _configure_sheet(sheet) -> None:
         "C": 8,
         "D": 10,
         "E": 12,
-        "F": 12,
+        "F": 34,
         "G": 12,
-        "H": 14,
-        "I": 48,
+        "H": 12,
+        "I": 12,
         "J": 12,
         "K": 12,
         "L": 12,
@@ -891,6 +912,14 @@ def _configure_sheet(sheet) -> None:
         sheet.column_dimensions[column].width = width
     sheet.freeze_panes = "A5"
     sheet.auto_filter.ref = f"A3:O{sheet.max_row}"
+    sheet.page_setup.orientation = "landscape"
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 0
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    sheet.print_area = f"A1:I{sheet.max_row}"
+    for row in sheet.iter_rows(min_row=1, max_row=sheet.max_row, min_col=1, max_col=9):
+        for cell in row:
+            cell.border = _QUOTE_BORDER
 
 
 def _write_automation_summary(sheet, rules_source: str) -> None:
