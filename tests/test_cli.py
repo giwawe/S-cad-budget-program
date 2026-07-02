@@ -434,6 +434,49 @@ def test_cli_quote_writes_residential_fitout_excel(tmp_path: Path):
     assert "Wrote" in result.output
 
 
+def test_cli_export_prices_writes_deduplicated_unit_price_table(tmp_path: Path):
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    quote_output = tmp_path / "quote.xlsx"
+    prices_output = tmp_path / "unit-prices.xlsx"
+    input_json.write_text(json.dumps(_quantity_result_payload()), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True)
+    quote_result = runner.invoke(app, ["quote", str(input_json), "--template", str(template), "--excel-output", str(quote_output)])
+    assert quote_result.exit_code == 0
+
+    result = runner.invoke(app, ["export-prices", str(quote_output), "--excel-output", str(prices_output)])
+
+    assert result.exit_code == 0
+    rows = list(load_workbook(prices_output).active.iter_rows(values_only=True))
+    floor_tile_rows = [row for row in rows[1:] if row[0] == "地面砖铺贴(750X1500)" and row[1] == "M2"]
+    assert len(floor_tile_rows) == 1
+    assert "Wrote" in result.output
+
+
+def test_cli_quote_applies_global_unit_price_table(tmp_path: Path):
+    runner = CliRunner()
+    input_json = tmp_path / "result.json"
+    template = tmp_path / "template.xlsx"
+    prices = tmp_path / "unit-prices.xlsx"
+    output = tmp_path / "quote.xlsx"
+    input_json.write_text(json.dumps(_quantity_result_payload(include_kitchen=True)), encoding="utf-8")
+    _write_quote_cli_template(template, include_fitout=True, include_kitchen=True)
+    _write_unit_price_cli_table(prices, [("地面砖铺贴(750X1500)", "M2", 1, 2, 3)])
+
+    result = runner.invoke(
+        app,
+        ["quote", str(input_json), "--template", str(template), "--unit-prices", str(prices), "--excel-output", str(output)],
+    )
+
+    assert result.exit_code == 0
+    rows = list(load_workbook(output, data_only=False).active.iter_rows(values_only=True))
+    living_floor_tile = _row_containing_after(rows, "客厅工程", "地面砖铺贴(750X1500)")
+    kitchen_floor_tile = _row_containing_after(rows, "厨房工程", "地面砖铺贴(750X1500)")
+    assert living_floor_tile[4:7] == (1, 2, 3)
+    assert kitchen_floor_tile[4:7] == (1, 2, 3)
+
+
 def test_cli_quote_report_writes_markdown_review_report(tmp_path: Path):
     runner = CliRunner()
     input_json = tmp_path / "result.json"
@@ -834,6 +877,16 @@ def _write_quote_review_workbook(path: Path, rows: list[list]) -> None:
         values = [index - 3, item_name, unit, quantity, None, None, None, None, None, source, "全屋", None, basis, status, note]
         for column, value in enumerate(values, start=1):
             sheet.cell(row=index, column=column).value = value
+    workbook.save(path)
+
+
+def _write_unit_price_cli_table(path: Path, rows: list[tuple[str, str, float, float, float]]) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "全局单价表"
+    sheet.append(["项目名称", "单位", "主材单价", "辅材单价", "人工单价", "备注"])
+    for row in rows:
+        sheet.append([*row, None])
     workbook.save(path)
 
 

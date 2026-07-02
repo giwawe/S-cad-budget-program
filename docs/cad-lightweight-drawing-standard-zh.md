@@ -295,6 +295,7 @@
 商品房整装报价 Excel 从 `QuantityResult` 生成，主表仍以算量结果为准，不反向修改 CAD 或 `ProjectInput`。
 
 - 空间分组按有效 `QuantityRow` 生成；`excluded` 空间不生成报价分组。
+- 可用 `cad-budget export-prices quote.xlsx --excel-output unit-prices.xlsx` 从报价表或模板导出全局单价表；该表按精确 `项目名称 + 单位` 去重，同名同单位项目只维护一次主材、辅材、人工单价。后续 `cad-budget quote ... --unit-prices unit-prices.xlsx` 会用这张表覆盖模板单价，因此新增方案和重复空间项目会套用同一套预算员确认单价。
 - 可用 `cad-budget quote-report quote.xlsx --quantity-json result.json --markdown-output quote-review.md --json-output quote-review.json --checklist-output quote-review-checklist.xlsx --fail-on high` 从报价 Excel 的可见复核列生成 Markdown 复核报告，也可同步生成结构化 JSON 和可编辑 Excel 复核清单；`--quantity-json` 可省略，传入时会补充房间/对象摘要，例如哪些空间存在默认窗高、门洞/推拉门高度或全屋定制高度/类型。报告顶部会按备注归纳补图/复核行动建议，例如补窗高、新砌墙高度/厚度、管道/包管标识、门洞/推拉门高度、全屋定制高度/类型，并显示每类行动影响的报价行数、涉及项目名摘要和 Excel 行号；JSON 会保留行动建议、优先级、负责人、建议动作、可接受处理方式、完成条件、状态/来源统计和复核明细行；Excel 清单按优先级列出行动、负责人、建议动作、可接受处理方式、完成条件、涉及项目、Excel 行和默认 `待处理` 状态；`--fail-on high` 会在仍有高优先级行动时返回非 0，`--fail-on medium` 会同时拦截中优先级行动，省略时仅生成报告不阻断；随后 Markdown 按 `自动生成-默认推断`、`自动生成-异常提示`、`按模板生成` 分组列出需要设计师/预算员复核的行，便于真实模板回归对比。
 - 干区空间的顶面、地面项目使用地面面积，墙面项目使用墙面净面积。
 - 厨房、卫生间、主卫、公卫等湿区使用专门高度规则：厨房防水为地面面积加 0.3m 以下墙面面积，卫生间防水为地面面积加 1.8m 以下墙面面积；墙砖为 2.5m 以下墙面贴砖面积，窗洞面积不超过 3㎡ 默认不扣减，超过 3㎡ 扣减窗面积，推拉门门洞面积扣减。

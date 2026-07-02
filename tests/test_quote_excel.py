@@ -19,7 +19,13 @@ from cad_budget.models import (
     WindowQuantityDetail,
 )
 from cad_budget import quote_excel
-from cad_budget.quote_excel import export_residential_quote, load_default_quote_rules, load_quote_rules, parse_quote_template
+from cad_budget.quote_excel import (
+    export_quote_unit_price_table,
+    export_residential_quote,
+    load_default_quote_rules,
+    load_quote_rules,
+    parse_quote_template,
+)
 
 
 def test_parse_quote_template_reads_fitout_sheet_and_ignores_half_package(tmp_path: Path):
@@ -137,6 +143,63 @@ def test_export_residential_quote_uses_loaded_quote_rules(tmp_path: Path, monkey
     assert kitchen_waterproof[3] == 11.0
     assert bath_waterproof[3] == 12.6
     assert kitchen_wall_tile[3] == 20.0
+
+
+def test_export_quote_unit_price_table_deduplicates_items_by_name_and_unit(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    quote_path = tmp_path / "quote.xlsx"
+    price_table_path = tmp_path / "unit-prices.xlsx"
+    _create_quote_template(template_path)
+    result = QuantityResult(
+        project_name="Unit Price Demo",
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=10.0, net_wall_area=20.0),
+            _quantity_row("bed", "\u5367\u5ba4", floor_area=8.0, net_wall_area=16.0),
+        ],
+        exceptions=[],
+    )
+    export_residential_quote(result, template_path, quote_path)
+
+    export_quote_unit_price_table(quote_path, price_table_path)
+
+    rows = list(load_workbook(price_table_path).active.iter_rows(values_only=True))
+    headers = rows[0]
+    floor_tile_rows = [row for row in rows[1:] if row[0] == "\u5730\u9762\u7816\u94fa\u8d34(750X1500)" and row[1] == "M2"]
+    assert headers[:6] == ("\u9879\u76ee\u540d\u79f0", "\u5355\u4f4d", "\u4e3b\u6750\u5355\u4ef7", "\u8f85\u6750\u5355\u4ef7", "\u4eba\u5de5\u5355\u4ef7", "\u5907\u6ce8")
+    assert len(floor_tile_rows) == 1
+    assert floor_tile_rows[0][2:5] == (0, 36, 60)
+
+
+def test_export_residential_quote_applies_unit_price_table_to_repeated_items(tmp_path: Path):
+    template_path = tmp_path / "template.xlsx"
+    prices_path = tmp_path / "unit-prices.xlsx"
+    output_path = tmp_path / "quote.xlsx"
+    _create_quote_template(template_path)
+    _write_unit_price_table(
+        prices_path,
+        [
+            ("\u5730\u9762\u7816\u94fa\u8d34(750X1500)", "M2", 1, 2, 3),
+            ("\u5899\u9762\u4e73\u80f6\u6f06", "M2", 9, 8, 7),
+        ],
+    )
+    result = QuantityResult(
+        project_name="Unit Price Demo",
+        rows=[
+            _quantity_row("living", "\u5ba2\u5385", floor_area=10.0, net_wall_area=20.0),
+            _quantity_row("kitchen", "\u53a8\u623f", floor_area=6.0, net_wall_area=18.0, wall_measure_perimeter=10.0),
+        ],
+        exceptions=[],
+    )
+
+    export_residential_quote(result, template_path, output_path, unit_prices_path=prices_path)
+
+    rows = list(load_workbook(output_path, data_only=False).active.iter_rows(values_only=True))
+    living_floor_tile = _row_containing_after(rows, "\u5ba2\u5385\u5de5\u7a0b", "\u5730\u9762\u7816\u94fa\u8d34(750X1500)")
+    kitchen_floor_tile = _row_containing_after(rows, "\u53a8\u623f\u5de5\u7a0b", "\u5730\u9762\u7816\u94fa\u8d34(750X1500)")
+    wall_paint = _row_containing_after(rows, "\u5ba2\u5385\u5de5\u7a0b", "\u5899\u9762\u4e73\u80f6\u6f06")
+    assert living_floor_tile[4:7] == (1, 2, 3)
+    assert kitchen_floor_tile[4:7] == (1, 2, 3)
+    assert wall_paint[4:7] == (9, 8, 7)
 
 
 def test_load_quote_rules_reads_external_rule_file(tmp_path: Path):
@@ -2732,6 +2795,16 @@ def _write_quote_header(sheet) -> None:
         "\u6750  \u6599  \u53ca  \u5de5  \u827a  \u8bf4  \u660e",
     ])
     sheet.append([None, None, None, None, "\u4e3b\u6750\n\u5355\u4ef7", "\u8f85\u6750\n\u5355\u4ef7"])
+
+
+def _write_unit_price_table(path: Path, rows: list[tuple[str, str, float, float, float]]) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "\u5168\u5c40\u5355\u4ef7\u8868"
+    sheet.append(["\u9879\u76ee\u540d\u79f0", "\u5355\u4f4d", "\u4e3b\u6750\u5355\u4ef7", "\u8f85\u6750\u5355\u4ef7", "\u4eba\u5de5\u5355\u4ef7", "\u5907\u6ce8"])
+    for row in rows:
+        sheet.append([*row, None])
+    workbook.save(path)
 
 
 def _write_custom_quote_rules(

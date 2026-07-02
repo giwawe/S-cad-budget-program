@@ -11,7 +11,7 @@ from cad_budget.dxf_adapter import import_dxf
 from cad_budget.models import ProjectInput, QuantityResult
 from cad_budget.export_excel import export_quantity_result
 from cad_budget.import_excel import import_quantity_result
-from cad_budget.quote_excel import default_quote_rules_text, export_residential_quote
+from cad_budget.quote_excel import default_quote_rules_text, export_quote_unit_price_table, export_residential_quote
 from cad_budget.quote_report import build_quote_review_data, generate_quote_review_report
 from cad_budget.quantity import calculate_quantities
 
@@ -170,6 +170,7 @@ def quote(
     input_json: Path,
     template: Path = typer.Option(..., "--template", help="Residential fitout quote template workbook."),
     rules: Path | None = typer.Option(None, "--rules", help="Optional residential quote rules JSON."),
+    unit_prices: Path | None = typer.Option(None, "--unit-prices", help="Optional global unit price workbook."),
     excel_output: Path = typer.Option(..., "--excel-output", help="Path for generated quote Excel output."),
 ) -> None:
     try:
@@ -186,9 +187,23 @@ def quote(
         raise typer.Exit(code=1)
 
     try:
-        export_residential_quote(result, template, excel_output, rules_path=rules)
+        export_residential_quote(result, template, excel_output, rules_path=rules, unit_prices_path=unit_prices)
     except (OSError, ValueError) as exc:
         typer.echo(f"Failed to generate quote Excel '{excel_output}': {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Wrote {excel_output}")
+
+
+@app.command("export-prices")
+def export_prices(
+    input_excel: Path,
+    excel_output: Path = typer.Option(..., "--excel-output", help="Path for generated global unit price workbook."),
+) -> None:
+    try:
+        export_quote_unit_price_table(input_excel, excel_output)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Failed to export unit price workbook '{excel_output}': {exc}", err=True)
         raise typer.Exit(code=1)
 
     typer.echo(f"Wrote {excel_output}")

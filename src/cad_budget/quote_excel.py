@@ -40,6 +40,8 @@ QUOTE_HEADERS = [
     "\u590d\u6838\u5907\u6ce8",
 ]
 QUOTE_SUBHEADERS = [None, None, None, None, "\u4e3b\u6750\n\u5355\u4ef7", "\u8f85\u6750\n\u5355\u4ef7"]
+UNIT_PRICE_SHEET_NAME = "\u5168\u5c40\u5355\u4ef7\u8868"
+UNIT_PRICE_HEADERS = ["\u9879\u76ee\u540d\u79f0", "\u5355\u4f4d", "\u4e3b\u6750\u5355\u4ef7", "\u8f85\u6750\u5355\u4ef7", "\u4eba\u5de5\u5355\u4ef7", "\u5907\u6ce8"]
 
 _SPACE_TEMPLATE_KEYWORDS = {
     "\u5ba2\u5385",
@@ -150,6 +152,15 @@ class QuoteTemplateSection:
 class QuoteTemplate:
     sheet_name: str
     sections: list[QuoteTemplateSection]
+
+
+@dataclass(frozen=True)
+class QuoteUnitPrice:
+    item_name: str
+    unit: str | None
+    main_material_price: float | int
+    auxiliary_material_price: float | int
+    labor_price: float | int
 
 
 @dataclass
@@ -394,13 +405,93 @@ def parse_quote_template(template_path: Path) -> QuoteTemplate:
     return QuoteTemplate(sheet_name=FITOUT_SHEET_NAME, sections=[section for section in sections if section.items])
 
 
+def export_quote_unit_price_table(input_excel: Path, output_path: Path) -> None:
+    workbook = load_workbook(input_excel, data_only=True)
+    sheet = workbook[FITOUT_SHEET_NAME] if FITOUT_SHEET_NAME in workbook.sheetnames else workbook.active
+
+    prices: dict[tuple[str, str], QuoteUnitPrice] = {}
+    for row_index in range(1, sheet.max_row + 1):
+        number = sheet.cell(row=row_index, column=1).value
+        name = _as_text(sheet.cell(row=row_index, column=2).value)
+        if not isinstance(number, int) or not name or _is_skip_row(name):
+            continue
+        unit = _as_text(sheet.cell(row=row_index, column=3).value)
+        key = _unit_price_key(name, unit)
+        if key in prices:
+            continue
+        prices[key] = QuoteUnitPrice(
+            item_name=name,
+            unit=unit,
+            main_material_price=_number_or_zero(sheet.cell(row=row_index, column=5).value),
+            auxiliary_material_price=_number_or_zero(sheet.cell(row=row_index, column=6).value),
+            labor_price=_number_or_zero(sheet.cell(row=row_index, column=7).value),
+        )
+
+    output_workbook = Workbook()
+    output_sheet = output_workbook.active
+    output_sheet.title = UNIT_PRICE_SHEET_NAME
+    output_sheet.append(UNIT_PRICE_HEADERS)
+    for price in prices.values():
+        output_sheet.append(
+            [
+                price.item_name,
+                price.unit,
+                price.main_material_price,
+                price.auxiliary_material_price,
+                price.labor_price,
+                None,
+            ]
+        )
+    for cell in output_sheet[1]:
+        cell.fill = _HEADER_FILL
+        cell.font = _WHITE_FONT
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    widths = [34, 10, 14, 14, 14, 32]
+    for column_index, width in enumerate(widths, start=1):
+        output_sheet.column_dimensions[output_sheet.cell(row=1, column=column_index).column_letter].width = width
+    output_sheet.freeze_panes = "A2"
+    output_sheet.auto_filter.ref = f"A1:F{max(output_sheet.max_row, 1)}"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_workbook.save(output_path)
+
+
+def load_quote_unit_prices(unit_prices_path: Path | None = None) -> dict[tuple[str, str], QuoteUnitPrice]:
+    if unit_prices_path is None:
+        return {}
+    workbook = load_workbook(unit_prices_path, data_only=True)
+    sheet = workbook[UNIT_PRICE_SHEET_NAME] if UNIT_PRICE_SHEET_NAME in workbook.sheetnames else workbook.active
+    header_row = _find_unit_price_header_row(sheet)
+    columns = _unit_price_columns(sheet, header_row)
+    prices: dict[tuple[str, str], QuoteUnitPrice] = {}
+    for row_index in range(header_row + 1, sheet.max_row + 1):
+        name = _as_text(sheet.cell(row=row_index, column=columns["name"]).value)
+        if not name:
+            continue
+        unit = _as_text(sheet.cell(row=row_index, column=columns["unit"]).value)
+        price = QuoteUnitPrice(
+            item_name=name,
+            unit=unit,
+            main_material_price=_number_or_zero(sheet.cell(row=row_index, column=columns["main"]).value),
+            auxiliary_material_price=_number_or_zero(sheet.cell(row=row_index, column=columns["auxiliary"]).value),
+            labor_price=_number_or_zero(sheet.cell(row=row_index, column=columns["labor"]).value),
+        )
+        key = _unit_price_key(name, unit)
+        existing = prices.get(key)
+        if existing is not None and existing != price:
+            raise ValueError(f"Duplicate unit price for item '{name}' unit '{unit or ''}'")
+        prices[key] = price
+    return prices
+
+
 def export_residential_quote(
     result: QuantityResult,
     template_path: Path,
     output_path: Path,
     rules_path: Path | None = None,
+    unit_prices_path: Path | None = None,
 ) -> None:
     rules = load_quote_rules(rules_path)
+    unit_prices = load_quote_unit_prices(unit_prices_path)
     template = parse_quote_template(template_path)
     workbook = Workbook()
     sheet = workbook.active
@@ -426,6 +517,7 @@ def export_residential_quote(
                 items,
                 room,
                 rules=rules,
+                unit_prices=unit_prices,
                 construction_details=result.construction_details,
             )
         )
@@ -446,6 +538,7 @@ def export_residential_quote(
                 result.exterior_rows,
                 result.construction_details,
                 result.building_area,
+                unit_prices,
             )
         )
 
@@ -475,6 +568,48 @@ def _write_quote_title(sheet, project_name: str) -> None:
     sheet["A1"].font = Font(bold=True, size=14)
 
 
+def _find_unit_price_header_row(sheet) -> int:
+    for row_index in range(1, min(sheet.max_row, 20) + 1):
+        values = [_as_text(sheet.cell(row=row_index, column=column).value) for column in range(1, sheet.max_column + 1)]
+        if "\u9879\u76ee\u540d\u79f0" in values and "\u4e3b\u6750\u5355\u4ef7" in values:
+            return row_index
+    raise ValueError("Unit price workbook must contain headers: 项目名称, 单位, 主材单价, 辅材单价, 人工单价")
+
+
+def _unit_price_columns(sheet, header_row: int) -> dict[str, int]:
+    headers = {_as_text(sheet.cell(row=header_row, column=column).value): column for column in range(1, sheet.max_column + 1)}
+    required = {
+        "name": "\u9879\u76ee\u540d\u79f0",
+        "unit": "\u5355\u4f4d",
+        "main": "\u4e3b\u6750\u5355\u4ef7",
+        "auxiliary": "\u8f85\u6750\u5355\u4ef7",
+        "labor": "\u4eba\u5de5\u5355\u4ef7",
+    }
+    missing = [header for header in required.values() if header not in headers]
+    if missing:
+        raise ValueError(f"Unit price workbook missing headers: {', '.join(missing)}")
+    return {key: headers[header] for key, header in required.items()}
+
+
+def _unit_price_key(item_name: str, unit: str | None) -> tuple[str, str]:
+    return (item_name.strip(), (unit or "").strip())
+
+
+def _apply_unit_price_override(
+    item: QuoteTemplateItem,
+    unit_prices: dict[tuple[str, str], QuoteUnitPrice],
+) -> QuoteTemplateItem:
+    price = unit_prices.get(_unit_price_key(item.name, item.unit))
+    if price is None:
+        return item
+    return replace(
+        item,
+        main_material_price=price.main_material_price,
+        auxiliary_material_price=price.auxiliary_material_price,
+        labor_price=price.labor_price,
+    )
+
+
 def _append_section(
     sheet,
     section_number: str,
@@ -486,6 +621,7 @@ def _append_section(
     exterior_rows: list[ExteriorQuantityRow] | None = None,
     construction_details: list[ConstructionQuantityDetail] | None = None,
     building_area: float | None = None,
+    unit_prices: dict[tuple[str, str], QuoteUnitPrice] | None = None,
 ) -> int:
     if rules is None:
         rules = load_default_quote_rules()
@@ -500,6 +636,7 @@ def _append_section(
 
     first_item_row = sheet.max_row + 1
     for item_number, item in enumerate(items, start=1):
+        item = _apply_unit_price_override(item, unit_prices or {})
         row_index = sheet.max_row + 1
         aggregate = (
             _aggregate_quantity_for_item(

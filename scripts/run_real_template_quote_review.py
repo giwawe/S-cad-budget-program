@@ -53,6 +53,7 @@ def run_quote_review_pipeline(
     output_dir: Path,
     unit: CadUnit = CadUnit.MILLIMETER,
     rules_path: Path | None = None,
+    unit_prices_path: Path | None = None,
     fail_on: str | None = None,
 ) -> QuoteReviewPipelineSummary:
     if not dxf_path.exists():
@@ -61,6 +62,8 @@ def run_quote_review_pipeline(
         raise PipelineError(f"Quote template does not exist: {template_path}")
     if rules_path is not None and not rules_path.exists():
         raise PipelineError(f"Quote rules file does not exist: {rules_path}")
+    if unit_prices_path is not None and not unit_prices_path.exists():
+        raise PipelineError(f"Unit price file does not exist: {unit_prices_path}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     project_path = output_dir / "project.json"
@@ -78,7 +81,7 @@ def run_quote_review_pipeline(
         raise PipelineError(f"DXF import failed:\n{issues}")
 
     quantity_result = calculate_quantities(import_result.project)
-    export_residential_quote(quantity_result, template_path, quote_path, rules_path=rules_path)
+    export_residential_quote(quantity_result, template_path, quote_path, rules_path=rules_path, unit_prices_path=unit_prices_path)
     export_quantity_result(quantity_result, result_excel_path)
     project_path.write_text(import_result.project.model_dump_json(indent=2), encoding="utf-8")
     result_path.write_text(quantity_result.model_dump_json(indent=2), encoding="utf-8")
@@ -111,6 +114,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help="Directory for generated outputs.")
     parser.add_argument("--unit", choices=[unit.value for unit in CadUnit], default=CadUnit.MILLIMETER.value)
     parser.add_argument("--rules", type=Path, default=None, help="Optional residential quote rules JSON.")
+    parser.add_argument("--unit-prices", type=Path, default=None, help="Optional global unit price workbook.")
     parser.add_argument("--fail-on", choices=["high", "medium"], default=None, help="Return exit code 1 at this review priority threshold.")
     args = parser.parse_args()
 
@@ -121,6 +125,7 @@ def main() -> None:
             output_dir=args.output_dir,
             unit=CadUnit(args.unit),
             rules_path=args.rules,
+            unit_prices_path=args.unit_prices,
             fail_on=args.fail_on,
         )
     except (OSError, ValueError, PipelineError) as exc:

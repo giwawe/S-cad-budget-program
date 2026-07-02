@@ -154,13 +154,20 @@ Generate a commodity-apartment fitout quote workbook from a `QuantityResult` JSO
 cad-budget quote result.json --template "D:\Desktop\清单式报价表（商品房）.xlsx" --excel-output quote.xlsx
 ```
 
+Export a reusable global unit-price workbook from a quote workbook or template, edit each unique `项目名称 + 单位` once, then reuse it for future quote generation:
+
+```powershell
+cad-budget export-prices quote.xlsx --excel-output unit-prices.xlsx
+cad-budget quote result.json --template "D:\Desktop\清单式报价表（商品房）.xlsx" --unit-prices unit-prices.xlsx --excel-output quote.xlsx
+```
+
 Generate a Markdown review report from the quote workbook:
 
 ```powershell
 cad-budget quote-report quote.xlsx --quantity-json result.json --markdown-output quote-review.md --json-output quote-review.json --checklist-output quote-review-checklist.xlsx --fail-on high
 ```
 
-The quote exporter reads only the `整装` worksheet from the template and ignores `半包`. It creates actual room sections from the quantity result, fills quantities that can be derived from room floor/wall areas, supported opening details, and optional `QUOTE_CUSTOM` / `QUOTE_CABINET` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` markers, and preserves template quantities for manual/non-CAD items such as sanitary ware and package lines without reliable CAD data. The generated workbook also includes visible review columns for quantity source, source room, room id, measurement basis, review status, and notes.
+The quote exporter reads only the `整装` worksheet from the template and ignores `半包`. It creates actual room sections from the quantity result, fills quantities that can be derived from room floor/wall areas, supported opening details, and optional `QUOTE_CUSTOM` / `QUOTE_CABINET` / `QUOTE_BASE_CABINET` / `QUOTE_WALL_CABINET` markers, and preserves template quantities for manual/non-CAD items such as sanitary ware and package lines without reliable CAD data. Passing `--unit-prices unit-prices.xlsx` overrides template prices by exact `项目名称 + 单位`, so repeated items across rooms share one maintained price and future plans can reuse the same edited price workbook. The generated workbook also includes visible review columns for quantity source, source room, room id, measurement basis, review status, and notes.
 
 The quote review report reads those visible review columns from `quote.xlsx`, starts with actionable CAD/review suggestions such as missing window heights, new-wall height/thickness, pipe/wrap markers, door heights, and custom-cabinet attributes, and shows each action's impacted quote-row count, item-name summary, and Excel row numbers. Passing `--quantity-json result.json` is optional and adds room/object context such as which rooms have defaulted window heights or door heights; without it, the report remains Excel-only. Passing `--json-output quote-review.json` also writes structured actions with priority, owner, suggested action, acceptable resolution options, completion condition, status/source counts, and review rows for downstream automation. Passing `--checklist-output quote-review-checklist.xlsx` writes an editable action checklist sorted by priority, with owner, acceptable resolution, completion condition, default `待处理` status, and notes columns for designers and estimators. Passing `--fail-on high` makes the command exit non-zero when high-priority actions remain, while `--fail-on medium` also blocks medium-priority actions; omitting it keeps report generation non-blocking. It then lists rows that need attention grouped by `自动生成-默认推断`, `自动生成-异常提示`, and `按模板生成`. It is intended for repeatable real-template validation after CAD/rule changes.
 
@@ -195,7 +202,7 @@ $env:PYTHONPATH='src'; py -3.14 scripts\run_real_template_quote_review.py
 $env:PYTHONPATH='src'; py -3.14 scripts\assert_real_template_key_results.py
 ```
 
-By default this reads `D:\Desktop\10.dxf` and `D:\Desktop\清单式报价表（商品房）-修正版.xlsx`, then writes `project.json`, `result.json`, `result.xlsx`, `quote.xlsx`, `quote-review.md`, `quote-review.json`, `quote-review-checklist.xlsx`, and `summary.json` under `scratch\cad-import-10-real-template-current`. The assertion script locks the key business-approved quantities from the real template review, including building area, indoor tile-protection area, main-bedroom merged L-window width, kitchen wall-tile area, dark curtain-box room filtering, interior-door count, and kitchen sliding-door quantities. Use `--dxf`, `--template`, `--output-dir`, `--rules`, and `--fail-on` to override the pipeline defaults; use `--output-dir` on the assertion script when checking a non-default output folder.
+By default this reads `D:\Desktop\10.dxf` and `D:\Desktop\清单式报价表（商品房）-修正版.xlsx`, then writes `project.json`, `result.json`, `result.xlsx`, `quote.xlsx`, `quote-review.md`, `quote-review.json`, `quote-review-checklist.xlsx`, and `summary.json` under `scratch\cad-import-10-real-template-current`. The assertion script locks the key business-approved quantities from the real template review, including building area, indoor tile-protection area, main-bedroom merged L-window width, kitchen wall-tile area, dark curtain-box room filtering, interior-door count, and kitchen sliding-door quantities. Use `--dxf`, `--template`, `--output-dir`, `--rules`, `--unit-prices`, and `--fail-on` to override the pipeline defaults; use `--output-dir` on the assertion script when checking a non-default output folder.
 
 To generate a compact local sample that already contains the supported quote marker layers and demonstrates the expected automation stats, run:
 
