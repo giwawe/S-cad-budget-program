@@ -6,6 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QFileDialog,
+    QAbstractItemView,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -16,6 +17,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -52,6 +55,7 @@ class CadBudgetMainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("CAD Budget")
         self.resize(1200, 760)
+        self.setStyleSheet(_APP_STYLESHEET)
         self._page_titles = ["运行", "结果", "设置"]
         self._path_edits: dict[str, QLineEdit] = {}
         self._stat_labels: dict[str, QLabel] = {}
@@ -127,7 +131,17 @@ class CadBudgetMainWindow(QMainWindow):
         page.layout().addWidget(QLabel("复核行动"))
         self._result_details = QLabel("暂无结果")
         self._result_details.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        page.layout().addWidget(self._result_details, 1)
+        page.layout().addWidget(self._result_details)
+
+        page.layout().addWidget(QLabel("输出文件"))
+        self._output_files_table = QTableWidget(0, 2)
+        self._output_files_table.setObjectName("outputFilesTable")
+        self._output_files_table.setHorizontalHeaderLabels(["文件", "路径"])
+        self._output_files_table.horizontalHeader().setStretchLastSection(True)
+        self._output_files_table.verticalHeader().setVisible(False)
+        self._output_files_table.setAlternatingRowColors(True)
+        self._output_files_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        page.layout().addWidget(self._output_files_table, 1)
         return page
 
     def _build_settings_page(self) -> QWidget:
@@ -242,6 +256,7 @@ class CadBudgetMainWindow(QMainWindow):
         text = "\n".join(summary_text.lines)
         self._run_log.setText(text)
         self._result_details.setText(text)
+        self._render_output_files(summary_text)
         for line in summary_text.lines[1:]:
             label, _, value = line.partition(": ")
             stat_label = "单价匹配" if label == "单价匹配行" else label
@@ -249,6 +264,12 @@ class CadBudgetMainWindow(QMainWindow):
                 self._stat_labels[stat_label].setText(value)
         self._run_button.setEnabled(True)
         self._pages.setCurrentIndex(1)
+
+    def _render_output_files(self, summary_text: GuiSummaryText) -> None:
+        self._output_files_table.setRowCount(len(summary_text.output_files))
+        for row, (label, path) in enumerate(summary_text.output_files):
+            self._output_files_table.setItem(row, 0, QTableWidgetItem(label))
+            self._output_files_table.setItem(row, 1, QTableWidgetItem(str(path)))
 
     @Slot(str, str)
     def _handle_run_failed(self, stage: str, message: str) -> None:
@@ -286,3 +307,66 @@ _INPUT_LABELS = {
     "unit_prices_path": "单价表",
     "output_root": "输出目录",
 }
+
+
+_APP_STYLESHEET = """
+QMainWindow {
+    background: #f6f7f9;
+}
+QListWidget#mainNavigation {
+    background: #202733;
+    border: 0;
+    color: #e8edf4;
+    font-size: 15px;
+    padding-top: 16px;
+}
+QListWidget#mainNavigation::item {
+    min-height: 44px;
+    border-left: 3px solid transparent;
+}
+QListWidget#mainNavigation::item:selected {
+    background: #2f7d6d;
+    border-left-color: #f2c94c;
+}
+QLabel#pageHeading {
+    color: #1f2933;
+    font-size: 22px;
+    font-weight: 600;
+}
+QFrame#runForm,
+QFrame#statCard {
+    background: #ffffff;
+    border: 1px solid #d8dee8;
+    border-radius: 6px;
+}
+QLineEdit {
+    background: #ffffff;
+    border: 1px solid #c8d0dc;
+    border-radius: 4px;
+    min-height: 30px;
+    padding: 0 8px;
+}
+QPushButton {
+    background: #2f7d6d;
+    border: 0;
+    border-radius: 4px;
+    color: #ffffff;
+    min-height: 32px;
+    padding: 0 14px;
+}
+QPushButton:disabled {
+    background: #a8b4c2;
+}
+QLabel#runLog {
+    background: #ffffff;
+    border: 1px solid #d8dee8;
+    border-radius: 6px;
+    padding: 12px;
+}
+QTableWidget#outputFilesTable {
+    background: #ffffff;
+    alternate-background-color: #f0f3f7;
+    border: 1px solid #d8dee8;
+    gridline-color: #e4e8ef;
+}
+"""

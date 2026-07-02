@@ -28,7 +28,9 @@ def test_main_window_source_wires_runtime_actions() -> None:
     assert "GuiRunController" in source
     assert "QFileDialog.getOpenFileName" in source
     assert "QFileDialog.getExistingDirectory" in source
+    assert "QTableWidget" in source
     assert "QThread" in source
+    assert "setStyleSheet" in source
     assert "subprocess.Popen" in source
 
 

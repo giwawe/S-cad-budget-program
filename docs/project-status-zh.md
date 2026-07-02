@@ -95,6 +95,7 @@ GUI v1 应保持轻量：选择 DXF、模板、单价表和输出目录，点击
 - `src/cad_budget/gui_controller.py` 已新增，用于把 GUI 选择的 DXF、模板、单价表和输出根目录转换成真实验收请求，并格式化运行摘要。
 - `cad-budget-gui` 主窗口已接入文件选择、后台线程运行真实验收、结果摘要刷新和打开输出目录按钮。
 - GUI 运行时会把用户选择的输出根目录映射为 `cad-import-10-real-template-current` 和 `cad-import-10-real-template-priced-command` 两个子目录，保持与现有验收路径一致。
+- GUI 结果页已新增关键输出文件列表，窗口已加入第一版基础 QSS 样式。
 
 ## 后续增强
 

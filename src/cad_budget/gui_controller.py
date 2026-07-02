@@ -22,6 +22,19 @@ TEXT_AUTO_EXCEPTION_HINT = "\u81ea\u52a8\u751f\u6210-\u5f02\u5e38\u63d0\u793a"
 TEXT_HIGH_REVIEW = "\u9ad8\u4f18\u5148\u7ea7\u590d\u6838"
 TEXT_MEDIUM_REVIEW = "\u4e2d\u4f18\u5148\u7ea7\u590d\u6838"
 TEXT_UNIT_PRICE_MATCHED = "\u5355\u4ef7\u5339\u914d\u884c"
+TEXT_PRICED_QUOTE = "\u6b63\u5f0f\u62a5\u4ef7\u8868"
+TEXT_PRICED_REVIEW = "\u6b63\u5f0f\u62a5\u4ef7\u590d\u6838\u62a5\u544a"
+TEXT_PRICED_REVIEW_JSON = "\u590d\u6838\u6570\u636e"
+TEXT_REVIEW_CHECKLIST = "\u590d\u6838\u6e05\u5355"
+TEXT_SUMMARY_JSON = "\u8fd0\u884c\u6458\u8981"
+
+OUTPUT_FILE_LABELS = {
+    "priced_quote": TEXT_PRICED_QUOTE,
+    "priced_review_markdown": TEXT_PRICED_REVIEW,
+    "priced_review_json": TEXT_PRICED_REVIEW_JSON,
+    "review_checklist": TEXT_REVIEW_CHECKLIST,
+    "summary_json": TEXT_SUMMARY_JSON,
+}
 
 
 @dataclass(frozen=True)
@@ -50,6 +63,7 @@ class GuiSummaryText:
     lines: list[str]
     output_dir: Path
     priced_output_dir: Path
+    output_files: list[tuple[str, Path]]
 
 
 class GuiRunController:
@@ -83,4 +97,18 @@ def _format_summary(summary: GuiRunSummary) -> GuiSummaryText:
         f"{TEXT_MEDIUM_REVIEW}: {summary.action_priority_counts.get('medium', 0)}",
         f"{TEXT_UNIT_PRICE_MATCHED}: {summary.matched_unit_price_rows}",
     ]
-    return GuiSummaryText(lines=lines, output_dir=summary.output_dir, priced_output_dir=summary.priced_output_dir)
+    return GuiSummaryText(
+        lines=lines,
+        output_dir=summary.output_dir,
+        priced_output_dir=summary.priced_output_dir,
+        output_files=_format_output_files(summary.output_files),
+    )
+
+
+def _format_output_files(output_files: dict[str, Path]) -> list[tuple[str, Path]]:
+    rows: list[tuple[str, Path]] = []
+    for key, label in OUTPUT_FILE_LABELS.items():
+        path = output_files.get(key)
+        if path is not None:
+            rows.append((label, path))
+    return rows

@@ -74,6 +74,9 @@ def test_gui_run_controller_runs_acceptance_and_formats_summary(tmp_path: Path) 
     ]
     assert summary_text.output_dir == tmp_path / "gui-output" / "cad-import-10-real-template-current"
     assert summary_text.priced_output_dir == tmp_path / "gui-output" / "cad-import-10-real-template-priced-command"
+    assert summary_text.output_files == [
+        ("\u6b63\u5f0f\u62a5\u4ef7\u8868", tmp_path / "gui-output" / "cad-import-10-real-template-priced-command" / "quote-priced.xlsx"),
+    ]
 
 
 def test_gui_run_controller_formats_service_errors(tmp_path: Path) -> None:
